@@ -1524,6 +1524,32 @@ function sendCustomEvent(messageId, data={}) {
 	document.dispatchEvent(customEvent);
 }
 /* ------------------- FARMOLÓ ----------------------- */
+/* --- guarded reads against the game's own pages ----------------------------
+   These deliberately still THROW when an element is missing, because that is
+   what the old inline chains did -- the enclosing catch aborts the step and
+   the engine retries. Returning null instead would let callers carry on with
+   NaN troop counts, which is worse than stopping.
+
+   What they add is a name. A moved id used to surface as "can't access
+   property X of null" from somewhere deep in a chain; now the debug log says
+   which element was wanted and what it was for. */
+function gameEl(ref, selector, what) {
+	var el = ref.document.querySelector(selector);
+	if (!el) throw new Error(`Hianyzo elem a jatek oldalan: ${what} [${selector}]`);
+	return el;
+}
+
+function numFrom(el, what) {
+	if (!el) throw new Error(`Hianyzo elem, nem olvashato szam: ${what}`);
+	var found = el.textContent.match(/[0-9]+/g);
+	if (!found) throw new Error(`Nincs szam ebben: ${what} ("${el.textContent.trim()}")`);
+	return parseInt(found[0], 10);
+}
+
+function gameNum(ref, selector, what) {
+	return numFrom(gameEl(ref, selector, what), what);
+}
+
 function drawWagons(koord) {
 	let farms = document.getElementById('farm_hova').rows;
 	if (!koord) {
@@ -2288,8 +2314,8 @@ function getSlowestUnit(attacker) {try{
 }catch(e) { debug('getSlowestUnit','Nem megállapítható egységsebesség, kl-t feltételezek ' + e); return E_SEB_ARR[5];}}
 function updateAvailableUnits(attacker, isError=false) {try{
 	for (let i=0;i<UNITS.length;i++) {
-		let allUnit = parseInt(FARM_REF.document.getElementById(`units_entry_all_${UNITS[i]}`).textContent.match(/[0-9]+/g)[0],10);
-		let unitToSendString = FARM_REF.document.getElementById(`unit_input_${UNITS[i]}`).value;
+		let allUnit = gameNum(FARM_REF, `#units_entry_all_${UNITS[i]}`, `${UNITS[i]}: elerheto mennyiseg`);
+		let unitToSendString = gameEl(FARM_REF, `#unit_input_${UNITS[i]}`, `${UNITS[i]}: beviteli mezo`).value;
 		if (unitToSendString == '') unitToSendString = 0;
 		let unitToSend = isError ? 0 : parseInt(unitToSendString,10);
 		attacker.noOfUnits[UNITS[i]] = allUnit - unitToSend;
@@ -2407,8 +2433,8 @@ function szem4_farmolo_2illeszto(bestPlan){try{/*FIXME: határszám alapján sz�
 		erk=erk.setSeconds(erk.getSeconds() + (ut_perc *60));
 		
 		if (!SZEM4_FARM.ALL_SPY_MOVEMENTS[bestPlan.farmVill] || (erk - SZEM4_FARM.ALL_SPY_MOVEMENTS[bestPlan.farmVill]) > (kemPerMin * 60000)) {
-			let kemElerheto = FARM_REF.document.getElementById("unit_input_spy").parentNode.children[2].textContent.match(/[0-9]+/g)[0]
-			kemElerheto = parseInt(kemElerheto, 10);
+			let kemMezo = gameEl(FARM_REF, '#unit_input_spy', 'kem beviteli mezo');
+			let kemElerheto = numFrom(kemMezo.parentNode.children[2], 'elerheto kemek szama');
 			kemToSend = (kemElerheto >= kemdb ? kemdb : 0)
 			C_form.spy.value= kemToSend;
 		}
@@ -2470,7 +2496,7 @@ function szem4_farmolo_3egyeztet(adatok){try{
 	}catch(e){ /* Nem az... */ }
 
 	/* TravelTime egyezik? */
-	let timeFormatted = FARM_REF.document.querySelector('#content_value .vis').rows[2].cells[1].textContent;
+	let timeFormatted = gameEl(FARM_REF, '#content_value .vis', 'megerosito tablazat').rows[2].cells[1].textContent;
 	let writedTime = timeFormatted.split(':').map((a) => parseInt(a, 10));
 	writedTime = writedTime[0] * 60 + writedTime[1] + (writedTime[2] / 60);
 	if (Math.abs(writedTime - adatok.plannedArmy.travelTime) > 0.05) {
@@ -2492,8 +2518,8 @@ function szem4_farmolo_3egyeztet(adatok){try{
 		SZEM4_FARM.DOMINFO_FARMS[adatok.plannedArmy.farmVill].szin.banya = scoutColor;
 	}
 
-	addCurrentMovementToList(FARM_REF.document.getElementById('command-data-form'), adatok.plannedArmy.farmVill, farm_helye, adatok.plannedArmy.units);
-	FARM_REF.document.getElementById("troop_confirm_submit").click();
+	addCurrentMovementToList(gameEl(FARM_REF, '#command-data-form', 'parancs urlap'), adatok.plannedArmy.farmVill, farm_helye, adatok.plannedArmy.units);
+	gameEl(FARM_REF, '#troop_confirm_submit', 'tamadas megerosito gomb').click();
 	document.getElementById('cnc_farm_heartbeat').innerHTML = new Date().toLocaleString();
 	const megbizhatosag = parseInt(document.getElementById('farmolo_options').megbizhatosag.value, 10);
 	const prodHour = SZEM4_FARM.DOMINFO_FARMS[adatok.plannedArmy.farmVill].prodHour;
