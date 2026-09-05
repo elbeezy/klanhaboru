@@ -65,7 +65,17 @@ function loadXMLDoc(dname) {
 	return xhttp.responseXML;
 }
 
-if (typeof(AZON)!="undefined") { alert("Itt már fut SZEM. \n Ha ez nem igaz, nyitsd meg új lapon a játékot, és próbáld meg ott futtatni"); exit();}
+/* Guards against evaluating this script twice against the same page. It used
+   to test AZON, but AZON is declared with var further down: once the file
+   became IIFE-scoped, hoisting made that typeof always "undefined" and the
+   guard stopped firing. A window flag survives a second eval, which is the
+   thing actually being guarded against. It is set after the startup block
+   below succeeds, so a failed launch can still be retried in the same tab.
+   (exit() was never defined anywhere; return is legal here now.) */
+if (window.SZEM4_ALREADY_RUNNING) {
+	alert("Itt már fut SZEM. \n Ha ez nem igaz, nyitsd meg új lapon a játékot, és próbáld meg ott futtatni");
+	return;
+}
 var VERZIO = 'v4.6 Build 26.05.25';
 var SZEM4_SETTINGS = {
 	selectedProfile: 1,
@@ -77,6 +87,7 @@ var SZEM4_SETTINGS = {
 var TIME_ZONE = 0;
 try{ /*Rendszeradatok*/
 	var AZON="S0";
+	window.SZEM4_ALREADY_RUNNING = true;
 	if (window.name.indexOf(AZON)>-1) AZON="S1";
 	var BASE_URL=document.location.href.split("game.php")[0];
 	var CONFIG=loadXMLDoc(BASE_URL+"interface.php?func=get_config");
@@ -167,7 +178,7 @@ try{ /*Rendszeradatok*/
 		);
 		return new Worker(window.URL.createObjectURL(blob));
 	}
-}catch(e){alert('SZEM Nem tud elindulni/n' + e); exit(0);}
+}catch(e){alert('SZEM Nem tud elindulni\n' + e); return;}
 
 function init(){try{
 	getServerTime(window, true);
@@ -4133,7 +4144,7 @@ function szem4_ADAT_motor() {
 
 function szem4_ADAT_AddImageRow(tipus){
 	return '\
-	<img title="Jelenlegi adat betöltése" alt="Betölt" onclick="szem4_ADAT_'+tipus+'_load()" width="17px" src="'+pic("load.png")+'"> \
+	<img title="Jelenlegi adat betöltése" alt="Betölt" onclick="szem4_ADAT_loadNow(\''+tipus+'\')" width="17px" src="'+pic("load.png")+'"> \
 	<img title="Törlés" alt="Töröl" onclick="szem4_ADAT_del(\''+tipus+'\')" src="'+pic("del.png")+'" width="17px""> \
 	<img title="Jelenlegi adat kiiratása" alt="Export" onclick="szem4_ADAT_kiir(\''+tipus+'\')" width="17px" src="'+pic("Export.png")+'"> \
 	<img title="Saját adat betöltése" alt="Import" onclick="szem4_ADAT_betolt(\''+tipus+'\')" width="17px" src="'+pic("Import.png")+'"> \
