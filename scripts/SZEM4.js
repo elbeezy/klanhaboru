@@ -1533,9 +1533,13 @@ function sendCustomEvent(messageId, data={}) {
    What they add is a name. A moved id used to surface as "can't access
    property X of null" from somewhere deep in a chain; now the debug log says
    which element was wanted and what it was for. */
+function pageUrl(ref) {
+	try { return ref.document.location.href; } catch (e) { return '(nem olvashato ablak)'; }
+}
+
 function gameEl(ref, selector, what) {
 	var el = ref.document.querySelector(selector);
-	if (!el) throw new Error(`Hianyzo elem a jatek oldalan: ${what} [${selector}]`);
+	if (!el) throw new Error(`Hianyzo elem: ${what} [${selector}] -- a megnyitott oldal: ${pageUrl(ref)}`);
 	return el;
 }
 
@@ -2824,7 +2828,7 @@ function szem4_vije_forgot() {
 function szem4_VIJE_1kivalaszt(){try{
 	/*Eredménye: jelentés azon (0=nincs meló);farm koord;jelentés SZÍNe;volt e checkbox-olt jeli*/
 	try{TamadUpdt(VIJE_REF1);}catch(e){}
-	VT=VIJE_REF1.document.getElementById("report_list").rows;
+	VT = gameEl(VIJE_REF1, '#report_list', 'jelentes lista').rows;
 	if (VT.length<3) return [0,0,"",false];
 	var isAnalize=false;
 	let szin = '';
