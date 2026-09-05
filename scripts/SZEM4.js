@@ -1253,7 +1253,7 @@ function getServerTime(ref, isSilent=false) {
 }
 
 function maplink(koord){
-	return '<a href="'+VILL1ST.replace("screen=overview","x="+koord.split("|")[0]+"&y="+koord.split("|")[1]+"&screen=map")+'" target="_BLANK">'+koord+'</a>';
+	return '<a href="'+gameUrl({ screen: 'map', x: koord.split('|')[0], y: koord.split('|')[1], mode: null, group: null, page: null })+'" target="_BLANK">'+koord+'</a>';
 }
 /*dupla klikk események*/
 function multipricer(ez,tip,s1){try{
@@ -2524,7 +2524,7 @@ function szem4_farmolo_3egyeztet(adatok){try{
 		if (FARM_REF.document.getElementById("content_value").getElementsByTagName("table")[0].rows[2].cells[1].getElementsByTagName("a")[0].href.indexOf("info_player")>-1) {
 			if (!farm_helye.cells[4].getElementsByTagName("input")[0].checked) {
 				naplo("Farmoló", `Játékos ${maplink(adatok.plannedArmy.farmVill)} helyen: ${FARM_REF.document.getElementById("content_value").getElementsByTagName("table")[0].rows[2].cells[1].innerHTML.replace("href",'target="_BLANK" href')}. Tovább nem támadom`);
-				FARM_REF = windowOpener('farm', VILL1ST.replace("screen=overview","screen=place"), AZON+"_Farmolo"); // Ki kell ütni a nézetből
+				FARM_REF = windowOpener('farm', gameUrl({ screen: 'place', mode: null, group: null, page: null }), AZON+"_Farmolo"); // Ki kell ütni a nézetből
 				farm_helye.cells[0].style.backgroundColor="red";
 				updateAvailableUnits(SZEM4_FARM.DOMINFO_FROM[adatok.plannedArmy.fromVill], true);
 				return "ERROR";
@@ -2658,7 +2658,7 @@ function szem4_farmolo_motor(){
 				if (!isPageLoaded(FARM_REF, KTID[PM1.fromVill],"screen=place") ||
 					FARM_REF.document.location.href.indexOf("try=confirm") > -1 ||
 					(FARM_REF.document.location.href.includes("mode=") && !FARM_REF.document.location.href.includes('mode=command'))) {
-						FARM_REF=windowOpener('farm', VILL1ST.replace(/village=[0-9]+/,"village="+KTID[PM1.fromVill]).replace("screen=overview","screen=place"), AZON+"_Farmolo");
+						FARM_REF=windowOpener('farm', gameUrl({ village: KTID[PM1.fromVill], screen: 'place', mode: null, group: null, page: null }), AZON+"_Farmolo");
 				}
 				/*debug("Farmoló_ToStep1",PM1);*/
 				FARM_LEPES=1;
@@ -3358,7 +3358,7 @@ function szem4_EPITO_ujFalu() {
 			var ZC = ZR.insertCell(0); ZC.innerHTML = `${ID_TO_INFO[KTID[faluCoord[i]]].name} (${faluCoord[i]})`; ZC.setAttribute("ondblclick", "sortorol(this)");
 			ZC = ZR.insertCell(1); ZC.innerHTML = lista; ZC.getElementsByTagName("select")[0].value = adat.getElementsByTagName("select")[0].value;
 			ZC = ZR.insertCell(2); ZC.style.fontSize = "x-small"; var d = getServerTime(); ZC.innerHTML = d.toLocaleString(); ZC.setAttribute("ondblclick", "szem4_EPITO_most(this)");
-			ZC = ZR.insertCell(3); ZC.innerHTML = "<i>Feldolgozás alatt...</i>" + ' <a href="' + VILL1ST.replace(/(village=)[0-9]+/g, "village=" + KTID[faluCoord[i]]).replace('screen=overview', 'screen=main') + '" target="_BLANK"><img alt="Nyit" title="Falu megnyitása" src="' + pic("link.png") + '"></a>';; ZC.setAttribute("ondblclick", 'szem4_EPITO_infoCell(this.parentNode,\'alap\',"")');
+			ZC = ZR.insertCell(3); ZC.innerHTML = "<i>Feldolgozás alatt...</i>" + ' <a href="' + gameUrl({ village: KTID[faluCoord[i]], screen: 'main', mode: null, group: null, page: null }) + '" target="_BLANK"><img alt="Nyit" title="Falu megnyitása" src="' + pic("link.png") + '"></a>';; ZC.setAttribute("ondblclick", 'szem4_EPITO_infoCell(this.parentNode,\'alap\',"")');
 		}
 		if (str != "") alert2("Dupla megadások/nem létező faluk kiszűrve: " + str);
 		adat.getElementsByTagName("input")[0].value = "";
@@ -3452,7 +3452,7 @@ function szem4_EPITO_infoCell(sor,szin,info){try{
 	sor.cells[3].style.backgroundColor=szin;
 	let coord = sor.cells[0].textContent.split(' ');
 	coord = coord[coord.length-1].replace('(', '').replace(')','');
-	sor.cells[3].innerHTML=info+' <a href="'+VILL1ST.replace(/(village=)[0-9]+/g,"village="+KTID[coord]).replace('screen=overview','screen=main')+'" target="_BLANK"><img alt="Nyit" title="Falu megnyitása" src="'+pic("link.png")+'"></a>';
+	sor.cells[3].innerHTML=info+' <a href="'+gameUrl({ village: KTID[coord], screen: 'main', mode: null, group: null, page: null })+'" target="_BLANK"><img alt="Nyit" title="Falu megnyitása" src="'+pic("link.png")+'"></a>';
 	return;
 }catch(e){debug("építő_infoCell",e);}}
 
@@ -3543,7 +3543,7 @@ function szem4_EPITO_IntettiBuild(buildOrder){try{
 
 	/* Minden épület kész */
 	if (nextToBuild === '') {
-		naplo("Építő",'<a href="'+VILL1ST.replace(/(village=)[0-9]+/g,"village="+PMEP[0])+'" target="_BLANK">'+EPIT_REF.game_data.village.name+" ("+EPIT_REF.game_data.village.x+"|"+EPIT_REF.game_data.village.y+")</a> falu teljesen felépült és törlődött a listából");
+		naplo("Építő",'<a href="'+gameUrl({ village: PMEP[0] })+'" target="_BLANK">'+EPIT_REF.game_data.village.name+" ("+EPIT_REF.game_data.village.x+"|"+EPIT_REF.game_data.village.y+")</a> falu teljesen felépült és törlődött a listából");
 		setTimeout(() => playSound("falu_kesz"), 1500);
 		szem4_EPITO_addIdo(PMEP[2],"del");
 		return;
@@ -3625,7 +3625,7 @@ function szem4_EPITO_motor(){try{
 	switch (EPIT_LEPES) {
 		case 0: PMEP=szem4_EPITO_Wopen(); /*FaluID;lista;link_a_faluhoz*/
 				if (PMEP[0]) {
-					EPIT_REF=windowOpener('epit', VILL1ST.replace("screen=overview","screen=main").replace(/village=[0-9]+/,"village="+PMEP[0]), AZON+"_SZEM4EPIT");
+					EPIT_REF=windowOpener('epit', gameUrl({ village: PMEP[0], screen: 'main', mode: null, group: null, page: null }), AZON+"_SZEM4EPIT");
 					EPIT_LEPES=1;
 				} else {
 					if (document.getElementById("epit_lista").rows.length==1) 
@@ -3739,7 +3739,7 @@ function szem4_GYUJTO_1keres() {try{
 		const villId = KTID[coord];
 		if (!GYUJTO_VILLINFO[villId]) GYUJTO_VILLINFO[villId] = { retry: false };
 		if (SZEM4_GYUJTO[villId] === true && (!GYUJTO_VILLINFO[villId].returned || GYUJTO_VILLINFO[villId].returned < d)) {
-			GYUJTO_REF = windowOpener('gyujto', VILL1ST.replace(/village=[0-9]+/g, 'village=' + villId).replace('screen=overview','screen=place&mode=scavenge'), AZON + '_gyujto');
+			GYUJTO_REF = windowOpener('gyujto', gameUrl({ village: villId, screen: 'place', mode: 'scavenge', group: null, page: null }), AZON + '_gyujto');
 			GYUJTO_STATE = 1;
 			GYUJTO_DATA = villId;
 			return false;
