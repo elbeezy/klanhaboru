@@ -3068,7 +3068,7 @@ function szem4_VIJE_2elemzes(adatok){try{
 	/*Adatok: [0]jelentés azon;[1]célpont koord;[2]jelentés SZÍNe;[3]volt e checkbox-olt jeli;[4]régi jeli e? (igen->nincs nyerselem)*/
 	var nyersossz=0;
 	var isOld = false;
-	var reportTable=VIJE_REF2.document.getElementById("attack_info_att").parentNode;
+	var reportTable=gameEl(VIJE_REF2, '#attack_info_att', 'jelentes fejlec').parentNode;
 	while (reportTable.nodeName != 'TABLE') {
 		reportTable = reportTable.parentNode;
 	}
@@ -3472,8 +3472,9 @@ function szem4_EPITO_IntettiBuild(buildOrder){try{
 	var textTime;
 
 	try {
-		if (!EPIT_REF.document.getElementById("buildqueue")) throw 'No queue';
-		var buildQueueRows=EPIT_REF.document.getElementById("buildqueue").rows;
+		var buildQueue = EPIT_REF.document.getElementById("buildqueue");
+		if (!buildQueue) throw 'No queue';
+		var buildQueueRows=buildQueue.rows;
 		for (var i=1;i<buildQueueRows.length;i++) {try{
 			buildList+=buildQueueRows[i].cells[0].getElementsByTagName("img")[0].src.match(/[A-Za-z0-9]+\.(png)/g)[0].replace(/[0-9]+/g,"").replace(".png","");
 			textTime=buildQueueRows[i].cells[1].textContent.split(":");
@@ -3571,7 +3572,7 @@ function szem4_EPITO_IntettiBuild(buildOrder){try{
 	}
 	if (nextToBuild == 'farm+' || nextToBuild == 'storage+') {
 		nextToBuild = nextToBuild.slice(0, -1);
-		nextToBuildRow = EPIT_REF.document.getElementById('main_buildrow_' + nextToBuild);
+		nextToBuildRow = gameEl(EPIT_REF, '#main_buildrow_' + nextToBuild, `epulet sora: ${nextToBuild}`);
 		resNeed = {
 			wood: parseInt(nextToBuildRow.cells[1].textContent.match(/[0-9]+/g),10),
 			stone: parseInt(nextToBuildRow.cells[2].textContent.match(/[0-9]+/g),10),
@@ -3581,7 +3582,7 @@ function szem4_EPITO_IntettiBuild(buildOrder){try{
 		// Farm kéne, de raktár nincs hozzá ~>
 		if (Math.max(resNeed.wood, resNeed.stone, resNeed.iron) > EPIT_REF.game_data.village.storage_max) {
 			nextToBuild = 'storage';
-			nextToBuildRow = EPIT_REF.document.getElementById('main_buildrow_' + nextToBuild);
+			nextToBuildRow = gameEl(EPIT_REF, '#main_buildrow_' + nextToBuild, `epulet sora: ${nextToBuild}`);
 			resNeed = {
 				wood: parseInt(nextToBuildRow.cells[1].textContent.match(/[0-9]+/g),10),
 				stone: parseInt(nextToBuildRow.cells[2].textContent.match(/[0-9]+/g),10),
@@ -3793,7 +3794,7 @@ function szem4_GYUJTO_motor() {
 			nexttime=5000;
 		} else {
 			if (GYUJTO_HIBA > 30) {
-				naplo('szem4_GYUJTO_motor', 'Valami baj van a gyűjtögetőnél - újraindítom...');
+				naplo('szem4_GYUJTO_motor', `Valami baj van a gyűjtögetőnél (${GYUJTO_STATE}. lépésben elakadt) - újraindítom... Oldal: ${pageUrl(GYUJTO_REF)}`);
 				GYUJTO_REF.close();
 				GYUJTO_STATE = 0;
 				GYUJTO_HIBA = 0;
