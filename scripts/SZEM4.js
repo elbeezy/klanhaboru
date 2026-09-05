@@ -1,3 +1,55 @@
+/* SZEM4 -- fork of cncDAni2/klanhaboru, maintained by elbeezy.
+ * Wrapped in an IIFE so the script no longer leaks its internals into the
+ * game page's window. The explicit export block below restores the exact
+ * set of globals the generated HTML depends on. No logic is changed. */
+;(function () {
+
+/* ============================================================================
+ * PUBLIC SURFACE
+ *
+ * Everything below is reachable from generated HTML (inline onclick/ondblclick
+ * handlers), from string-form setTimeout(), or from the injected Firebase
+ * module script -- all of which resolve names against window.
+ *
+ * The Adatmento tab builds handler names DYNAMICALLY ("szem4_ADAT_"+tipus+
+ * "_load"), so this list cannot safely be narrowed by static analysis.
+ * Every top-level function is exported, exactly as before the IIFE wrap.
+ * ========================================================================== */
+Object.assign(window, {
+	BotvedelemBe, BotvedelemKi, TamadUpdt, VIJE_IntelliAnalyst_isRequired,
+	VIJE_adatbeir, addCurrentMovementToList, addFreezeNotification, addTooltip,
+	addTooltip_build, addWagons, add_attackerRow, add_farmolando,
+	add_farmolo, alert2, buildArmy, calculateNyers,
+	clearAttacks, convertTbToTime, debug, debug_urit,
+	distCalc, drawWagons, extendArmy, findClosestTimes,
+	getAllResFromVIJE, getProdHour, getResourceProduction, getServerTime,
+	getSlowestUnit, getSpyBuildingLevels, getSpyResourceCell, gyujto_listAllVillages,
+	gyujto_setVill, hattercsere, hattertolor, hideFarms,
+	init, isPageLoaded, learnCatapult, loadCloudDataIntoLocal,
+	loadCloudSync, loadSettings, loadXMLDoc, maplink,
+	modosit_szam, multipricer, naplo, nyit,
+	onWallpChange, pic, picBuilding, planAttack,
+	playSound, prettyDatePrint, readUpVijeOpts, rebuildDOM_VIJE,
+	rebuildDOM_farm, rebuildDOM_gyujto, removeTooltip, rendez,
+	restartKieg, rovidit, saveLocalDataToCloud, saveSettings,
+	selectTheme, sendCustomEvent, setNoUnits, setTooltip,
+	shorttest, sortorol, soundVolume, stop,
+	stopEvent, subtractNyersValue, sugo, switchMobileMode,
+	szem4_ADAT_AddImageRow, szem4_ADAT_LoadAll, szem4_ADAT_StopAll, szem4_ADAT_betolt,
+	szem4_ADAT_del, szem4_ADAT_epito_load, szem4_ADAT_epito_save, szem4_ADAT_kiir,
+	szem4_ADAT_loadNow, szem4_ADAT_motor, szem4_ADAT_restart, szem4_ADAT_saveNow,
+	szem4_EPITO_IntettiBuild, szem4_EPITO_Wopen, szem4_EPITO_addIdo, szem4_EPITO_cscheck,
+	szem4_EPITO_csopDelete, szem4_EPITO_csopToList, szem4_EPITO_getBuildLink, szem4_EPITO_getlista,
+	szem4_EPITO_infoCell, szem4_EPITO_most, szem4_EPITO_motor, szem4_EPITO_perccsokkento,
+	szem4_EPITO_ujCsop, szem4_EPITO_ujFalu, szem4_GYUJTO_1keres, szem4_GYUJTO_3elindit,
+	szem4_GYUJTO_motor, szem4_GYUJTO_search, szem4_VIJE_1kivalaszt, szem4_VIJE_2elemzes,
+	szem4_VIJE_3torol, szem4_VIJE_motor, szem4_farmolo_1kereso, szem4_farmolo_2illeszto,
+	szem4_farmolo_3egyeztet, szem4_farmolo_4visszaell, szem4_farmolo_csoport, szem4_farmolo_motor,
+	szem4_farmolo_multiclick, szem4_vije_forgot, szunet, ujkieg,
+	ujkieg_hang, updateAvailableUnits, updateDefaultProdHour, urit,
+	validate, windowOpener, writeAllBuildTime,
+});
+
 function stop(){
 	var x = setTimeout('',100); for (var i = 0 ; i < x ; i++) clearTimeout(i);
 }
@@ -3895,6 +3947,11 @@ function loadCloudSync() {
 	} else {
 		return;
 	}
+	/* This file is IIFE-scoped, but the Firebase module injected below reads
+	   CLOUD_AUTHS as a BARE global, and the value was reassigned by the JSON.parse
+	   above. Publish the parsed object or the module receives the raw string. */
+	window.CLOUD_AUTHS = CLOUD_AUTHS;
+
 	const script = document.createElement("script");
 	script.type = "module";
 	script.innerHTML = `
@@ -4165,4 +4222,6 @@ FAL	MIN
 2	32 kl	6kl+10íló
 */
 
+
+})();
 void(0);
