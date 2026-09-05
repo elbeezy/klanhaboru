@@ -1077,7 +1077,11 @@ function debug_urit() {
 function ujkieg(id,nev,tartalom){
 	if (document.getElementById(nev)) return false;
 	ALL_EXTENSION.push(id);
-	document.getElementById("kiegs").innerHTML+='<img onclick=\'szunet("'+id+'",this)\' name="'+id+'" onmouseover=\'sugo(this,"Az érintett scriptet tudod megállítani/elindítani.")\' src="'+pic(((id=='farm'||id=='vije'||id=='gyujto')?'pause':'play')+ ".png")+'" alt="Stop" title="Klikk a szüneteltetéshez"> <a href=\'javascript: nyit("'+id+'");\'>'+nev.toUpperCase()+'</a> ';
+	/* The icon reflects current state, not the action, so a module that starts
+	   paused shows the pause image. Keep this in step with the *_PAUSE initial
+	   values further down. */
+	const startsPaused = ['farm', 'vije', 'gyujto', 'epit'];
+	document.getElementById("kiegs").innerHTML+='<img onclick=\'szunet("'+id+'",this)\' name="'+id+'" onmouseover=\'sugo(this,"Az érintett scriptet tudod megállítani/elindítani.")\' src="'+pic((startsPaused.includes(id)?'pause':'play')+ ".png")+'" alt="Stop" title="Klikk a szüneteltetéshez"> <a href=\'javascript: nyit("'+id+'");\'>'+nev.toUpperCase()+'</a> ';
 	document.getElementById("content").innerHTML+='<table class="menuitem" width="1024px" align="center" id="'+id+'" style="display: none">'+tartalom+'</table>';
 	return true;
 }
@@ -3658,7 +3662,7 @@ ujkieg("epit","Építő",'<tr><td><h2 align="center">Építési listák</h2><tab
 
 var EPIT_LEPES=0;
 var EPIT_REF; var EPIT_HIBA=0; var EPIT_GHIBA=0;
-var PMEP; var EPIT_PAUSE=false;
+var PMEP; var EPIT_PAUSE=true;
 szem4_EPITO_motor();
 szem4_EPITO_perccsokkento();
 
