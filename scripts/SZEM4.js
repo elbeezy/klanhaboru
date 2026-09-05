@@ -3880,15 +3880,33 @@ ujkieg('gyujto','Gyűjtő',`<tr><td>
 szem4_GYUJTO_motor();
 
 /*-----------------Adatmentő kezelő--------------------*/
+/* Refuses to replace substantial saved data with something drastically
+   smaller. The autosave writes whatever is in memory every 60 seconds, so a
+   failed load silently becomes permanent data loss one minute later. A save
+   that collapses to under a quarter of what is stored is far more likely to
+   be a failed load than a real edit, so it is skipped and reported loudly.
+
+   Deleting farms deliberately still works: removals are gradual, and the
+   Adatmento delete button bypasses this entirely. */
+function storeGuarded(key, value, label) {
+	var prev = localStorage.getItem(key);
+	if (prev && prev.length > 200 && value.length < prev.length / 4) {
+		naplo('Adatmentő ⚠', `${label}: mentés kihagyva. A mentendő adat (${value.length} karakter) sokkal kisebb a már tároltnál (${prev.length}), ami általában sikertelen betöltést jelent. A régi adat érintetlen maradt.`);
+		return false;
+	}
+	localStorage.setItem(key, value);
+	return true;
+}
+
 function szem4_ADAT_saveNow(tipus) {
 	let dateEl = document.querySelector(`#adat_opts input[name=${tipus}]`);
 	if (dateEl) dateEl = dateEl.closest('tr').cells[2];
 	switch (tipus) {
-		case "farm":   localStorage.setItem(AZON+"_farm", JSON.stringify(SZEM4_FARM)); break;
+		case "farm":   storeGuarded(AZON+"_farm", JSON.stringify(SZEM4_FARM), 'Farmoló'); break;
 		case "epit":   szem4_ADAT_epito_save(); break;
-		case "vije":   localStorage.setItem(AZON+"_vije", JSON.stringify(SZEM4_VIJE)); break;
-		case "sys":    localStorage.setItem(AZON+"_sys", JSON.stringify(SZEM4_SETTINGS)); break;
-		case "gyujto": localStorage.setItem(AZON + '_gyujto', JSON.stringify(SZEM4_GYUJTO)); break;
+		case "vije":   storeGuarded(AZON+"_vije", JSON.stringify(SZEM4_VIJE), 'Jelentés Elemző'); break;
+		case "sys":    storeGuarded(AZON+"_sys", JSON.stringify(SZEM4_SETTINGS), 'Beállítások'); break;
+		case "gyujto": storeGuarded(AZON + '_gyujto', JSON.stringify(SZEM4_GYUJTO), 'Gyűjtögető'); break;
 		case 'cloud':  saveLocalDataToCloud(false, false);
 	}
 	if (dateEl) dateEl.innerHTML = new Date().toLocaleString();
@@ -3968,7 +3986,7 @@ function szem4_ADAT_epito_save(){try{
 		eredmeny+=adat[i].cells[1].getElementsByTagName("select")[0].value;
 		if (i<adat.length-1) eredmeny+=".";
 	}
-	localStorage.setItem(AZON+"_epit",eredmeny);
+	storeGuarded(AZON+"_epit", eredmeny, 'Építő');
 	var d=new Date(); document.getElementById("adat_opts").rows[2].cells[2].textContent=d.toLocaleString();
 	return;
 }catch(e){debug("ADAT_epito_save",e);}}
