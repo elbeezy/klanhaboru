@@ -147,6 +147,24 @@ try{ /*Rendszeradatok*/
 	var VILL1ST="";
 	var MAX_IDO_PERC = 20; // shorttest-be van felülírva!!!
 	AZON=game_data.player.id+"_"+game_data.world+AZON;
+	/* S0/S1 namespacing exists so two instances can run side by side without
+	   overwriting each other's saved data, and the choice is made from
+	   window.name a hundred lines above. That means launching the bookmarklet
+	   inside a window SZEM itself opened (those are named "<AZON>_Farmolo" and
+	   friends, so they contain "S0") silently starts a second instance whose
+	   storage is empty -- and every saved farm looks permanently lost.
+	   Only warn when the second namespace has nothing in it, so deliberate
+	   two-instance use is left alone. */
+	if (AZON.slice(-2) === 'S1') {
+		var primaryFarms = localStorage.getItem(AZON.slice(0, -1) + '0_farm');
+		var ownFarms = localStorage.getItem(AZON + '_farm');
+		if (primaryFarms && primaryFarms.length > 200 && (!ownFarms || ownFarms.length < 200)) {
+			alert('SZEM m\u00e1sodik p\u00e9ld\u00e1nyk\u00e9nt indul (' + AZON + '), \u00edgy \u00fcres adatokkal kezd.\n\n'
+				+ 'A mentett adataid megvannak, csak a m\u00e1sik n\u00e9vt\u00e9rben (' + AZON.slice(0, -1) + '0).\n\n'
+				+ 'Ez akkor t\u00f6rt\u00e9nik, ha a bookmarkletet egy olyan ablakban ind\u00edtod, amit kor\u00e1bban maga a SZEM nyitott meg. '
+				+ 'Nyiss egy teljesen \u00faj lapot a j\u00e1t\u00e9kkal, \u00e9s onnan ind\u00edtsd -- akkor a r\u00e9gi adataid bet\u00f6lt\u0151dnek.');
+		}
+	}
 	var CLOUD_AUTHS = localStorage.getItem('szem_firebase');
 	var USER_ACTIVITY = true;
 	var USER_ACTIVITY_TIMEOUT;
