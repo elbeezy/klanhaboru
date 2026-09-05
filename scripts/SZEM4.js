@@ -1533,6 +1533,24 @@ function sendCustomEvent(messageId, data={}) {
    What they add is a name. A moved id used to surface as "can't access
    property X of null" from somewhere deep in a chain; now the debug log says
    which element was wanted and what it was for. */
+/* Every module reaches other game screens by string-replacing "screen=overview"
+   inside VILL1ST. That is only safe while the launch page is exactly
+   screen=overview: "screen=overview" is a PREFIX of "screen=overview_villages",
+   so launching from the villages list rewrites it to "screen=report_villages"
+   -- not a real screen. Stray list-only params (group, page, mode=prod) ride
+   along too, and the farm engine's own page check rejects any URL carrying an
+   unexpected mode=.
+
+   Setting parameters properly avoids the whole class. Pass null to drop one. */
+function gameUrl(overrides) {
+	var url = new URL(VILL1ST, document.location.href);
+	for (var key in overrides) {
+		if (overrides[key] === null || overrides[key] === undefined) url.searchParams.delete(key);
+		else url.searchParams.set(key, overrides[key]);
+	}
+	return url.href;
+}
+
 function pageUrl(ref) {
 	try { return ref.document.location.href; } catch (e) { return '(nem olvashato ablak)'; }
 }
@@ -3131,9 +3149,12 @@ function szem4_VIJE_motor(){try{
 	switch(VIJE_LEPES) {
 		case 0: /*Támadói jelentések megnyitása*/
 			if (document.getElementById("farm_hova").rows.length>1) {
-			var csoport="";
-			if (game_data.player.premium) csoport="group_id=-1&";
-			VIJE_REF1=windowOpener('vije', VILL1ST.replace("screen=overview","mode=attack&"+csoport+"screen=report"), AZON+"_SZEM4VIJE_1");
+			VIJE_REF1=windowOpener('vije', gameUrl({
+				screen: 'report',
+				mode: 'attack',
+				group_id: game_data.player.premium ? -1 : null,
+				view: null, group: null, page: null
+			}), AZON+"_SZEM4VIJE_1");
 			VIJE_LEPES=1;
 			} else nexttime=10000;
 			break;
@@ -3151,7 +3172,12 @@ function szem4_VIJE_motor(){try{
 						}
 					}
 				} else {
-					VIJE_REF2=windowOpener('vije2', VILL1ST.replace("screen=overview","mode=attack&view="+PM2[0]+"&screen=report"), AZON+"_SZEM4VIJE_2");
+					VIJE_REF2=windowOpener('vije2', gameUrl({
+						screen: 'report',
+						mode: 'attack',
+						view: PM2[0],
+						group_id: null, group: null, page: null
+					}), AZON+"_SZEM4VIJE_2");
 					VIJE_LEPES=2;
 				}
 				VIJE_REF1.document.title = 'Szem4/vije1';
