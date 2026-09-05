@@ -2007,7 +2007,29 @@ function findClosestTimes(allAttack, arriveTime) {
 
 	return [lastBefore, firstAfter];
 }
-function addCurrentMovementToList(formEl, farmCoord, farmHelyRow) {try{
+/* The confirm page's own capacity figure is authoritative because it accounts
+   for any carry-modifier effect, so it stays the preferred source. But its
+   markup has moved at least once (the V100 update nulled this selector), and a
+   throw here aborted the whole raid record -- which left every farm looking
+   permanently full and pinned the farm engine to a single village. Summing the
+   units we already decided to send is markup-independent, so it backs it up. */
+function readCarryCapacity(formEl, plannedUnits, farmCoord) {
+	var cell = formEl.querySelector('.icon.header.ressources');
+	if (cell && cell.parentElement) {
+		var scraped = parseInt(cell.parentElement.innerText.replace(/\./g, ''), 10);
+		if (!isNaN(scraped) && scraped > 0) return scraped;
+	}
+	var summed = 0;
+	for (var unit in plannedUnits) {
+		if (unit === 'pop' || !TEHER[unit]) continue;
+		summed += plannedUnits[unit] * TEHER[unit];
+	}
+	if (summed > 0) return summed;
+	debug('readCarryCapacity', 'Nem allapithato meg a teherbiras: ' + farmCoord);
+	return 0;
+}
+
+function addCurrentMovementToList(formEl, farmCoord, farmHelyRow, plannedUnits) {try{
 	var patternOfIdo = /<td>[0-9]+:[0-9]+:[0-9]+<\/td>/g;
 	var travelTime = formEl.innerHTML.match(patternOfIdo)[0].match(/[0-9]+/g);
 	travelTime = parseInt(travelTime[0],10) * 3600 + parseInt(travelTime[1],10) * 60 + parseInt(travelTime[2],10);
@@ -2015,7 +2037,7 @@ function addCurrentMovementToList(formEl, farmCoord, farmHelyRow) {try{
 	arriveTime.setSeconds(arriveTime.getSeconds() + travelTime);
 	arriveTime = arriveTime.getTime();
 
-	var teherbiras = parseInt(formEl.querySelector('.icon.header.ressources').parentElement.innerText.replaceAll('.',''), 10);
+	var teherbiras = readCarryCapacity(formEl, plannedUnits, farmCoord);
 	var VIJE_teher = 0;
 	var VIJE_nyers = SZEM4_FARM.DOMINFO_FARMS[farmCoord].nyers;
 	if (VIJE_nyers > 0) {
@@ -2027,7 +2049,7 @@ function addCurrentMovementToList(formEl, farmCoord, farmHelyRow) {try{
 	}
 
 	if (teherbiras < 10 && VIJE_teher < 10) {
-		debug('addCurrentMovementToList', `ERROR: ${formEl.querySelector('.icon.header.ressources').parentElement.innerText} -- teherbírás=0; Farm: ${farmCoord} | Innen: ${FARM_REF.game_data.village.display_name}`);
+		debug('addCurrentMovementToList', `ERROR: teherbírás=0; Farm: ${farmCoord} | Innen: ${FARM_REF.game_data.village.display_name}`);
 	}
 	var allAttack = SZEM4_FARM.ALL_UNIT_MOVEMENT[farmCoord];
 	if (!allAttack) {
@@ -2037,7 +2059,9 @@ function addCurrentMovementToList(formEl, farmCoord, farmHelyRow) {try{
 	}
 	addWagons(farmHelyRow);
 	// KÉM?
-	if (!FARM_REF.document.getElementById('place_confirm_units').querySelector('[data-unit="spy"]').getElementsByTagName('img')[0].classList.contains('faded')) {
+	var spyIcon = FARM_REF.document.getElementById('place_confirm_units');
+	spyIcon = spyIcon && spyIcon.querySelector('[data-unit="spy"] img');
+	if (spyIcon && !spyIcon.classList.contains('faded')) {
 		if (!SZEM4_FARM.ALL_SPY_MOVEMENTS[farmCoord] || SZEM4_FARM.ALL_SPY_MOVEMENTS[farmCoord] < arriveTime) SZEM4_FARM.ALL_SPY_MOVEMENTS[farmCoord] = arriveTime;
 	}
 }catch(e) {debug('addCurrentMovementToList', e); console.error(e);}}
@@ -2468,7 +2492,7 @@ function szem4_farmolo_3egyeztet(adatok){try{
 		SZEM4_FARM.DOMINFO_FARMS[adatok.plannedArmy.farmVill].szin.banya = scoutColor;
 	}
 
-	addCurrentMovementToList(FARM_REF.document.getElementById('command-data-form'), adatok.plannedArmy.farmVill, farm_helye);
+	addCurrentMovementToList(FARM_REF.document.getElementById('command-data-form'), adatok.plannedArmy.farmVill, farm_helye, adatok.plannedArmy.units);
 	FARM_REF.document.getElementById("troop_confirm_submit").click();
 	document.getElementById('cnc_farm_heartbeat').innerHTML = new Date().toLocaleString();
 	const megbizhatosag = parseInt(document.getElementById('farmolo_options').megbizhatosag.value, 10);
