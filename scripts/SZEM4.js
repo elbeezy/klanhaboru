@@ -57,6 +57,7 @@ stop(); /*Időstop*/
 document.getElementsByTagName("html")[0].setAttribute("class","");
 
 function loadXMLDoc(dname) {
+	var xhttp;
 	if (window.XMLHttpRequest) xhttp=new XMLHttpRequest();
 		else xhttp=new ActiveXObject("Microsoft.XMLHTTP");
 	xhttp.open("GET",dname,false);
@@ -1445,7 +1446,7 @@ function addTooltip_build(el, koord) {
 	if (isNew) el.querySelector('.tooltip_text').classList.remove('szem_old_build_tooltip'); else el.querySelector('.tooltip_text').classList.add('szem_old_build_tooltip');
 	let buildingTooltip = `<table class="no-bg-table">`;
 	const i18nBuildings=document.getElementById("vije_opts");
-	for (build in SZEM4_FARM.DOMINFO_FARMS[koord].buildings) {
+	for (let build in SZEM4_FARM.DOMINFO_FARMS[koord].buildings) {
 		if (SZEM4_FARM.DOMINFO_FARMS[koord].buildings[build] < 1) continue;
 		buildingTooltip += `<tr><td>${i18nBuildings[build].value}:</td><td>${SZEM4_FARM.DOMINFO_FARMS[koord].buildings[build]}</td></tr>`
 	}
@@ -1722,7 +1723,7 @@ function rebuildDOM_farm() {try{
 
 	// FARMOLÓ FALUK
 	$("#farm_honnan tr:gt(0)").remove();
-	for (attacker in SZEM4_FARM.DOMINFO_FROM) {
+	for (let attacker in SZEM4_FARM.DOMINFO_FROM) {
 		add_attackerRow(attacker);
 	}
 	debug('rebuildDOM_farm', '(1) Loading debug: FROM = ' + JSON.stringify(SZEM4_FARM.DOMINFO_FROM));
@@ -1730,7 +1731,7 @@ function rebuildDOM_farm() {try{
 	// FARMOK
 	const farmTable = document.getElementById('farm_hova');
 	$("#farm_hova tr:gt(0)").remove();
-	for (farm in SZEM4_FARM.DOMINFO_FARMS) {
+	for (let farm in SZEM4_FARM.DOMINFO_FARMS) {
 		SZEM4_FARM.DOMINFO_FARMS[farm].szin = SZEM4_FARM.DOMINFO_FARMS[farm].szin || {};
 		const a_row = farmTable.insertRow(-1);
 		// HOVA
@@ -1796,7 +1797,7 @@ function learnCatapult(el){
 	let toCatapult = {};
 	const ignoreCatapult=['wood', 'stone', 'iron', 'wall'];
 	const i18nBuildings=document.getElementById("vije_opts");
-	for (b in SZEM4_FARM.DOMINFO_FARMS[coord].buildings) {
+	for (let b in SZEM4_FARM.DOMINFO_FARMS[coord].buildings) {
 		if (ignoreCatapult.includes(b) || SZEM4_FARM.DOMINFO_FARMS[coord].buildings[b] == 0) continue;
 		toCatapult[i18nBuildings[b].value] = SZEM4_FARM.DOMINFO_FARMS[coord].buildings[b];
 	}
@@ -1932,7 +1933,7 @@ function getProdHour(banyaszintek) {
 }
 function updateDefaultProdHour() {
 	const newProdHour = parseInt(document.getElementById('farmolo_options').termeles.value, 10);
-	for (koord in SZEM4_FARM.DOMINFO_FARMS) {
+	for (let koord in SZEM4_FARM.DOMINFO_FARMS) {
 		if (SZEM4_FARM.DOMINFO_FARMS[koord].buildings.iron || SZEM4_FARM.DOMINFO_FARMS[koord].buildings.stone || SZEM4_FARM.DOMINFO_FARMS[koord].buildings.wood) continue;
 		SZEM4_FARM.DOMINFO_FARMS[koord].prodHour = newProdHour;
 	}
@@ -1962,7 +1963,7 @@ function calculateNyers(farmCoord, travelTimeMinutes) {try{
 		foszthatoNyers = getResourceProduction(SZEM4_FARM.DOMINFO_FARMS[farmCoord].prodHour, 'max');
 		return foszthatoNyers;
 	}
-	allAttack = SZEM4_FARM.ALL_UNIT_MOVEMENT[farmCoord];
+	let allAttack = SZEM4_FARM.ALL_UNIT_MOVEMENT[farmCoord];
 	// Vonat:   [ ---- lastBefore ----|]        [ ---- firstAfter ---- |]
 	//                         [ ---- arriveTime ----|]
 	var closests = findClosestTimes(allAttack, arriveTime);
@@ -2049,7 +2050,7 @@ function planAttack(farmRow, nyers_VIJE, bestSpeed, hatarszam) {try{
 	const maxTavPerc = parseInt(allOptions.maxtav_ora.value, 10) * 60 + parseInt(allOptions.maxtav_p.value, 10);
 	let plan = {};
 
-	for (attacker in SZEM4_FARM.DOMINFO_FROM) {
+	for (let attacker in SZEM4_FARM.DOMINFO_FROM) {
 		let unifiedTraverTime = (1/SPEED)*(1/UNIT_S);
 		unifiedTraverTime = unifiedTraverTime*(distCalc(farmCoord.split("|"), attacker.split("|"))); /*a[i]<->fromVillRow távkeresés*/
 		
@@ -2248,7 +2249,7 @@ function getSlowestUnit(attacker) {try{
 	// Get unit speed of the smallest available, but priorize horse
 	// heavy > light,marcher > sword > spear,axe,archer
 	const available_units = {};
-	isUnit = false;
+	let isUnit = false;
 	for (let i=0;i<UNITS.length;i++) {
 		if (UNITS[i] !== 'spy' && attacker.isUnits[UNITS[i]] && attacker.noOfUnits[UNITS[i]] > 0) {
 			available_units[UNITS[i]] = true;
