@@ -1866,7 +1866,7 @@ suite("SZEM's own icons", function () {
 	var halvany = szemCss().match(/--szem-text-dim:\s*([^;]+);/)[1].trim();
 	var piros = szemCss().match(/--szem-danger:\s*([^;]+);/)[1].trim();
 
-	['search', 'heart', 'hang'].forEach(function (nev) {
+	['search', 'heart', 'hang', 'pihen'].forEach(function (nev) {
 		var d = api.szemIkon(nev);
 		ok(d.indexOf('data:image/svg+xml,') === 0, nev + ' is drawn rather than fetched');
 		var dec = decodeURIComponent(d);
@@ -1883,13 +1883,24 @@ suite("SZEM's own icons", function () {
 	ok(decodeURIComponent(api.szemIkon('hang')).indexOf(piros) === -1,
 	   'and the sound icon does not shout');
 
+	/* The waiting indicator sits in an element the stylesheet spins, so it has
+	   to be a shape that reads as motion: a full track with one bright arc on
+	   it. The accent is what makes the arc findable against the track, and the
+	   track is what makes it a spinner rather than a dot going in circles. */
+	var ekes = szemCss().match(/--szem-accent:\s*([^;]+);/)[1].trim();
+	var pihen = decodeURIComponent(api.szemIkon('pihen'));
+	ok(pihen.indexOf(ekes) !== -1, 'the waiting indicator is drawn in the accent');
+	ok(pihen.indexOf(halvany) !== -1, 'over a track in the quiet colour');
+	ok(/#global_notifications img\.rotate\s*\{[^}]*animation:/.test(szemCssRules()),
+	   'and the element it goes in is still the one that spins');
+
 	eq(api.szemIkon('nincsilyen'), '', 'an unknown name draws nothing rather than a broken image');
 	keret.remove();
 
 	/* The artwork these replaced is gone from the source entirely -- a stray
 	   pic("search.png") would fetch a picture that no longer matches. */
 	['search.png', 'heart.png', 'hang.png', 'play.png', 'pause.png',
-	 'muhely_logo.png'].forEach(function (f) {
+	 'muhely_logo.png', 'freeze.png'].forEach(function (f) {
 		eq(SZEM4_SRC.indexOf(f), -1, f + ' is no longer fetched');
 	});
 

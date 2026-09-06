@@ -1168,6 +1168,7 @@ function ikonSvg(tartalom) {
 function szemIkon(nev, szinNev) {
 	var halvany = ikonSzin(szinNev || '--szem-text-dim', '#9aa4b0');
 	var piros = ikonSzin(szinNev || '--szem-danger', '#e05252');
+	var ekes = ikonSzin(szinNev || '--szem-accent', '#d9a441');
 	switch (nev) {
 		case 'search':
 			return ikonSvg('<circle cx="7.6" cy="7.6" r="4.5" fill="none" stroke="' + halvany + '" stroke-width="1.6"/>' +
@@ -1178,6 +1179,14 @@ function szemIkon(nev, szinNev) {
 			return ikonSvg('<path d="M2.6 7 L5.6 7 L9.2 3.7 L9.2 14.3 L5.6 11 L2.6 11 Z" fill="' + halvany + '"/>' +
 				'<path d="M11.8 6.4 A4 4 0 0 1 11.8 11.6" fill="none" stroke="' + halvany + '" stroke-width="1.5" stroke-linecap="round"/>' +
 				'<path d="M13.8 4.4 A6.7 6.7 0 0 1 13.8 13.6" fill="none" stroke="' + halvany + '" stroke-width="1.4" stroke-linecap="round" opacity="0.6"/>');
+		/* SZEM standing back while the interface is being used. The element
+		   this goes in is spun by #global_notifications img.rotate, so it is
+		   drawn as a track with one bright arc riding it -- the shape that
+		   reads as "working, wait" once it turns. A snowflake spinning on the
+		   spot read as an error state instead. */
+		case 'pihen':
+			return ikonSvg('<circle cx="9" cy="9" r="6.3" fill="none" stroke="' + halvany + '" stroke-width="2" opacity="0.3"/>' +
+				'<path d="M9 2.7 A6.3 6.3 0 0 1 15.3 9" fill="none" stroke="' + ekes + '" stroke-width="2" stroke-linecap="round"/>');
 		default:
 			return '';
 	}
@@ -1942,7 +1951,7 @@ function hattercsere(cella){
 	
 }
 function addFreezeNotification() {
-	if (!USER_ACTIVITY) document.getElementById('global_notifications').innerHTML = `<img src="${pic('freeze.png')}" class="rotate" onmouseover="sugo(this,'Amíg SZEM keretrendszert piszkálod, SZEM pihen hogy fókuszálni tudj (automata)')">`;
+	if (!USER_ACTIVITY) document.getElementById('global_notifications').innerHTML = `<img src="${szemIkon('pihen')}" class="rotate" onmouseover="sugo(this,'Amíg SZEM keretrendszert piszkálod, SZEM pihen hogy fókuszálni tudj (automata)')">`;
 	USER_ACTIVITY = true;
 	clearTimeout(USER_ACTIVITY_TIMEOUT);
 	USER_ACTIVITY_TIMEOUT = setTimeout(() => {
