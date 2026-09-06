@@ -1472,6 +1472,24 @@ var BOT_HANGERO = 0.5;
 var BOT_KEZDET = 0, BOT_FELADVA = false;
 var BOTORA = 0, ALTBOT2=false; /*ALTBOT2 --> megnyílt e már 1x az ablak*/
 var BOT_REF;
+/* The windows SZEM opens for its modules, as a list of the ones still open.
+
+   BotvedelemKi() used to find these by walking `window` for property names
+   containing "REF". That worked while the script was a pile of globals; the
+   day it was wrapped in an IIFE they became locals, the walk started finding
+   nothing, and the refresh after a check quietly stopped happening. Naming
+   them is duller and cannot silently become a no-op again. */
+function nyitottAblakok() {
+	var lista = [['FARM_REF', FARM_REF], ['VIJE_REF1', VIJE_REF1], ['VIJE_REF2', VIJE_REF2],
+	             ['EPIT_REF', EPIT_REF], ['GYUJTO_REF', GYUJTO_REF], ['BOT_REF', BOT_REF]];
+	var nyitva = [];
+	for (var i = 0; i < lista.length; i++) {
+		/* Reading .closed throws on a window that has gone away underneath us. */
+		try { if (lista[i][1] && !lista[i][1].closed) nyitva.push({ nev: lista[i][0], ablak: lista[i][1] }); }
+		catch (e) { debug('nyitottAblakok', lista[i][0] + ': ' + e); }
+	}
+	return nyitva;
+}
 /* The one place that decides whether a page is showing a bot check, so that
    raising the alarm and deciding it has cleared can never disagree. Returns
    the signal that fired, for the log, or '' for a clean page.
@@ -1578,20 +1596,16 @@ function BotvedelemKi(){
 	soundVolume(1.0); // standing down muted it; without this every later sound is silent
 	botvedelemAblakZar();
 	alert2('Bot védelem rendben');
-	/*Megnyitott lapok frissítése*/
-	for (const propertyName in window) {
-		if (window.hasOwnProperty(propertyName)) {
-			const propertyValue = window[propertyName];
-			if (propertyName.includes("REF") && isWindowReference(propertyValue) && !propertyValue.closed) {
-				try{propertyValue.location.reload();}catch(e){console.error("Not reloadable", propertyName);}
-			}
-		}
-	}
-	return;
+	/* Megnyitott lapok frissítése: they are sitting on the check page.
 
-	function isWindowReference(obj) {
-		return obj && typeof obj === "object" && "window" in obj && obj.window === obj;
-	}
+	   Navigating to the same address rather than calling .reload(): a farm
+	   window can be sitting on the result of a POST, and reloading that
+	   repeats the request -- which in this program means sending an attack
+	   again. Assigning to location.href is a plain GET of the same page. */
+	nyitottAblakok().forEach(function (ab) {
+		try { ab.ablak.location.href = ab.ablak.location.href; }
+		catch (e) { debug('BotvedelemKi', ab.nev + ' nem friss\u00edthet\u0151: ' + e); }
+	});
 }
 
 function isPageLoaded(ref, faluid, address, elements=[]){try{

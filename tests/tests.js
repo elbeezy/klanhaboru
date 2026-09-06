@@ -459,6 +459,17 @@ suite('Pausing everything for a while', function () {
    to stop and stay stopped until the code is typed in -- so what matters most
    is that the alarm can be raised once, and can actually be switched off. */
 suite('The bot-protection alarm', function () {
+	/* A window whose navigations can be told apart from a reload: assigning to
+	   location.href is a fresh GET, location.reload() repeats the last request. */
+	function fakeAblak(href) {
+		var a = { closed: false, navigated: [], reloads: 0 };
+		a.location = {
+			get href() { return href; },
+			set href(v) { a.navigated.push(v); },
+			reload: function () { a.reloads++; }
+		};
+		return a;
+	}
 	function alarmWorld(pageState) {
 		var w = {
 			BOT: false, BOTORA: 0, ALTBOT2: false, BOT_VOL: 0.0, BOT_REF: null,
@@ -485,7 +496,17 @@ suite('The bot-protection alarm', function () {
 			getElementById: function (id) { return w.page[id] || null; },
 			querySelector: function (sel) { return w.page[sel] || null; }
 		};
-		w.BOT_REF = { closed: false, document: doc, close: function () { this.closed = true; } };
+		w.BOT_REF = { closed: false, document: doc, location: fakeAblak('https://game/bot').location,
+		              close: function () { this.closed = true; } };
+		/* The module windows, as nyitottAblakok() sees them: one open, one open
+		   but never used, one never opened, one already closed, and one that
+		   throws the moment it is asked whether it is closed. */
+		w.FARM_REF = fakeAblak('https://game/game.php?screen=place&try=confirm');
+		w.VIJE_REF1 = fakeAblak('https://game/game.php?screen=report');
+		w.VIJE_REF2 = null;
+		w.EPIT_REF = fakeAblak('https://game/game.php?screen=main');
+		w.EPIT_REF.closed = true;
+		w.GYUJTO_REF = { get closed() { throw new Error('elt\u00fbnt'); } };
 		w.window = { open: function () { return w.BOT_REF; } };
 		/* One element, not a fresh stub per call: the question is whether
 		   anything ever actually paused the clip. */
@@ -630,6 +651,36 @@ suite('The bot-protection alarm', function () {
 	ok(r4 !== '', 'answering in time is reported too');
 	ok(r4.indexOf('elhallgatott') === -1, 'without claiming the alarm gave up', r4);
 	ok(w4.BOT === false, 'and the modules run again');
+
+	/* --- the windows SZEM has open ---
+	   Found by name. The old walk over `window` for properties containing
+	   "REF" stopped finding anything when the file was wrapped in an IIFE,
+	   which made the refresh below a no-op without ever failing. */
+	var w8 = alarmWorld(checkShowing()), api8 = alarmApi(w8);
+	var nyitva = api8.nyitottAblakok().map(function (a) { return a.nev; });
+	ok(nyitva.indexOf('FARM_REF') !== -1, 'an open window is found', nyitva.join(','));
+	ok(nyitva.indexOf('VIJE_REF1') !== -1, 'and so is a second one', nyitva.join(','));
+	ok(nyitva.indexOf('VIJE_REF2') === -1, 'one that was never opened is not');
+	ok(nyitva.indexOf('EPIT_REF') === -1, 'nor one that has been closed');
+	ok(nyitva.indexOf('GYUJTO_REF') === -1, 'nor one that throws when asked');
+	ok(nyitva.indexOf('BOT_REF') !== -1, 'the alarm window counts while it is open');
+	ok(api8.nyitottAblakok().length === 3,
+	   'and nothing else is dragged in', nyitva.join(','));
+
+	/* After the check clears, the module windows are still sitting on it. */
+	api8.BotvedelemBe();
+	api8.BotvedelemKi();
+	eq(w8.FARM_REF.navigated.length, 1, 'the farm window is sent back to its page');
+	eq(w8.VIJE_REF1.navigated.length, 1, 'and so is the report window');
+	eq(w8.EPIT_REF.navigated.length, 0, 'a closed one is left alone');
+
+	/* Not with reload(): a farm window can be sitting on the result of a POST,
+	   and repeating that request means sending the attack a second time. */
+	eq(w8.FARM_REF.reloads, 0, 'without repeating whatever request got it there');
+	eq(w8.VIJE_REF1.reloads, 0, 'for any of them');
+
+	ok(stripComments(SZEM4_SRC).indexOf('includes("REF")') === -1,
+	   'and nothing looks for these by sniffing global names any more');
 
 	/* --- what counts as a bot check ---
 	   One function answers this, so that raising the alarm and deciding it
