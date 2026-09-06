@@ -1838,6 +1838,22 @@ function getServerTime(ref, isSilent=false) {
 function maplink(koord){
 	return '<a href="'+gameUrl({ screen: 'map', x: koord.split('|')[0], y: koord.split('|')[1], mode: null, group: null, page: null })+'" target="_BLANK">'+koord+'</a>';
 }
+/* "No highlight" for a farm row, a wall cell or a builder info cell.
+
+   This used to be the literal colour #f4e4bc -- a hand-copied sample of the
+   beige the tables were back when the game painted them. It never meant
+   beige, though: every place that writes it is clearing a marking, and the
+   builder even spells it "alap". So on the dark palette it stopped reading
+   as "nothing is flagged here" and started reading as a highlight of its
+   own, in a cream that the pale body text cannot be read on.
+
+   Empty means the inline colour comes off entirely and the cell goes back to
+   whatever the stylesheet says, so this follows the palette for free and
+   there is no second copy of a background colour to keep in step. Nothing
+   ever reads this value back -- the states that ARE read back are red,
+   yellow and green -- so it can be empty safely. */
+var JELZO_NINCS = '';
+
 /*dupla klikk események*/
 function multipricer(ez,tip,s1){try{
 	if (ez==undefined) return;
@@ -1853,7 +1869,7 @@ function multipricer(ez,tip,s1){try{
 				case "mod": SZEM4_FARM.DOMINFO_FARMS[koord].nyers = parseInt(s1, 10); x[i].cells[3].innerHTML=s1; break;
 				case "htor":
 					SZEM4_FARM.DOMINFO_FARMS[koord].szin.falu = '';
-					x[i].cells[0].style.backgroundColor="#f4e4bc";
+					x[i].cells[0].style.backgroundColor=JELZO_NINCS;
 					break;
 				case 'hreset':
 					SZEM4_FARM.DOMINFO_FARMS[koord].szin.fal = '';
@@ -1893,7 +1909,7 @@ function modosit_szam(cella){
 	multipricer("hova","mod",uj);
 }
 function hattertolor(cella) {
-	cella.style.backgroundColor="#f4e4bc";
+	cella.style.backgroundColor=JELZO_NINCS;
 	let koord = cella.closest('tr').cells[0].textContent;
 	SZEM4_FARM.DOMINFO_FARMS[koord].szin = SZEM4_FARM.DOMINFO_FARMS[koord].szin || {};
 	SZEM4_FARM.DOMINFO_FARMS[koord].szin.falu = '';
@@ -1906,7 +1922,7 @@ function hattercsere(cella){
 
 	if (cella.style.backgroundColor=="rgb(0, 255, 0)" || cella.style.backgroundColor=="#00FF00") {
 		if (cella.style.border) {
-			szin="#f4e4bc";
+			szin=JELZO_NINCS;
 			cella.style.backgroundColor = szin;
 			SZEM4_FARM.DOMINFO_FARMS[koord].szin.fal = '';
 			cella.style.border = '';
@@ -3750,7 +3766,7 @@ function szem4_VIJE_1kivalaszt(){try{
 
 		if (szin.includes("green")) {
 			VT[i].cells[0].getElementsByTagName("input")[0].checked = true;
-			farm_helye.cells[0].style.backgroundColor="#f4e4bc";
+			farm_helye.cells[0].style.backgroundColor=JELZO_NINCS;
 		}
 		else if (szin.includes('yellow')) {
 			farm_helye.cells[0].style.backgroundColor = 'yellow';
@@ -4323,7 +4339,7 @@ function szem4_EPITO_addIdo(sor, perc){try{
 }catch(e){debug("epito_addIdo",e); return false;}}
 
 function szem4_EPITO_infoCell(sor,szin,info){try{
-	if (szin=="alap") szin="#f4e4bc";
+	if (szin=="alap") szin=JELZO_NINCS;
 	if (szin=="blue") szin="#44F";
 	if (szin=="red") setTimeout('playSound("kritikus_hiba")',2000);
 	sor.cells[3].style.backgroundColor=szin;

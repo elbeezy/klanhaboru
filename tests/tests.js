@@ -1365,6 +1365,70 @@ suite('The tables', function () {
 });
 
 /* ------------------------------------------------------------------------ */
+suite('Clearing a marking clears it', function () {
+	/* Five places wrote the literal #f4e4bc, and not one of them was choosing
+	   a colour: every one was clearing a marking, and the builder even spells
+	   its case "alap". The value was a hand-copied sample of the beige the
+	   tables used to be, so on the dark palette "nothing is flagged here"
+	   started rendering as a cream block with unreadable text on it -- which
+	   is what got reported.
+
+	   Matched with the quotes on purpose. The constant's own comment names
+	   the old colour to explain itself, and a bare search for the hex cannot
+	   tell that apart from the hex still being used. */
+	eq(SZEM4_SRC.indexOf('"#f4e4bc"'), -1, 'no cell is painted the old table beige to mean "unmarked"');
+	eq(SZEM4_SRC.indexOf("'#f4e4bc'"), -1, 'spelled either way');
+
+	var hivasok = [];
+	var vilag = {
+		SZEM4_FARM: { DOMINFO_FARMS: { '500|500': { szin: {} } } },
+		multipricer: function () { hivasok.push([].slice.call(arguments)); }
+	};
+
+	/* JELZO_NINCS is a top-level var, so it is taken from the source with the
+	   functions and read back through an accessor -- a var declared inside
+	   the compiled scope does not escape it. */
+	var deklaracio = SZEM4_SRC.match(/var JELZO_NINCS = [^;]*;/)[0];
+	var api = sandbox(vilag, [
+		deklaracio,
+		sliceFn(SZEM4_SRC, 'hattertolor'),
+		sliceFn(SZEM4_SRC, 'hattercsere')
+	], { JELZO_NINCS: 'JELZO_NINCS' });
+
+	eq(api.JELZO_NINCS(), '', 'clearing takes the inline colour off rather than picking another one');
+
+	/* A real table: these functions walk from the cell to its row with
+	   closest() to find the coordinate, which a stand-in object cannot do. */
+	var tabla = document.createElement('table');
+	tabla.innerHTML = '<tbody><tr><td>500|500</td><td>x</td><td>w</td></tr></tbody>';
+	document.body.appendChild(tabla);
+	var sor = tabla.rows[0];
+
+	var falu = sor.cells[0];
+	falu.style.backgroundColor = 'red';
+	api.hattertolor(falu);
+	eq(falu.style.backgroundColor, '',
+	   'a cleared row goes back to the table colour instead of a cream of its own');
+	eq(vilag.SZEM4_FARM.DOMINFO_FARMS['500|500'].szin.falu, '', 'and stores no colour for it');
+
+	/* The three colours that ARE read back as state must not get swept up in
+	   this. The farm engine skips a row whose first cell is red, and
+	   hattercsere recognises its own green to know which way it is toggling,
+	   so emptying those would change what gets attacked. */
+	var fal = sor.cells[2];
+	api.hattercsere(fal);
+	eq(fal.style.backgroundColor, 'rgb(0, 255, 0)', 'marking a wall cell still turns it green');
+	api.hattercsere(fal);
+	eq(fal.style.backgroundColor, 'rgb(0, 255, 0)', 'a second click still reads that green back');
+	ok(fal.style.border !== '', 'and adds the mark on top of it', fal.style.border);
+	api.hattercsere(fal);
+	eq(fal.style.backgroundColor, '', 'and only the third click clears the marking off');
+	eq(fal.style.border, '', 'along with the mark');
+
+	tabla.remove();
+});
+
+/* ------------------------------------------------------------------------ */
 suite('The farm search control stays in its header', function () {
 	/* Both farm tables put a search icon and a select-all box in the corner of
 	   a header cell, positioned absolutely. An absolutely positioned element
