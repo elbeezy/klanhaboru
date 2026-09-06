@@ -4010,67 +4010,123 @@ function szem4_ADAT_LoadAll(){
 	szem4_ADAT_loadNow('sys');
 }
 
-/** OBSOLATE, NEED REFACTOR */
+/* The builder's saved state used to be one string: groups and villages joined
+   by "_", entries by ".", and a group's name separated from its build list by
+   "-". Group names may contain "-" (ujCsop only strips ";", "." and "_"), so
+   naming a group "Gyors-epites" silently truncated its build list on reload.
+
+   Loading was positional too: it recreated each group, then wrote the build
+   list into row i+2 by index. Any group that failed to appear -- a duplicate
+   name, say -- shifted every later row, which is the "rows[(i+2)] is
+   undefined" failure this has thrown before.
+
+   It is JSON now, like every other module. Villages are stored by coordinate
+   rather than by display label, since the label embeds a village name that
+   the game may change. */
+
+function szem4_EPITO_parseLegacy(text) {
+	const [groupPart = '', villagePart = '', assignPart = ''] = text.split('_');
+	const groups = groupPart.split('.').filter(Boolean).map(entry => {
+		const cut = entry.indexOf('-');
+		return cut === -1
+			? { name: entry, list: '' }
+			: { name: entry.slice(0, cut), list: entry.slice(cut + 1) };
+	});
+	const labels = villagePart ? villagePart.split('.') : [];
+	const assigned = assignPart ? assignPart.split('.') : [];
+	const villages = [];
+	labels.forEach((label, i) => {
+		const found = label.match(/[0-9]{1,3}\|[0-9]{1,3}/);
+		if (found) villages.push({ coord: found[0], group: assigned[i] || 'Alap\u00e9rtelmezett' });
+	});
+	return { v: 2, groups, villages };
+}
+
+function szem4_EPITO_applyState(state) {
+	const groupTable = document.getElementById("epit").getElementsByTagName("table")[0];
+	const villageTable = document.getElementById("epit_lista");
+	const groupPicker = document.getElementById("epit_ujfalu_adat").getElementsByTagName("select")[0];
+
+	/* row 1 of the group table is the built-in default, which stays */
+	for (let i = groupTable.rows.length - 1; i > 1; i--) groupTable.deleteRow(i);
+	for (let i = villageTable.rows.length - 1; i > 0; i--) villageTable.deleteRow(i);
+	while (groupPicker.length > 1) groupPicker.remove(1);
+
+	/* Created through the existing button so every select stays wired up, then
+	   located by name -- a group that fails to appear no longer shifts the ones
+	   after it into the wrong rows. */
+	(state.groups || []).forEach(group => {
+		document.getElementById("epit_ujcsopnev").value = group.name;
+		szem4_EPITO_ujCsop();
+		const row = [...groupTable.rows].find(r => r.cells[0] && r.cells[0].textContent === group.name);
+		if (!row) {
+			debug('szem4_EPITO_applyState', `A(z) "${group.name}" csoport nem j\u00f6tt l\u00e9tre, kihagyva.`);
+			return;
+		}
+		row.cells[1].getElementsByTagName("input")[0].value = group.list;
+	});
+
+	const coords = (state.villages || []).map(v => v.coord).filter(Boolean);
+	if (coords.length) {
+		document.getElementById("epit_ujfalu_adat").getElementsByTagName("input")[0].value = coords.join(' ');
+		szem4_EPITO_ujFalu();
+	}
+
+	/* Assignments matched by coordinate, not by row order: a village that was
+	   skipped (sold, or no longer yours) must not shift everyone else's group. */
+	const wanted = {};
+	(state.villages || []).forEach(v => { wanted[v.coord] = v.group; });
+	for (let i = 1; i < villageTable.rows.length; i++) {
+		const found = villageTable.rows[i].cells[0].textContent.match(/[0-9]{1,3}\|[0-9]{1,3}/);
+		if (!found) continue;
+		const group = wanted[found[0]];
+		const select = villageTable.rows[i].cells[1].getElementsByTagName("select")[0];
+		if (group && [...select.options].some(o => o.text === group)) select.value = group;
+	}
+}
+
 function szem4_ADAT_epito_save(){try{
-	var eredmeny="";
-	/*Csoportok*/
-	var adat=document.getElementById("epit").getElementsByTagName("table")[0].rows;
-	for (var i=2;i<adat.length;i++) {
-		eredmeny+=adat[i].cells[0].textContent+"-"+adat[i].cells[1].getElementsByTagName("input")[0].value;
-		if (i<adat.length-1) eredmeny+=".";
+	const groupTable = document.getElementById("epit").getElementsByTagName("table")[0];
+	const groups = [];
+	for (let i = 2; i < groupTable.rows.length; i++) {
+		groups.push({
+			name: groupTable.rows[i].cells[0].textContent,
+			list: groupTable.rows[i].cells[1].getElementsByTagName("input")[0].value
+		});
 	}
-	
-	/*Falulista*/
-	eredmeny+="_";
-	adat=document.getElementById("epit").getElementsByTagName("table")[1].rows;
-	for (var i=1;i<adat.length;i++) {
-		eredmeny+=adat[i].cells[0].textContent;
-		if (i<adat.length-1) eredmeny+=".";
+
+	const villageTable = document.getElementById("epit_lista");
+	const villages = [];
+	for (let i = 1; i < villageTable.rows.length; i++) {
+		const found = villageTable.rows[i].cells[0].textContent.match(/[0-9]{1,3}\|[0-9]{1,3}/);
+		if (!found) continue;
+		villages.push({
+			coord: found[0],
+			group: villageTable.rows[i].cells[1].getElementsByTagName("select")[0].value
+		});
 	}
-	eredmeny+="_";
-	for (var i=1;i<adat.length;i++) {
-		eredmeny+=adat[i].cells[1].getElementsByTagName("select")[0].value;
-		if (i<adat.length-1) eredmeny+=".";
-	}
-	storeGuarded(AZON+"_epit", eredmeny, 'Építő');
-	var d=new Date(); document.getElementById("adat_opts").rows[2].cells[2].textContent=d.toLocaleString();
-	return;
+
+	/* the save date is stamped by szem4_ADAT_saveNow, which calls this */
+	storeGuarded(AZON+"_epit", JSON.stringify({ v: 2, groups, villages }), '\u00c9p\u00edt\u0151');
 }catch(e){debug("ADAT_epito_save",e);}}
 
-/** OBSOLATE, NEED REFACTOR */
 function szem4_ADAT_epito_load(){try{
-	if(localStorage.getItem(AZON+"_epit")) var suti=localStorage.getItem(AZON+"_epit"); else return;
-	/* START: Minden adat törlése a listából és falukból!*/
-	var adat=document.getElementById("epit").getElementsByTagName("table")[0];
-	for (var i=adat.rows.length-1;i>1;i--) {
-		adat.deleteRow(i);
+	const raw = localStorage.getItem(AZON+"_epit");
+	if (!raw) return;
+
+	let state = null;
+	try { state = JSON.parse(raw); } catch (e) { state = null; }
+
+	if (!state || !Array.isArray(state.groups)) {
+		state = szem4_EPITO_parseLegacy(raw);
+		/* Keep the original untouched: this is the one format change that cannot
+		   be undone by checking out an older version of the script. */
+		if (!localStorage.getItem(AZON+"_epit_legacy")) localStorage.setItem(AZON+"_epit_legacy", raw);
+		naplo('\u00c9p\u00edt\u0151', `A r\u00e9gi form\u00e1tum\u00fa \u00e9p\u00edt\u00e9si adat \u00e1talak\u00edtva (${state.groups.length} csoport, ${state.villages.length} falu). Az eredeti megmaradt a(z) ${AZON}_epit_legacy kulcson.`);
 	}
-	var adat=document.getElementById("epit").getElementsByTagName("table")[1];
-	for (var i=adat.rows.length-1;i>0;i--) {
-		adat.deleteRow(i);
-	}
-	adat=document.getElementById("epit_ujfalu_adat").getElementsByTagName("select")[0];
-	while (adat.length>1) adat.remove(1);
-	
-	/*új csoport gomb használata, utána módosítás - ezt egyesével*/
-	adat=suti.split("_")[0].split(".");
-	for (var i=0;i<adat.length;i++) {
-		document.getElementById("epit_ujcsopnev").value=adat[i].split("-")[0];
-		szem4_EPITO_ujCsop();
-		document.getElementById("epit").getElementsByTagName("table")[0].rows[i+2].cells[1].getElementsByTagName("input")[0].value=adat[i].split("-")[1];
-	}
-	/*Új faluk hozzáadása gomb, majd select állítása*/
-	adat=suti.split("_")[1].split(".");
-	document.getElementById("epit_ujfalu_adat").getElementsByTagName("input")[0].value=adat;
-	szem4_EPITO_ujFalu();
-	
-	adat=suti.split("_")[2].split(".");
-	var hely=document.getElementById("epit").getElementsByTagName("table")[1].rows;
-	for (var i=0;i<adat.length;i++) {
-		hely[i+1].cells[1].getElementsByTagName("select")[0].value=adat[i];
-	}
-	alert2("Építési adatok betöltése kész.");
-	return;
+
+	szem4_EPITO_applyState(state);
+	alert2("\u00c9p\u00edt\u00e9si adatok bet\u00f6lt\u00e9se k\u00e9sz.");
 }catch(e){debug("ADAT_epito_load",e);}}
 
 function szem4_ADAT_del(tipus){try{
