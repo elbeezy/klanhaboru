@@ -3641,6 +3641,28 @@ szem4_EPITO_motor();
 szem4_EPITO_perccsokkento();
 
 /*-----------------GYŰJTÖGETŐ--------------------*/
+/* The gatherer drives InnoGames' own scavenging helper rather than
+   reimplementing it. That path is market-specific -- com_DS_HU is the
+   Hungarian one -- so playing on another server means changing this line.
+   It is stated once and reused by the on-screen instructions further down,
+   so what the script loads and what the interface tells you to load cannot
+   drift apart. */
+const SCAVENGE_SCRIPT_URL = 'https://media.innogames.com/com_DS_HU/scripts/scavenging.js';
+
+/* $.getScript returns a promise whose rejection was never handled. If the
+   file moves or the market is wrong, nothing loads, the page never reaches
+   the state the next step waits for, and the gatherer counts to thirty
+   errors and restarts -- forever, saying only that something is wrong.
+   A failure here is now reported with the URL that failed. */
+function loadScavengeHelper(reason) {try{
+	const pending = GYUJTO_REF.$.getScript(SCAVENGE_SCRIPT_URL);
+	if (pending && typeof pending.fail === 'function') {
+		pending.fail(function (xhr, status, err) {
+			naplo('Gyűjtögető ⚠', `A gyűjtögető segédscriptje nem tölthető be, így nem tud dolgozni. Cím: ${SCAVENGE_SCRIPT_URL}`);
+			debug('loadScavengeHelper', `${reason}: ${SCAVENGE_SCRIPT_URL} -> ${status}${err ? ' ' + err : ''}`);
+		});
+	}
+}catch(e){ debug('loadScavengeHelper', e); }}
 function gyujto_listAllVillages() {
 	let rows = '';
 	for (const key in KTID) {
@@ -3799,7 +3821,7 @@ function szem4_GYUJTO_motor() {
 				case 1:
 					// run 3rdparty script
 					if (isPageLoaded(GYUJTO_REF, GYUJTO_DATA, 'screen=place&mode=scavenge', ['#scavenge_screen .scavenge-option'])) {
-						GYUJTO_REF.$.getScript('https://media.innogames.com/com_DS_HU/scripts/scavenging.js');
+						loadScavengeHelper('első betöltés');
 						GYUJTO_STATE = 2;
 					} else GYUJTO_HIBA++;
 					break;
@@ -3809,7 +3831,7 @@ function szem4_GYUJTO_motor() {
 						szem4_GYUJTO_3elindit();
 					} else {
 						GYUJTO_HIBA++;
-						if (GYUJTO_HIBA == 15) GYUJTO_REF.$.getScript('https://media.innogames.com/com_DS_HU/scripts/scavenging.js');
+						if (GYUJTO_HIBA == 15) loadScavengeHelper('újrapróbálkozás 15 sikertelen ellenőrzés után');
 					}
 					break;
 			}
@@ -3834,7 +3856,7 @@ ujkieg('gyujto','Gyűjtő',`<tr><td>
 	<h4 align="center">Powered by TwCheese</h4>
 	<br><br>
 	Ez a script külön beállítást igényel. Ehhez az alábbi, legálisan is futtható scriptet kell futtatnod a gyülekezőhelyeden, a gyűjtögetésnél:<br>
-	<pre>$.getScript('https://media.innogames.com/com_DS_HU/scripts/scavenging.js');</pre><br>
+	<pre>$.getScript('${SCAVENGE_SCRIPT_URL}');</pre><br>
 	SZEM ezt a scriptet fogja automata módban futtatni az alább bejelöld faluidban, az ott beállított módon.<br>
 	<form id="gyujto_form">
 		<table class="vis gyujto_table" id="gyujto_form_table">
