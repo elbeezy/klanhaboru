@@ -77,13 +77,7 @@ if (window.SZEM4_ALREADY_RUNNING) {
 	return;
 }
 var VERZIO = 'v4.6 Build 26.05.25';
-var SZEM4_SETTINGS = {
-	selectedProfile: 1,
-	profile1: {},
-	profile2: {},
-	profile3: {},
-	profile4: {}
-};
+var SZEM4_SETTINGS = defaultSettingsState();
 var TIME_ZONE = 0;
 try{ /*Rendszeradatok*/
 	var AZON="S0";
@@ -1584,6 +1578,31 @@ function gameUrl(overrides) {
 	return url.href;
 }
 
+/* Default state shapes. Declared once and used both to initialise and to
+   reset, so the two cannot drift apart. */
+function defaultFarmState() {
+	return {
+		ALL_UNIT_MOVEMENT: {}, // hova(koord): [[ teherbírás, mikorra(getTime()), VIJE miatti teherbírás ], ...]
+		ALL_SPY_MOVEMENTS: {}, // hova(koord): mikor ment utoljára kém
+		DOMINFO_FARMS: {},     // village: {prodHour, buildings, nyers, szin, isJatekos}
+		DOMINFO_FROM: {},      // village: {isUnits, noOfUnits}
+		OPTIONS: {}
+	};
+}
+function defaultVijeState() {
+	return {
+		ALL_VIJE_SAVED: {}, // coord: a faluról készült legfrissebb elemzés ideje
+		i18ns: {},          // épületId: fordítás
+		ELEMZETT: []
+	};
+}
+function defaultGyujtoState() {
+	return { settings: { strategy: 'max' } };
+}
+function defaultSettingsState() {
+	return { selectedProfile: 1, profile1: {}, profile2: {}, profile3: {}, profile4: {} };
+}
+
 function pageUrl(ref) {
 	try { return ref.document.location.href; } catch (e) { return '(nem olvashato ablak)'; }
 }
@@ -2829,13 +2848,7 @@ ujkieg("farm","Farmoló",`<tr><td>
 var FARM_LEPES=0, FARM_REF, FARM_HIBA=0, FARM_GHIBA=0,
 	BOT=false,
 	FARMOLO_TIMER,
-	SZEM4_FARM = {
-		ALL_UNIT_MOVEMENT: {}, //{..., hova(koord): [[ mennyi_termelésből(teherbírás), mikorra(getTime()), mennyi_VIJE_miatt(teherbírás) ], ...], ...}
-		ALL_SPY_MOVEMENTS: {}, // hova(koord): mikor ment utoljára kém
-		DOMINFO_FARMS: {}, // village: {prodHour: <number>, buildings: {main: <number>, barracks: <number>, wall: <number>}, nyers: <number>, isJatekos: <boolean> }
-		DOMINFO_FROM: {}, // village: {isUnits: {spear: true, sword: false, ...}, noOfUnits: {spear: 999, sword: 0, ...}}
-		OPTIONS: {}
-	},
+	SZEM4_FARM = defaultFarmState(),
 	PM1, FARM_PAUSE=true;
 szem4_farmolo_motor();
 
@@ -3270,11 +3283,7 @@ var VIJE_LEPES=0;
 var VIJE_REF1; var VIJE_REF2;
 var VIJE_HIBA=0; var VIJE_GHIBA=0;
 var VIJE2_HIBA=0; var VIJE2_GHIBA=0;
-var SZEM4_VIJE = {
-	ALL_VIJE_SAVED: {}, // coord: date (legfrissebb elemzés a faluról),
-	i18ns: {}, // épületId: fordítás
-	ELEMZETT: [],
-};
+var SZEM4_VIJE = defaultVijeState();
 readUpVijeOpts();
 var PM2;
 szem4_VIJE_motor();
@@ -3866,11 +3875,7 @@ function szem4_GYUJTO_motor() {
 		worker.postMessage({'id': 'gyujto', 'time': nexttime});
 	}catch(e){debug('gyujto_motor', 'Worker engine error: ' + e);setTimeout(function(){szem4_GYUJTO_motor();}, 1000);}
 }
-var SZEM4_GYUJTO = {
-	settings: {
-		strategy: 'max'
-	}
-}, //VillId: isEnabled
+var SZEM4_GYUJTO = defaultGyujtoState(), //VillId: isEnabled
 GYUJTO_VILLINFO = {}, // villId: {returned: xxxDatexxx, retry: bool}
 GYUJTO_STATE = 0,
 GYUJTO_REF,
@@ -3970,10 +3975,54 @@ function szem4_ADAT_loadNow(tipus) {try{
 	}
 }catch(e) {debug('szem4_ADAT_loadNow', `Hiba ${tipus} adatbetöltésénél: ${e}`);}}
 
-function szem4_ADAT_restart(tipus) {
-	// DEL nem is kell, csak ez a reset?
-	alert('To be implemented'); return;
-}
+/* The delete button only removes the stored copy. Whatever is in memory
+   survives it, and the autosave writes it straight back within the minute,
+   so on a running instance deleting alone achieves nothing. Reset clears
+   both, which is what makes it stick.
+
+   Some of the interface is rebuilt in place; the rest is only fully clean
+   after reloading SZEM, which the confirmation says. */
+function szem4_ADAT_restart(tipus) {try{
+	const labels = {
+		farm: 'Farmol\u00f3', vije: 'Jelent\u00e9s Elemz\u0151', epit: '\u00c9p\u00edt\u0151',
+		gyujto: 'Gy\u0171jt\u00f6get\u0151', sys: 'Hangok \u00e9s t\u00e9m\u00e1k'
+	};
+	const label = labels[tipus];
+	if (!label) { alert2(`Nincs ilyen t\u00edpus: ${tipus}`); return; }
+
+	if (!confirm(`Biztosan alaphelyzetbe \u00e1ll\u00edtod ezt: ${label}?\n\n`
+		+ `T\u00f6rl\u0151dik a mem\u00f3ri\u00e1ban l\u00e9v\u0151 \u00e9s a lementett adat is. Ez nem vonhat\u00f3 vissza.\n\n`
+		+ `Ha el\u0151bb biztons\u00e1gi m\u00e1solatot szeretn\u00e9l, haszn\u00e1ld az Export gombot.\n\n`
+		+ `A teljesen tiszta felülethez ut\u00e1na t\u00f6ltsd \u00fajra a SZEM-et.`)) return;
+
+	switch (tipus) {
+		case 'farm':
+			SZEM4_FARM = defaultFarmState();
+			rebuildDOM_farm();
+			break;
+		case 'vije':
+			SZEM4_VIJE = defaultVijeState();
+			readUpVijeOpts(); // put the form's own defaults back into i18ns
+			break;
+		case 'gyujto':
+			SZEM4_GYUJTO = defaultGyujtoState();
+			// rebuildDOM_gyujto only ever ticks boxes, so clear them first
+			document.querySelectorAll('#gyujto_form_table input[type="checkbox"]').forEach(el => { el.checked = false; });
+			rebuildDOM_gyujto();
+			break;
+		case 'sys':
+			SZEM4_SETTINGS = defaultSettingsState();
+			selectTheme(1);
+			break;
+		case 'epit':
+			// the builder keeps its state in the table rather than an object
+			$('#epit_lista tr:gt(0)').remove();
+			break;
+	}
+	localStorage.removeItem(`${AZON}_${tipus}`);
+	naplo('Adatment\u0151', `${label}: alaphelyzetbe \u00e1ll\u00edtva, a mentett adat t\u00f6r\u00f6lve.`);
+	alert2(`${label}: alaphelyzetbe \u00e1ll\u00edtva.`);
+}catch(e){ debug('szem4_ADAT_restart', e); alert2('Hiba alaphelyzetbe \u00e1ll\u00edt\u00e1skor:\n' + e); }}
 
 /**
  * By default, all save is enabled. This function sets all to disabled
