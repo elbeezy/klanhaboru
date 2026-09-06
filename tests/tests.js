@@ -486,9 +486,13 @@ suite('The bot-protection alarm', function () {
 		};
 		w.BOT_REF = { closed: false, document: doc, close: function () { this.closed = true; } };
 		w.window = { open: function () { return w.BOT_REF; } };
-		w.document = { getElementById: function () { return { pause: function () {}, volume: 0 }; } };
-		w.soundVolume = function (v) { w.sounds.push(v); };
-		w.playSound = function () {};
+		/* One element, not a fresh stub per call: the question is whether
+		   anything ever actually paused the clip. */
+		w.audio = { volume: 0, paused: true, pauses: 0,
+		            pause: function () { this.paused = true; this.pauses++; } };
+		w.document = { getElementById: function (id) { return id === 'audio1' ? w.audio : null; } };
+		w.soundVolume = function (v) { w.sounds.push(v); w.audio.volume = v; };
+		w.playSound = function () { w.audio.paused = false; };   // the clip is now running
 		w.alert2 = function (m) { w.alerts.push(m); };
 		w.debug = function () {};
 		w.naplo = function (k, m) { w.logged.push(k + ': ' + m); };
@@ -499,7 +503,8 @@ suite('The bot-protection alarm', function () {
 	   to the sandbox once sliced, so they are read back through accessors
 	   rather than off the fake world. */
 	function alarmApi(w) {
-		return sandbox(w, [sliceFrom(SZEM4_SRC, 'var BOT_HATARIDO_MS', 'BotvedelemKi')],
+		return sandbox(w, [sliceFn(SZEM4_SRC, 'stopSound'),
+		                   sliceFrom(SZEM4_SRC, 'var BOT_HATARIDO_MS', 'BotvedelemKi')],
 			{ kezdet: 'BOT_KEZDET', feladva: 'BOT_FELADVA', hatarido: 'BOT_HATARIDO_MS',
 			  botora: 'BOTORA', botref: 'BOT_REF' });
 	}
@@ -535,8 +540,12 @@ suite('The bot-protection alarm', function () {
 	eq(w.liveTimers().length, 1, 'and stays one over several polls');
 
 	/* Switching it off has to leave nothing running. */
+	ok(w.audio.paused === false, 'the alarm is making noise while it waits');
 	api.BotvedelemKi();
 	ok(w.BOT === false, 'typing the code lets the modules run again');
+	ok(w.audio.paused === true, 'and the alarm sound stops');
+	ok(w.audio.pauses > 0,
+	   'because something calls pause() -- naming it without the brackets does nothing');
 	eq(w.liveTimers().length, 0, 'no polling cycle is left behind');
 	eq(api.botora(), 0, 'and the handle is cleared, not just the timer');
 
@@ -577,6 +586,7 @@ suite('The bot-protection alarm', function () {
 	eq(w3.liveTimers().length, 0, 'past three minutes it stops calling');
 	ok(api3.feladva() === true, 'and records that it gave up');
 	ok(w3.sounds[w3.sounds.length - 1] === 0.0, 'the alarm goes quiet');
+	ok(w3.audio.paused === true, 'with the clip stopped, not merely turned down');
 	ok(api3.botref() === null, 'the window it opened is let go');
 
 	/* The point of the whole thing: giving up on being answered must never
@@ -599,6 +609,7 @@ suite('The bot-protection alarm', function () {
 	ok(api3.feladva() === false, 'including the gave-up flag');
 	ok(w3.sounds[w3.sounds.length - 1] === 1.0,
 	   'sound is turned back up, or every later alarm would be silent');
+	ok(w3.audio.paused === true, 'and nothing is left playing to come back with it');
 
 	/* --- what you missed --- */
 	var report = w3.logged.filter(function (l) { return l.indexOf('Feloldva') !== -1; })[0] || '';

@@ -885,6 +885,14 @@ function soundVolume(vol){
 	document.getElementById("audio1").volume=vol;
 }
 
+/* Turning the volume down is not the same as stopping the clip: it plays on
+   silently, and turning the volume back up replays whatever is left of it.
+   The element only exists once the interface has been built. */
+function stopSound(){
+	var el=document.getElementById("audio1");
+	if (el) el.pause();
+}
+
 function playSound(hang, ext='wav'){try{
 	let hang2 = hang;
 	if (hang.includes('farmolas')) hang2 ='farmolas';
@@ -1518,7 +1526,7 @@ function botvedelemTick() {
 function botvedelemFeladas() {
 	BOT_FELADVA = true;
 	clearTimeout(BOTORA); BOTORA = 0;
-	soundVolume(0.0);
+	stopSound(); soundVolume(0.0);
 	botvedelemAblakZar();
 	naplo('Bot v\u00e9delem \u26a0', `${Math.round(BOT_HATARIDO_MS / 60000)} perce nincs v\u00e1lasz az ellen\u0151rz\u00e9sre. Minden modul le\u00e1ll\u00edtva marad, am\u00edg meg nem oldod \u00e9s itt nem jelzed.`);
 	alert2('BOT V\u00c9DELEM \u2014 nem \u00e9rkezett v\u00e1lasz.<br><br>Minden modul le van \u00e1ll\u00edtva. Old meg az ellen\u0151rz\u00e9st a j\u00e1t\u00e9kban, majd kattints ide.<br><br><a href="javascript: BotvedelemKi()">Megoldottam, mehet tov\u00e1bb!</a>');
@@ -1545,9 +1553,9 @@ function BotvedelemKi(){
 	}
 	BOT_KEZDET = 0; BOT_FELADVA = false;
 	BOT=false; ALTBOT2=false; BOT_VOL=0.0;
+	stopSound();
 	soundVolume(1.0); // standing down muted it; without this every later sound is silent
 	botvedelemAblakZar();
-	document.getElementById("audio1").pause;
 	alert2('Bot védelem rendben');
 	/*Megnyitott lapok frissítése*/
 	for (const propertyName in window) {
