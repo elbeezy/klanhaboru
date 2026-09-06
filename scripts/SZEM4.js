@@ -1089,48 +1089,56 @@ function ujkieg_hang(nev,hangok){
 	return;
 }
 
-function szunet(script,kep){try{
+/* Pausing a module means two things that have to stay in step: its own flag,
+   and the icon that reports it. Both live here now, so that everything wanting
+   to stop or start a module -- the icons, and the global pause -- goes through
+   one place and gets the same side effects. "idtamad" has no flag of its own:
+   it only listens for incoming attacks, so there is nothing to pause. */
+function moduleIsPaused(script) {
 	switch (script) {
-		case "farm":
-			FARM_PAUSE=!FARM_PAUSE;
-			var sw=FARM_PAUSE;
-			break;
-		case "vije":
-			VIJE_PAUSE=!VIJE_PAUSE;
-			var sw=VIJE_PAUSE;
-			break;
-		case "idtamad":
-			alert2("Ezt a script nem állítható meg, mivel nem igényel semmilyen erőforrást.<br>Ha a hangot szeretnéd kikapcsolni, megteheted azt a hangbeállításoknál.");
-			break;
-		case "epit":
-			EPIT_PAUSE=!EPIT_PAUSE;
-			var sw=EPIT_PAUSE;
-			break;
-		case "adatok":
-			ADAT_PAUSE=!ADAT_PAUSE;
-			var sw=ADAT_PAUSE;
-			break;
-		case 'gyujto':
-			GYUJTO_PAUSE = !GYUJTO_PAUSE;
-			var sw = GYUJTO_PAUSE;
-			break;
-		default: {alert2("Sikertelen script megállatás. Nincs ilyen alscript: "+script);return;}
+		case "farm":   return FARM_PAUSE;
+		case "vije":   return VIJE_PAUSE;
+		case "epit":   return EPIT_PAUSE;
+		case "adatok": return ADAT_PAUSE;
+		case "gyujto": return GYUJTO_PAUSE;
+		default:       return null;
 	}
-	
-	if (sw) {
-		kep.src=pic("pause.png");
-		kep.alt="Start";
-		kep.title="Klikk a folytatáshoz";
-	} else {
-		kep.src=pic("play.png");
-		kep.alt="Stop";
-		kep.title="Klikk a szüneteltetéshez";
+}
+
+function setModulePause(script, paused, kep) {
+	switch (script) {
+		case "farm":   FARM_PAUSE   = paused; break;
+		case "vije":   VIJE_PAUSE   = paused; break;
+		case "epit":   EPIT_PAUSE   = paused; break;
+		case "adatok": ADAT_PAUSE   = paused; break;
+		case "gyujto": GYUJTO_PAUSE = paused; break;
+		default: return false;
 	}
-	
-	if (script=="farm") shorttest();
+
+	/* From the icon's own handler the element arrives as an argument; called
+	   programmatically it has to be looked up by name. */
+	if (!kep) kep = document.querySelector('#kiegs img[name="' + script + '"]');
+	if (kep) {
+		kep.src   = pic(paused ? "pause.png" : "play.png");
+		kep.alt   = paused ? "Start" : "Stop";
+		kep.title = paused ? "Klikk a folytatáshoz" : "Klikk a szüneteltetéshez";
+	}
+
+	if (script == "farm") shorttest();
 	/* Starting VIJE by hand beats a synced rest -- otherwise the play icon would
 	   claim it is running while it sits out the rest of the farm's break. */
-	if (script=="vije" && !sw) VIJE_SYNC_REST_UNTIL = 0;
+	if (script == "vije" && !paused) VIJE_SYNC_REST_UNTIL = 0;
+	return true;
+}
+
+function szunet(script,kep){try{
+	if (script == "idtamad") {
+		alert2("Ezt a script nem állítható meg, mivel nem igényel semmilyen erőforrást.<br>Ha a hangot szeretnéd kikapcsolni, megteheted azt a hangbeállításoknál.");
+		return;
+	}
+	var most = moduleIsPaused(script);
+	if (most === null) { alert2("Sikertelen script megállatás. Nincs ilyen alscript: " + script); return; }
+	setModulePause(script, !most, kep);
 }catch(e){alert2("Hiba:\n"+e);}}
 
 function distCalc(S,D){
