@@ -98,6 +98,47 @@ function banyak(fa, agyag, vas) {
 	}).join('');
 }
 
+/* The Farmoló panel, built from the markup the script really carries.
+
+   The hand-written stand-in that used to be here only showed the target
+   table, so the settings block, the unit picker and the two "add a village"
+   forms were never looked at while the interface was being restyled -- and
+   they were the parts still wearing the game's own colours.
+
+   ujkieg("farm", ...) is handed a template literal. It has no nested
+   backticks and only three interpolations, all of them image helpers, so it
+   can be read out of the source and filled in here. Nothing is retyped, so
+   nothing can drift.
+
+   The game's own graphics are asked for with root-relative paths, which
+   resolve on the game's domain and not here, so they are pointed at the CDN
+   the script already uses for building icons. */
+const GAME_ASSET = 'https://dshu.innogamescdn.com/asset/88651122/graphic/';
+const UNITS = ['spear', 'sword', 'axe', 'archer', 'spy', 'light', 'marcher', 'heavy'];
+
+function farmPanelBol(src) {
+	const marker = 'ujkieg("farm","Farmoló",`';
+	const start = src.indexOf(marker);
+	if (start === -1) throw new Error('nem találom a farm panel markupját');
+	const end = src.indexOf('`', start + marker.length);
+	if (end === -1) throw new Error('a farm panel markup nincs lezárva');
+	const sablon = src.slice(start + marker.length, end);
+
+	const pic = (f) => PIC + f;
+	const picBuilding = (b) => '<img src="' + GAME_ASSET + 'buildings/mid/' + b + '3.png">';
+	const rovidit = () => UNITS.map((u, i) =>
+		'<div class="szem4_unitbox" data-allunit="999" name="' + u + '"><label>' +
+		'<img src="' + GAME_ASSET + 'unit/unit_' + u + '.png">' +
+		'<input type="checkbox" name="' + u + '">' +
+		'</label></div>').join('');
+
+	const kitoltve = new Function('pic', 'picBuilding', 'rovidit',
+		'return `' + sablon + '`;')(pic, picBuilding, rovidit);
+
+	/* Root-relative game art, which only resolves on the game's own domain. */
+	return kitoltve.replace(/src="\/graphic\//g, 'src="' + GAME_ASSET);
+}
+
 function farmSor(hova, banyak, fal, nyers, jatekos, tav) {
 	return '<tr>' +
 		'<td>' + hova + '</td>' +
@@ -112,7 +153,7 @@ function farmSor(hova, banyak, fal, nyers, jatekos, tav) {
 		'</tr>';
 }
 
-function tartalom() {
+function tartalom(src) {
 	const modulok =
 		'<img src="' + PIC + 'kh_logo.png" alt="Game" title="Klánháború">' +
 		'<a href="javascript:void 0" id="szunet_mind" title="Minden modul megállítása">' +
@@ -165,8 +206,12 @@ function tartalom() {
 	'</div>' +
 
 	'<div id="content">' +
+		'<table class="menuitem" width="1024px" align="center" id="farm"><tbody>' +
+			farmPanelBol(src) +
+		'</tbody></table>' +
+
 		'<table class="menuitem" width="1024px" align="center"><tbody><tr><td>' +
-			'<h1 align="center">Farmoló</h1>' +
+			'<h1 align="center">Farmoló — célpontok</h1>' +
 			'<table class="vis" id="farm_hova" style="vertical-align:top; display:inline-block;"><tbody>' +
 				'<tr>' +
 					'<th style="cursor:pointer;">Hova</th>' +
@@ -220,7 +265,7 @@ fetch('../scripts/SZEM4.js')
 		document.head.appendChild(el);
 		/* After the stylesheet is in: the icons read their colours off it. */
 		modulIkonBetolt(src);
-		document.getElementById('preview_root').innerHTML = tartalom();
+		document.getElementById('preview_root').innerHTML = tartalom(src);
 	})
 	.catch(function (e) {
 		hiba('Az előnézet nem tudott elindulni:\n\n' + e.message +

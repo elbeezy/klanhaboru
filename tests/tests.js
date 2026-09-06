@@ -1181,6 +1181,40 @@ suite('The preview mirrors the real interface', function () {
 	var fej = PREVIEW_SRC.slice(PREVIEW_SRC.indexOf('id="farm_hova"'));
 	fej = fej.slice(0, fej.indexOf('</tr>'));
 	eq((fej.match(/<th/g) || []).length, 7, 'the preview farm table still has seven columns');
+
+	/* The Farmoló panel is no longer mirrored by hand at all -- it is built
+	   from the template literal the script really carries. A hand-written
+	   stand-in is what hid the settings block, the unit picker and the two
+	   add-a-village forms while the interface was being restyled: they were
+	   simply never on the page being looked at. */
+	ok(PREVIEW_SRC.indexOf('farmPanelBol') !== -1,
+	   'the preview builds the Farmoló panel from the real markup');
+	ok(PREVIEW_SRC.indexOf("ujkieg(\"farm\",\"Farmol\u00f3\",`") !== -1,
+	   'reading it out of the source by the same marker the script defines it with');
+	ok(SZEM4_SRC.indexOf('ujkieg("farm","Farmol\u00f3",`') !== -1,
+	   'and that marker is really what the script uses');
+
+	/* The three things it has to fill in. If a fourth is ever added to that
+	   markup the preview stops building and says so, rather than rendering a
+	   panel with a hole in it. */
+	var panel = SZEM4_SRC.slice(SZEM4_SRC.indexOf('ujkieg("farm","Farmol\u00f3",`'));
+	panel = panel.slice(0, panel.indexOf('`', 30));
+	var hivasok = {};
+	(panel.match(/\$\{\s*([A-Za-z_$][\w$]*)\s*\(/g) || []).forEach(function (m) {
+		hivasok[m.replace(/[${(\s]/g, '')] = 1;
+	});
+	eq(Object.keys(hivasok).sort().join(','), 'pic,picBuilding,rovidit',
+	   'the panel markup still only needs the three helpers the preview stubs',
+	   Object.keys(hivasok).sort().join(','));
+
+	/* Root-relative game art resolves on the game's domain and nowhere else,
+	   so the preview has to point it somewhere real or it shows broken
+	   images -- which is exactly what it used to do for the mine levels. */
+	ok(panel.indexOf('src="/graphic/') !== -1,
+	   'the panel does ask for game art by root-relative path');
+	ok(PREVIEW_SRC.indexOf('src="\\/graphic\\/') !== -1 ||
+	   PREVIEW_SRC.indexOf('/graphic/') !== -1,
+	   'and the preview rewrites those to somewhere they load from');
 });
 
 /* ------------------------------------------------------------------------ */
