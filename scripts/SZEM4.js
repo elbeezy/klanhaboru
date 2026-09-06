@@ -365,7 +365,8 @@ function init(){try{
 		}
 		table.vis { color:black; }
 		table.vis td, table.vis th { padding: 3px 6px 3px 6px; }
-		#farm_hova > tbody > tr > td:last-child {
+		/* the wagons cell -- no longer last, a distance column follows it */
+		#farm_hova > tbody > tr > td:nth-child(6) {
 			width: 135px;
 		}
 		textarea {
@@ -1157,6 +1158,9 @@ function rendez(tipus, isAsc, thislink, table_azon, oszlopNo){try{
 				else
 					tavok[i-1]=parseInt(tc.replace(".",""));
 				break;
+			/* Distances are small and fractional, so the thousands-separator
+			   strip that "szam" does would turn 4.2 fields into 42. */
+			case "tav": tavok[i-1] = (!cellText || cellText == '') ? -0.1 : parseFloat(cellText); break;
 			case "datum": if (cellText == '' || cellText == '---') tavok[i-1]=getServerTime(); else tavok[i-1]=new Date(cellText); break;
 			case "datum2": var honap=new Array("Jan","Febr","March","Apr","May","Jun","Jul","Aug","Sept","Oct","Nov","Dec");
 				var d=new Date();
@@ -1289,6 +1293,7 @@ function sortorol(cella,ismulti) {
 	delete SZEM4_FARM.DOMINFO_FARMS[row.cells[0].textContent];
 	delete SZEM4_FARM.DOMINFO_FROM[row.cells[0].textContent];
 	row.parentNode.removeChild(row);
+	refreshFarmDistances(); // the row removed may have been an attacking village
 	multipricer(ismulti, "del");
 }
 function modosit_szam(cella){
@@ -1664,6 +1669,33 @@ function setTooltip(el, index) {
 	<i>Utolsó jelentés: ${SZEM4_VIJE.ALL_VIJE_SAVED[farmCoord] ? new Date(SZEM4_VIJE.ALL_VIJE_SAVED[farmCoord]).toLocaleString() : 'Nincs'}</i>`;
 	addTooltip(el, content);
 }
+/* Distance from a farm to the nearest village you farm from -- the same
+   measure the engine uses when it chooses which village attacks, so ordering
+   by this column brings the cheapest targets to reach to the top. Null while
+   no attacking village exists, because there is nothing to measure from. */
+function farmDistance(koord) {
+	let best = null;
+	for (const attacker in SZEM4_FARM.DOMINFO_FROM) {
+		const d = distCalc(koord.split('|'), attacker.split('|'));
+		if (best === null || d < best) best = d;
+	}
+	return best;
+}
+
+/* Recomputed rather than stored: it depends on which villages you farm from,
+   so a saved figure would go stale the moment one is added or removed. */
+function refreshFarmDistances() {try{
+	const table = document.getElementById('farm_hova');
+	if (!table) return; // interface not built yet
+	const rows = table.rows;
+	for (let i = 1; i < rows.length; i++) {
+		const cell = rows[i].cells[6];
+		if (!cell) continue;
+		const d = farmDistance(rows[i].cells[0].textContent);
+		cell.innerHTML = d === null ? '' : d.toFixed(1);
+	}
+}catch(e){ debug('refreshFarmDistances', e); }}
+
 function add_farmolando(){try{
 	let addFarmolandoFaluk = document.getElementById('add_farmolando_faluk');
 	var faluk = addFarmolandoFaluk.value;
@@ -1696,6 +1728,7 @@ function add_farmolando(){try{
 		var c=a_row.insertCell(3); c.innerHTML="0"; c.setAttribute("ondblclick",'modosit_szam(this)');
 		var c=a_row.insertCell(4); c.innerHTML='<input type="checkbox" onclick="szem4_farmolo_multiclick(0,\'hova\',this.checked)">';
 		var c=a_row.insertCell(5); c.innerHTML=""; c.setAttribute("onmouseleave",'removeTooltip(this)');
+		var c=a_row.insertCell(6); c.innerHTML="";
 		SZEM4_FARM.DOMINFO_FARMS[faluk[i]] = {
 			prodHour: defaultProdHour,
 			buildings: {},
@@ -1710,6 +1743,7 @@ function add_farmolando(){try{
 	}
 		
 	addFarmolandoFaluk.value="";
+	refreshFarmDistances();
 	let text = '';
 	if (Object.keys(SZEM4_FARM.DOMINFO_FARMS).length > 200) {
 		text += 'Túl sok farm, csak az első 200-at jelenítem meg (ettől még aktívak és szűrhetőek/rendezhetőek)\n';
@@ -1785,6 +1819,7 @@ function add_attackerRow(attackerCoord) {
 		// UPDATE (Not a valid case)
 		debug('add_attackerRow', 'Invalid case: No update possible');
 	}
+	refreshFarmDistances(); // a new attacking village moves every farm's nearest
 }
 
 function rebuildDOM_farm() {try{
@@ -1862,7 +1897,11 @@ function rebuildDOM_farm() {try{
 		// WAGONS
 		c=a_row.insertCell(5); c.innerHTML=""; c.setAttribute("onmouseleave",'removeTooltip(this)');
 		drawWagons(farm);
+
+		// TÁV
+		c=a_row.insertCell(6); c.innerHTML="";
 	}
+	refreshFarmDistances();
 	hideFarms();
 	debug('rebuildDOM_farm', '(2) Loading debug: FROM = ' + JSON.stringify(SZEM4_FARM.DOMINFO_FROM));
 } catch(e) {
@@ -2786,6 +2825,7 @@ ujkieg("farm","Farmoló",`<tr><td>
 					<input type="checkbox" id="farm_multi_hova">
 				</span>
 			</th>
+			<th onmouseover="sugo(this,'A legközelebbi farmoló faludtól mért távolság, mezőben.<br>Rendezhető: így a legközelebbi célpontok kerülnek előre.')" style="cursor: pointer;" onclick='rendez("tav",false,this,"farm_hova",6)'>Táv</th>
 		</tr></table>
 </div></p></td></tr>`);
 
