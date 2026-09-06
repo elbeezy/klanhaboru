@@ -1077,3 +1077,68 @@ suite('The palette', function () {
 	   whole panels. */
 	ok(css.indexOf('--szem-accent:') !== -1, 'there is a single accent token');
 });
+
+/* ------------------------------------------------------------------------ */
+suite('Replacing the pre-palette colours', function () {
+	/* Anyone who has run SZEM once has the old style defaults in storage, and
+	   they are written back as inline styles that beat the stylesheet. So the
+	   palette only actually arrives if those stored copies are moved on. */
+	var api = sandbox({}, [sliceFrom(SZEM4_SRC, 'var REGI_STILUS_ALAP', 'upgradeStyleDefaults')]);
+
+	function regi() {
+		return {
+			selectedProfile: 1,
+			profile1: { content_bgcolor: '#111', content_fontcolor: 'white',
+			            content_border: 'yellow', content_shadow: '0 0 12px black' },
+			profile2: {}, profile3: {}, profile4: {}
+		};
+	}
+
+	var s = regi();
+	var n = api.upgradeStyleDefaults(s);
+	eq(s.profile1.content_bgcolor, '#0b0d10', 'the old page colour moves to the new one');
+	eq(s.profile1.content_fontcolor, '#dfe4ea', 'and the old text colour');
+	eq(s.profile1.content_border, '#272e37', 'and the yellow frame');
+	eq(s.profile1.content_shadow, '0 2px 24px rgba(0,0,0,0.65)', 'and the old drop shadow');
+	eq(n, 4, 'and it reports how many it moved', String(n));
+
+	/* The half of this that matters most: a colour that was actually chosen is
+	   not a default, and must survive untouched. */
+	var sajat = regi();
+	sajat.profile1.content_bgcolor = '#4b0082';
+	sajat.profile2.content_border = 'red';
+	var n2 = api.upgradeStyleDefaults(sajat);
+	eq(sajat.profile1.content_bgcolor, '#4b0082', 'a colour that was picked is left alone');
+	eq(sajat.profile2.content_border, 'red', 'in any profile, not just the active one');
+	eq(n2, 3, 'and only the untouched defaults are counted', String(n2));
+
+	/* Nothing to do must stay quiet: the count is what decides whether a line
+	   is written to the log, so a stray 1 here would nag on every single start. */
+	var mar = regi();
+	api.upgradeStyleDefaults(mar);
+	eq(api.upgradeStyleDefaults(mar), 0, 'running it a second time changes nothing');
+	eq(api.upgradeStyleDefaults({ profile1: {} }), 0, 'and a profile with no colours in it is left alone');
+	eq(api.upgradeStyleDefaults(null), 0, 'with nothing saved at all it does nothing');
+
+	/* Every profile, not only profile1 -- there are four and any of them can
+	   be the one selected. */
+	var mind = { profile1: { content_border: 'yellow' }, profile2: { content_border: 'yellow' },
+	             profile3: { content_border: 'yellow' }, profile4: { content_border: 'yellow' } };
+	eq(api.upgradeStyleDefaults(mind), 4, 'all four profiles are covered');
+
+	/* And what it moves them to has to be what the stylesheet actually uses,
+	   or retuning a token would quietly leave this pointing at a dead colour. */
+	var marker = 'const szemStyle = `';
+	var start = SZEM4_SRC.indexOf(marker);
+	var css = SZEM4_SRC.slice(start + marker.length, SZEM4_SRC.indexOf('`', start + marker.length));
+	function token(nev) {
+		var m = css.match(new RegExp('--szem-' + nev + ':\\s*([^;]+);'));
+		return m ? m[1].trim() : '';
+	}
+	var frissP = regi();
+	api.upgradeStyleDefaults(frissP);
+	eq(frissP.profile1.content_bgcolor, token('bg'), 'the new page colour is the --szem-bg token');
+	eq(frissP.profile1.content_fontcolor, token('text'), 'the new text colour is the --szem-text token');
+	eq(frissP.profile1.content_border, token('line'), 'the new frame colour is the --szem-line token');
+	eq(frissP.profile1.content_shadow, token('shadow'), 'the new shadow is the --szem-shadow token');
+});

@@ -1929,6 +1929,39 @@ function defaultVijeState() {
 function defaultGyujtoState() {
 	return { settings: { strategy: 'max' } };
 }
+/* The four colours the interface shipped with before it had a palette.
+
+   The style boxes are saved as soon as anything on the sound panel is, so an
+   instance that has been run even once has these sitting in storage -- not
+   because they were chosen, but because they were what the boxes happened to
+   hold. On load they are written back as inline styles, which beat the
+   stylesheet, so without this the old yellow-framed look paints itself over
+   the new palette on every start and the palette only half arrives.
+
+   A value that is one of these is therefore treated as "never actually
+   chosen" and replaced. Anything else is a colour that was typed in on
+   purpose and is left exactly as it is. */
+var REGI_STILUS_ALAP = {
+	content_bgcolor:   { '#111': '#0b0d10' },
+	content_fontcolor: { 'white': '#dfe4ea' },
+	content_border:    { 'yellow': '#272e37' },
+	content_shadow:    { '0 0 12px black': '0 2px 24px rgba(0,0,0,0.65)' }
+};
+
+function upgradeStyleDefaults(settings) {
+	if (!settings) return 0;
+	var valtozott = 0;
+	var helyek = [settings, settings.profile1, settings.profile2, settings.profile3, settings.profile4];
+	helyek.forEach(function (hely) {
+		if (!hely || typeof hely !== 'object') return;
+		for (var kulcs in REGI_STILUS_ALAP) {
+			var csere = REGI_STILUS_ALAP[kulcs][hely[kulcs]];
+			if (csere !== undefined) { hely[kulcs] = csere; valtozott++; }
+		}
+	});
+	return valtozott;
+}
+
 function defaultSettingsState() {
 	return { selectedProfile: 1, profile1: {}, profile2: {}, profile3: {}, profile4: {} };
 }
@@ -4460,6 +4493,8 @@ function szem4_ADAT_loadNow(tipus) {try{
 			break;
 		case "sys":
 			SZEM4_SETTINGS = Object.assign({}, SZEM4_SETTINGS, dataObj);
+			const stilusFrissitve = upgradeStyleDefaults(SZEM4_SETTINGS);
+			if (stilusFrissitve) naplo('Be\u00e1ll\u00edt\u00e1s', 'A r\u00e9gi alap\u00e9rtelmezett sz\u00ednek lecser\u00e9lve az \u00faj s\u00f6t\u00e9t t\u00e9m\u00e1ra. A H\u00e1tt\u00e9r- \u00e9s st\u00edlus be\u00e1ll\u00edt\u00e1sn\u00e1l b\u00e1rmelyik \u00e1t\u00edrhat\u00f3.');
 			loadSettings();
 			break;
 		case "gyujto":
