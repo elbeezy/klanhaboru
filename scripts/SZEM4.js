@@ -3555,6 +3555,10 @@ function buildCandidates(parts, lvls) {
 function canAffordBuildNow(ref, id) {
 	const row = ref.document.getElementById('main_buildrow_' + id);
 	if (!row) return false; // not available -- prerequisite missing
+	/* A building at its maximum keeps a row but loses every cost cell, so its
+	   cost reads as zero -- which would make it look cheaper than everything
+	   else and win every comparison, then fail to click. */
+	if (!row.querySelector('.btn.btn-build')) return false;
 	const cost = buildingCost(row);
 	const v = ref.game_data.village;
 	if (Math.max(cost.wood, cost.stone, cost.iron) > v.storage_max) return false;
