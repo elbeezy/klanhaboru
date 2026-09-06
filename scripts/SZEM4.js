@@ -1509,6 +1509,44 @@ function botvedelemJel(doc) {
 	} catch (e) { debug('botvedelemJel', e); } // cross-origin, or a window closing mid-read
 	return '';
 }
+/* How often the open windows are swept for a check.
+
+   Until now a check was only ever noticed inside isPageLoaded(), which runs
+   when a module happens to poll a page. A window nothing is currently
+   driving -- one whose module is between steps, or waiting out a rest --
+   could sit on a check for as long as it took something else to trip over
+   it. Ten seconds is cheap: a handful of getElementById calls. */
+var BOT_FIGYELO_MS = 10000;
+var BOT_FIGYELO = 0;
+
+function botvedelemFigyeloIndit() {
+	if (BOT_FIGYELO) return;
+	BOT_FIGYELO = setInterval(botvedelemFigyelo, BOT_FIGYELO_MS);
+}
+
+function botvedelemFigyelo() {
+	/* Already ringing: the alarm has its own cycle watching BOT_REF. */
+	if (BOT) return;
+	/* Nothing running means nothing to interrupt. The alarm exists to stop
+	   work in its tracks, and waking the flat for a check that is in nobody's
+	   way -- during a Sz\u00fcnet mind, say -- is the wrong trade. */
+	if (!ALL_EXTENSION.some(szunetMindFut)) return;
+	var ablakok = nyitottAblakok();
+	for (var i = 0; i < ablakok.length; i++) {
+		var doc;
+		/* Reaching for .document throws on a window closing under us. */
+		try { doc = ablakok[i].ablak.document; }
+		catch (e) { debug('botvedelemFigyelo', ablakok[i].nev + ': ' + e); continue; }
+		if (!doc) continue;
+		var jel = botvedelemJel(doc);
+		if (jel) {
+			naplo("Glob\u00e1lis", "Bot v\u00e9delem akt\u00edv!!! (" + ablakok[i].nev + ", " + jel + ")");
+			BotvedelemBe();
+			return;
+		}
+	}
+}
+
 /* Raising the alarm and polling it used to be the same function, which
    rescheduled itself every 2.5 seconds. isPageLoaded() calls it afresh every
    time a page check fails, so a second call started a second chain while
@@ -4703,6 +4741,7 @@ $(document).ready(function(){
 	naplo('Globál','Verzió ['+VERZIO+'] legfrissebb állapotban, GIT-ről szedve.');
 	naplo("Indulás","SZEM 4.7 elindult.");
 	naplo("Indulás","Kiegészítők szünetelő módban.");
+	botvedelemFigyeloIndit();
 	if (TIME_ZONE != 0) naplo('🕐 Időzóna', `Időeltolódás frissítve: eltolódás ${TIME_ZONE} perccel.`);
 	soundVolume(0.0);
 	playSound("bot2"); /* Ha elmegy a net, tudjon csipogni */

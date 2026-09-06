@@ -461,8 +461,13 @@ suite('Pausing everything for a while', function () {
 suite('The bot-protection alarm', function () {
 	/* A window whose navigations can be told apart from a reload: assigning to
 	   location.href is a fresh GET, location.reload() repeats the last request. */
-	function fakeAblak(href) {
-		var a = { closed: false, navigated: [], reloads: 0 };
+	function fakeAblak(href, page) {
+		var a = { closed: false, navigated: [], reloads: 0, page: page || {} };
+		a.document = {
+			get title() { return a.page.title || ''; },
+			getElementById: function (id) { return a.page[id] || null; },
+			querySelector: function (sel) { return a.page[sel] || null; }
+		};
 		a.location = {
 			get href() { return href; },
 			set href(v) { a.navigated.push(v); },
@@ -513,6 +518,10 @@ suite('The bot-protection alarm', function () {
 		w.audio = { volume: 0, paused: true, pauses: 0,
 		            pause: function () { this.paused = true; this.pauses++; } };
 		w.document = { getElementById: function (id) { return id === 'audio1' ? w.audio : null; } };
+		/* Which modules are running, as the sweep asks it. */
+		w.ALL_EXTENSION = ['farm', 'vije', 'epit', 'gyujto', 'adatok'];
+		w.futo = ['farm'];
+		w.szunetMindFut = function (id) { return w.futo.indexOf(id) !== -1; };
 		w.soundVolume = function (v) { w.sounds.push(v); w.audio.volume = v; };
 		w.playSound = function () { w.audio.paused = false; };   // the clip is now running
 		w.alert2 = function (m) { w.alerts.push(m); };
@@ -719,6 +728,50 @@ suite('The bot-protection alarm', function () {
 	w7.page = { '#serverTime': { innerHTML: '12:34:56' }, title: 'Falu \u00e1ttekint\u00e9s' };
 	pollFor(w7, 10000);
 	ok(w7.BOT === false, 'and lets go once the title says the check is gone');
+
+	/* --- sweeping windows nothing is polling ---
+	   A check used to be noticed only inside isPageLoaded(), so a window whose
+	   module was between steps could sit on one indefinitely. */
+	var w9 = alarmWorld(), api9 = alarmApi(w9);
+	api9.botvedelemFigyelo();
+	ok(w9.BOT === false, 'a sweep over clean windows raises nothing');
+
+	w9.FARM_REF.page = { bot_check: {} };
+	api9.botvedelemFigyelo();
+	ok(w9.BOT === true, 'a check sitting in an unpolled window is found');
+	ok(w9.logged.some(function (l) { return l.indexOf('FARM_REF') !== -1; }),
+	   'and the log names the window it was in', w9.logged.join(' | '));
+
+	/* Everything deliberately stopped -- a Sz\u00fcnet mind, say. There is no work
+	   to interrupt, so waking the flat would be the wrong trade. */
+	var w10 = alarmWorld();
+	w10.futo = [];
+	w10.FARM_REF.page = { bot_check: {} };
+	alarmApi(w10).botvedelemFigyelo();
+	ok(w10.BOT === false, 'nothing is raised while every module is stopped');
+
+	/* One window going away must not hide a check in the next one. */
+	var w11 = alarmWorld();
+	Object.defineProperty(w11.FARM_REF, 'document',
+		{ configurable: true, get: function () { throw new Error('elment'); } });
+	w11.VIJE_REF1.page = { title: 'Bot protection' };
+	alarmApi(w11).botvedelemFigyelo();
+	ok(w11.BOT === true, 'a window that throws does not hide a check behind it');
+
+	/* Already ringing: the alarm has its own cycle on BOT_REF. */
+	var w12 = alarmWorld(checkShowing()), api12 = alarmApi(w12);
+	api12.BotvedelemBe();
+	var futTimerek = w12.liveTimers().length, naploHossz = w12.logged.length;
+	w12.FARM_REF.page = { bot_check: {} };
+	api12.botvedelemFigyelo();
+	eq(w12.liveTimers().length, futTimerek, 'the sweep leaves a ringing alarm alone');
+	/* BotvedelemBe() would refuse a second cycle anyway, so the timers alone
+	   prove nothing -- the visible cost of sweeping through an alarm is a log
+	   line every ten seconds for as long as it rings. */
+	eq(w12.logged.length, naploHossz, 'without reporting the same check over and over');
+
+	ok(stripComments(SZEM4_SRC).split('botvedelemFigyeloIndit').length - 1 >= 2,
+	   'and something actually starts the sweep at launch');
 
 	/* --- how loud it gets ---
 	   It used to climb by a fifth every 2.5s until it was at full volume,
