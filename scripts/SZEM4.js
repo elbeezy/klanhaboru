@@ -59,7 +59,11 @@ if (window.SZEM4_ALREADY_RUNNING) {
 	alert("Itt már fut SZEM. \n Ha ez nem igaz, nyitsd meg új lapon a játékot, és próbáld meg ott futtatni");
 	return;
 }
-var VERZIO = 'v4.7 by elbeezy';
+/* The version, in one place. It used to be written out twice -- here and
+   again in the startup line -- which is how the log came to announce 4.7
+   while this said something else. */
+var VERZIO_SZAM = '4.8';
+var VERZIO = 'v' + VERZIO_SZAM + ' by elbeezy';
 var SZEM4_SETTINGS = defaultSettingsState();
 var TIME_ZONE = 0;
 try{ /*Rendszeradatok*/
@@ -5071,7 +5075,7 @@ function verifyInlineHandlers() {try{
 $(document).ready(function(){
 	nyit("naplo");
 	naplo('Globál','Verzió ['+VERZIO+'] legfrissebb állapotban, GIT-ről szedve.');
-	naplo("Indulás","SZEM 4.7 elindult.");
+	naplo("Indulás","SZEM "+VERZIO_SZAM+" elindult.");
 	naplo("Indulás","Kiegészítők szünetelő módban.");
 	botvedelemFigyeloIndit();
 	if (TIME_ZONE != 0) naplo('🕐 Időzóna', `Időeltolódás frissítve: eltolódás ${TIME_ZONE} perccel.`);

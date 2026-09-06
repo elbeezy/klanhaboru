@@ -1443,3 +1443,24 @@ suite('The default background', function () {
 	ok(szemCssRules().indexOf('.left-background, .right-background {') !== -1,
 	   'and the empty panes are painted rather than left blank');
 });
+
+/* ------------------------------------------------------------------------ */
+suite('The version', function () {
+	/* It was written out twice -- once as VERZIO and once, as a bare number,
+	   inside the startup line -- so bumping one and forgetting the other left
+	   the log announcing a version that was not the one running. */
+	var m = SZEM4_SRC.match(/var VERZIO_SZAM = '([^']+)';/);
+	ok(!!m, 'there is one version number');
+	var szam = m ? m[1] : '';
+
+	ok(SZEM4_SRC.indexOf("var VERZIO = 'v' + VERZIO_SZAM + ' by elbeezy';") !== -1,
+	   'and the full version string is built from it');
+
+	ok(SZEM4_SRC.indexOf('"SZEM "+VERZIO_SZAM+" elindult."') !== -1,
+	   'the startup line is built from it too, not typed again');
+
+	/* Nothing anywhere still names an older one. */
+	var kod = stripComments(SZEM4_SRC);
+	eq(kod.indexOf('4.7'), -1, 'no 4.7 left anywhere in the script', szam);
+	eq(szam, '4.8', 'and the version is 4.8', szam);
+});
