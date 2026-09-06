@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+<meta charset="utf-8">
+<title>SZEM4 kinézet-előnézet</title>
+<style>
+	/* Only the badge belongs to the preview itself. Everything else on the page
+	   is styled by the real stylesheet, pulled out of scripts/SZEM4.js below. */
+	#preview_badge {
+		position: fixed; top: 0; left: 0; z-index: 9999;
+		font: 11px/1.6 monospace; background: #b00; color: #fff;
+		padding: 2px 8px; opacity: 0.85;
+	}
+	/* Preview-only: the real interface hides every panel and reveals one at a
+	   time through nyit(). Here they are all shown at once, stacked, so the
+	   whole thing can be looked at in one pass. */
+	body #content table.menuitem { display: table !important; }
+	#preview_error {
+		font: 14px/1.6 monospace; color: #c00; background: #fee;
+		padding: 12px; margin: 40px auto; max-width: 900px; white-space: pre-wrap;
+	}
+</style>
+</head>
+<body>
+<div id="preview_badge">ELŐNÉZET — nem a valódi SZEM, csak a kinézete</div>
+<div id="preview_root"></div>
+
+<script>
+/* ---------------------------------------------------------------------------
+   A look at SZEM's interface without a game page.
+
+   init() gives up unless it is running on a real Klánháború screen, so none of
+   the panels ever get built and the styling cannot be seen while working on it.
+   This page pulls the real stylesheet out of scripts/SZEM4.js -- the actual
+   text, not a copy that can drift -- and puts a representative slice of the
+   interface underneath it: the header and module bar, a data table with the
+   widest content it ever holds, the log, a form, and the message box.
+
+   Open it the same way as the tests: tests/run.cmd, then /tests/preview.html.
+   Change the CSS in SZEM4.js, press F5, see it.
+--------------------------------------------------------------------------- */
+
+const PIC = 'https://raw.githubusercontent.com/cncDAni2/klanhaboru/main/images/szem4/';
+
+function hiba(msg) {
+	document.getElementById('preview_root').innerHTML =
+		'<div id="preview_error">' + msg + '</div>';
+}
+
+/* The stylesheet as the script really holds it: everything between
+   `const szemStyle = ` and the backtick that closes it. */
+function styleLapBol(src) {
+	const marker = 'const szemStyle = `';
+	const start = src.indexOf(marker);
+	if (start === -1) throw new Error('nem találom a szemStyle blokkot a SZEM4.js-ben');
+	const end = src.indexOf('`', start + marker.length);
+	if (end === -1) throw new Error('a szemStyle blokk nincs lezárva');
+	return src.slice(start + marker.length, end);
+}
+
+function modul(id, nev, all) {
+	return '<img name="' + id + '" src="' + PIC + (all ? 'pause' : 'play') + '.png" ' +
+		'alt="Stop" title="Klikk a szüneteltetéshez"> ' +
+		'<a href="javascript:void 0">' + nev.toUpperCase() + '</a> ';
+}
+
+function farmSor(hova, banyak, fal, nyers, jatekos, tav) {
+	return '<tr>' +
+		'<td>' + hova + '</td>' +
+		'<td>' + banyak + '</td>' +
+		'<td>' + fal + '</td>' +
+		'<td>' + nyers + '</td>' +
+		'<td><input type="checkbox"' + (jatekos ? ' checked' : '') + '></td>' +
+		'<td>' + [1, 2, 3].map(function (n) {
+			return '<img src="' + PIC + 'mozdony.png" title="szerelvény ' + n + '" style="height:18px;">';
+		}).join(' ') + '</td>' +
+		'<td>' + tav + '</td>' +
+		'</tr>';
+}
+
+function tartalom() {
+	const modulok =
+		'<img src="' + PIC + 'muhely_logo.png" alt="GIT" title="GIT C&amp;C Műhely">' +
+		'<img src="' + PIC + 'kh_logo.png" alt="Game" title="Klánháború">' +
+		'<a href="javascript:void 0" id="szunet_mind" title="Minden modul megállítása">Szünet mind</a> | ' +
+		modul('farm', 'Farmoló', true) +
+		modul('vije', 'Jelentés elemző', true) +
+		modul('idtamad', 'Bejövő támadások', false) +
+		modul('epit', 'Építő', true) +
+		modul('gyujto', 'Gyűjtő', false) +
+		modul('adatok', 'Adatmentő', false);
+
+	const farmSorok = [
+		farmSor('500|500', '<img src="' + PIC + 'fa.png" style=\"height:14px;\">3 <img src="' + PIC + 'agyag.png" style=\"height:14px;\">3 <img src="' + PIC + 'vas.png" style=\"height:14px;\">2', '0', '1.240', false, '4.2'),
+		farmSor('501|498', '&nbsp;', '-2', '860', false, '5.0'),
+		farmSor('497|512', '<img src="' + PIC + 'fa.png" style=\"height:14px;\">1 <img src="' + PIC + 'agyag.png" style=\"height:14px;\">0 <img src="' + PIC + 'vas.png" style=\"height:14px;\">1', '5', '12.500', true, '11.8'),
+		farmSor('488|530', '&nbsp;', '3', '', false, '24.3')
+	].join('');
+
+	return '' +
+	'<div class="left-background"><video src="" autoplay loop muted></video></div>' +
+	'<div class="right-background"><video src="" autoplay loop muted></video></div>' +
+
+	'<div id="alert2" style="display:block">' +
+		'<div id="alert2head">' +
+			'<div>Üzenet</div>' +
+			'<div><a href="javascript:void 0">[ESC] ❌</a></div>' +
+		'</div>' +
+		'<p id="alert2szov">Példaüzenet, hogy a doboz kinézete is látszódjon.</p>' +
+	'</div>' +
+
+	'<div class="fej">' +
+		'<div id="global_notifications"></div>' +
+		'<table width="100%" align="center" style="background:#111; background-image:url(\'' + PIC + 'wallp.jpg\'); background-size:1024px;">' +
+			'<tr>' +
+				'<td width="70%" id="fejresz" style="vertical-align:middle; margin:auto;"><h1><i></i></h1></td>' +
+				'<td id="sugo" height="110px">Ide kerül a súgó szövege, amikor egy vezérlő fölé viszed az egeret.</td>' +
+			'</tr>' +
+			'<tr><td colspan="2" id="menuk">' +
+				'<div class="divrow" style="width:1016px">' +
+					'<span class="divcell" id="kiegs" style="text-align:left; padding-top:9px; width:870px;">' + modulok + '</span>' +
+					'<span class="divcell" style="text-align:right; width:250px">' +
+						'<a href="javascript:void 0">Napló</a> ' +
+						'<a href="javascript:void 0">Debug</a> ' +
+						'<a href="javascript:void 0"><img src="' + PIC + 'hang.png" alt="hangok"></a>' +
+					'</span>' +
+				'</div>' +
+			'</td></tr>' +
+		'</table>' +
+	'</div>' +
+
+	'<div id="content">' +
+		'<table class="menuitem" width="1024px" align="center"><tbody><tr><td>' +
+			'<h1 align="center">Farmoló</h1>' +
+			'<table class="vis" id="farm_hova" style="vertical-align:top; display:inline-block;"><tbody>' +
+				'<tr>' +
+					'<th style="cursor:pointer;">Hova</th>' +
+					'<th>Bányák</th>' +
+					'<th style="cursor:pointer;">Fal</th>' +
+					'<th style="cursor:pointer;">Nyers</th>' +
+					'<th>J?</th>' +
+					'<th style="height:20px; vertical-align:middle;">Szerelvények' +
+						'<span style="position:absolute; right:7px; top:3px; display:flex; align-items:center;">' +
+							'<img src="' + PIC + 'search.png" alt="?" style="width:15px;height:15px;">' +
+							'<input type="checkbox">' +
+						'</span>' +
+					'</th>' +
+					'<th style="cursor:pointer;">Táv</th>' +
+				'</tr>' +
+				farmSorok +
+			'</tbody></table>' +
+		'</td></tr></tbody></table>' +
+
+		'<table class="menuitem" width="1024px" align="center"><tbody><tr><td>' +
+			'<h1 align="center">Napló</h1><br>' +
+			'<table align="center" class="vis" id="naploka"><tbody>' +
+				'<tr><th style="cursor:pointer;">Dátum</th><th style="cursor:pointer;">Script</th><th style="cursor:pointer;">Esemény</th></tr>' +
+				'<tr><td>Sept 6, 20:43:05</td><td>Adat</td><td>Adatbetöltés helyi adatokból...</td></tr>' +
+				'<tr><td>Sept 6, 20:43:04</td><td>Indulás</td><td>Kiegészítők szünetelő módban.</td></tr>' +
+				'<tr><td>Sept 6, 20:43:04</td><td>Globál</td><td>Verzió [v4.7 by elbeezy] legfrissebb állapotban, GIT-ről szedve.</td></tr>' +
+			'</tbody></table>' +
+		'</td></tr></tbody></table>' +
+
+		'<table class="menuitem" width="1024px" align="center"><tbody><tr><td>' +
+			'<h1 align="center">Beállítások</h1>' +
+			'<table class="vis style-settings-table" align="center"><tbody>' +
+				'<tr><td>Bal háttérkép</td><td><input type="text" size="60" value="' + PIC + 'default_bg_left.jpg"></td></tr>' +
+				'<tr><td>Tükrözött?</td><td><input type="checkbox"></td></tr>' +
+				'<tr><td>Szünet percben</td><td><input type="text" size="6" value="30"> <button type="button">Mentés</button></td></tr>' +
+				'<tr><td>Csoport</td><td><select><option>Összes falu</option><option>Farmoló faluk</option></select></td></tr>' +
+			'</tbody></table>' +
+			'<br><textarea rows="3" cols="60">Építési sor: ANY(FASTEST(MINES 25)); barracks 5</textarea>' +
+		'</td></tr></tbody></table>' +
+	'</div>';
+}
+
+fetch('../scripts/SZEM4.js')
+	.then(function (r) {
+		if (!r.ok) throw new Error('scripts/SZEM4.js nem tölthető be (' + r.status + ')');
+		return r.text();
+	})
+	.then(function (src) {
+		const el = document.createElement('style');
+		el.textContent = styleLapBol(src);
+		document.head.appendChild(el);
+		document.getElementById('preview_root').innerHTML = tartalom();
+	})
+	.catch(function (e) {
+		hiba('Az előnézet nem tudott elindulni:\n\n' + e.message +
+		     '\n\nA repó gyökeréből kell kiszolgálni (tests/run.cmd), file:// alól nem megy.');
+	});
+</script>
+</body>
+</html>

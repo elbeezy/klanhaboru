@@ -80,3 +80,17 @@ ami pont ezt méri ("a sandbox tényleg látja az értékadást").
 el szándékosan a forrást, és nézd meg, hogy tényleg pirosra vált. Ezen a
 suite-on ez megtörtént: öt hibát vittünk be, és a negyedik átcsúszott, mert a
 teszt nem a megfelelő esetet vizsgálta — az állítás azóta szigorúbb.
+
+## Megnézni, hogy néz ki (preview.html)
+
+A `run.cmd` elindítása után a <http://localhost:8765/tests/preview.html> címen
+megnézheted SZEM kinézetét anélkül, hogy elindítanád a játékban.
+
+Miért kell: SZEM `init()` függvénye feladja, ha nem valódi Klánháború-oldalon
+fut, így a panelek soha nem épülnek fel — a stílusán dolgozni tehát vakon
+kellene. Ez az oldal kiszedi a *valódi* stíluslapot a `scripts/SZEM4.js`-ből
+(nem másolatot, ami elavulhat), és alátesz egy jellemző darabot a felületből:
+fejléc, modulsor, egy adattábla, a napló, egy űrlap és az üzenetdoboz.
+
+Átírod a CSS-t a `SZEM4.js`-ben, F5, és látod. A piros csík a bal felső
+sarokban emlékeztet, hogy ez csak előnézet, nem az igazi SZEM.
