@@ -1029,12 +1029,7 @@ suite('The palette', function () {
 	   panel, because onWallpChange() writes them back as inline styles that
 	   beat the stylesheet -- if the two copies drift, changing a token quietly
 	   does nothing and the old colour comes back on every start. */
-	function styleLap() {
-		var marker = 'const szemStyle = `';
-		var start = SZEM4_SRC.indexOf(marker);
-		return SZEM4_SRC.slice(start + marker.length, SZEM4_SRC.indexOf('`', start + marker.length));
-	}
-	var css = styleLap();
+	var css = szemCss();
 
 	function token(nev) {
 		var m = css.match(new RegExp('--szem-' + nev + ':\\s*([^;]+);'));
@@ -1068,8 +1063,9 @@ suite('The palette', function () {
 	/* The point of the block: no bare colour left behind in the sheet. These
 	   are the ones the old sheet actually used, and each was a real eyesore
 	   against near-black -- a yellow frame, a blue button, a white chip. */
+	var szabalyok = szemCssRules();
 	['yellow', 'lavenderblush', '#0d47a1', '#3366CC', '#FFFF77', '#111'].forEach(function (szin) {
-		eq(css.indexOf(szin), -1, 'no ' + szin + ' left loose in the stylesheet');
+		eq(szabalyok.indexOf(szin), -1, 'no ' + szin + ' left loose in the stylesheet');
 	});
 
 	/* The accent is meant to be the restrained one, not a second theme: it may
@@ -1128,9 +1124,7 @@ suite('Replacing the pre-palette colours', function () {
 
 	/* And what it moves them to has to be what the stylesheet actually uses,
 	   or retuning a token would quietly leave this pointing at a dead colour. */
-	var marker = 'const szemStyle = `';
-	var start = SZEM4_SRC.indexOf(marker);
-	var css = SZEM4_SRC.slice(start + marker.length, SZEM4_SRC.indexOf('`', start + marker.length));
+	var css = szemCss();
 	function token(nev) {
 		var m = css.match(new RegExp('--szem-' + nev + ':\\s*([^;]+);'));
 		return m ? m[1].trim() : '';
@@ -1189,9 +1183,7 @@ suite('The tables', function () {
 
 	   Specificity is not something to reason about on paper, so the whole
 	   thing is built in an iframe and the browser is asked what it computed. */
-	var marker = 'const szemStyle = `';
-	var start = SZEM4_SRC.indexOf(marker);
-	var css = SZEM4_SRC.slice(start + marker.length, SZEM4_SRC.indexOf('`', start + marker.length));
+	var css = szemCss();
 
 	var keret = document.createElement('iframe');
 	keret.style.cssText = 'position:absolute; left:-9999px; top:0; width:1200px; height:600px;';
@@ -1252,8 +1244,9 @@ suite('The tables', function () {
 	keret.remove();
 
 	/* The assumption that something else paints the background is gone. */
-	eq(css.indexOf('color: black'), -1, 'no cell is left waiting on a black-text assumption');
-	eq(css.indexOf('color:black'), -1, 'spelled either way');
+	var szabalyok = szemCssRules();
+	eq(szabalyok.indexOf('color: black'), -1, 'no cell is left waiting on a black-text assumption');
+	eq(szabalyok.indexOf('color:black'), -1, 'spelled either way');
 });
 
 /* ------------------------------------------------------------------------ */
@@ -1268,9 +1261,7 @@ suite('The farm search control stays in its header', function () {
 	   farm_honnan carried position:relative inline and it did not. Asking the
 	   browser what the control actually measures from is the only way to see
 	   this; reading the CSS cannot. */
-	var marker = 'const szemStyle = `';
-	var start = SZEM4_SRC.indexOf(marker);
-	var css = SZEM4_SRC.slice(start + marker.length, SZEM4_SRC.indexOf('`', start + marker.length));
+	var css = szemCss();
 
 	var keret = document.createElement('iframe');
 	keret.style.cssText = 'position:absolute; left:-9999px; top:0; width:1200px; height:600px;';
@@ -1310,4 +1301,82 @@ suite('The farm search control stays in its header', function () {
 	   'the header rule is what provides the anchor');
 	eq(SZEM4_SRC.indexOf('style="position: relative; height: 20px; min-width: 100px"'), -1,
 	   'and no header states it inline any more');
+});
+
+/* ------------------------------------------------------------------------ */
+suite('The layout holds together at any width', function () {
+	/* The interface was a flat 1024px, written out in four places, with the
+	   two wallpaper panes worked out as calc(50vw - 512px) -- half of it,
+	   spelled again. On a window narrower than 1024 that goes negative: the
+	   panes collapse and the interface runs off the side of the screen.
+
+	   It is one token now and everything is derived from it. What matters is
+	   that the derived pieces still meet exactly -- header over content, panes
+	   filling the gap either side with no seam and no overlap -- so the whole
+	   thing is measured in a real browser at several widths. */
+	var css = szemCss();
+
+	function meres(szelesseg) {
+		var keret = document.createElement('iframe');
+		keret.style.cssText = 'position:absolute; left:-9999px; top:0; height:700px; border:0; width:' + szelesseg + 'px;';
+		document.body.appendChild(keret);
+		var d = keret.contentDocument;
+		d.open();
+		d.write('<!doctype html><html><head><style>' + css + '</style></head><body>' +
+		        '<div class="left-background"></div><div class="right-background"></div>' +
+		        '<div class="fej"><table width="100%"><tr><td id="fejresz"><h1>Szem</h1></td>' +
+		        '<td id="sugo"></td></tr></table></div>' +
+		        '<div id="content"><table class="menuitem" width="1024px"><tbody><tr><td>' +
+		        '<h1>Farmol\u00f3</h1></td></tr></tbody></table></div>' +
+		        '</body></html>');
+		d.close();
+		function r(sel) {
+			var e = d.querySelector(sel).getBoundingClientRect();
+			return { bal: Math.round(e.left), jobb: Math.round(e.right) };
+		}
+		var m = {
+			lap: d.documentElement.clientWidth,
+			tulcsordul: d.documentElement.scrollWidth > d.documentElement.clientWidth,
+			fej: r('.fej'), content: r('#content'), panel: r('#content table.menuitem'),
+			bal: r('.left-background'), jobb: r('.right-background')
+		};
+		keret.remove();
+		return m;
+	}
+
+	/* Wider than the maximum, around it, and well under the old fixed 1024 --
+	   the last of which is where the old layout broke. */
+	[1600, 1280, 1100, 900, 700].forEach(function (w) {
+		var m = meres(w);
+		var cimke = 'at ' + w + 'px';
+
+		ok(!m.tulcsordul, cimke + ': nothing runs off the side of the screen');
+
+		eq(m.fej.bal, m.content.bal, cimke + ': the header starts where the content does');
+		eq(m.fej.jobb, m.content.jobb, cimke + ': and ends where it does');
+
+		/* The panel fills its column exactly -- it is still built carrying
+		   width="1024px", so this is what proves the rule reaches it. */
+		eq(m.panel.bal, m.content.bal, cimke + ': the panel fills the column');
+		eq(m.panel.jobb, m.content.jobb, cimke + ': right out to its edge');
+
+		/* No seam and no overlap where the wallpaper meets the content. */
+		eq(m.bal.bal, 0, cimke + ': the left wallpaper starts at the screen edge');
+		eq(m.bal.jobb, m.content.bal, cimke + ': and runs up to the content');
+		eq(m.jobb.bal, m.content.jobb, cimke + ': the right one starts where the content ends');
+		eq(m.jobb.jobb, m.lap, cimke + ': and runs to the other edge');
+	});
+
+	/* The maximum is a maximum: a very wide window must not stretch the
+	   column to match it. */
+	var szeles = meres(1600);
+	ok(szeles.content.jobb - szeles.content.bal <= 1280,
+	   'a wide window leaves the column at its comfortable maximum',
+	   (szeles.content.jobb - szeles.content.bal) + 'px');
+	ok(szeles.content.bal > 0, 'centred rather than pinned to one side');
+
+	/* And half of it is not written down a second time anywhere. */
+	var szabalyok = szemCssRules();
+	eq(szabalyok.indexOf('50vw - 512px'), -1, 'the panes are no longer half of a number spelled twice');
+	eq(szabalyok.indexOf('width: 1024px'), -1, 'and the column width is not a literal any more');
 });

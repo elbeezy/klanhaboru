@@ -268,10 +268,29 @@ function init(){try{
 			--szem-hover: rgba(255,255,255,0.06);
 			--szem-danger: #e05252;
 			--szem-shadow: 0 2px 24px rgba(0,0,0,0.65);
+
+			/* One column, as wide as the window allows up to a comfortable
+			   maximum. The header, the panels and the two wallpaper panes beside
+			   them are all derived from this, so there is one number to change and
+			   nothing can fall out of step with anything else.
+
+			   It used to be a flat 1024px in four places, with the panes worked
+			   out as calc(50vw - 512px) -- half of it, spelled again. On a window
+			   narrower than 1024 that goes negative, the panes collapse and the
+			   interface runs off the side of the screen. */
+			--szem-szelesseg: min(1280px, calc(100% - 48px));
 		}
-		body { background: var(--szem-bg); scrollbar-width: none; padding-bottom: 0; }
+		body { background: var(--szem-bg); scrollbar-width: none; padding-bottom: 0; margin: 0; }
 		body::-webkit-scrollbar { width: 0; }
-		#content > table { box-shadow: var(--szem-shadow); min-height: 100vh; }
+		/* Every panel is built carrying width="1024px", the runtime ones from
+		   ujkieg() included, so the column width is stated here rather than in
+		   markup -- one rule reaches all of them. The full-height rule moved to
+		   #content: a panel stretched to the whole window was mostly empty card. */
+		#content > table {
+			box-shadow: var(--szem-shadow);
+			width: 100%;
+			box-sizing: border-box;
+		}
 		#side-notification-container {
 			pointer-events: none;
 			display: none;
@@ -321,13 +340,15 @@ function init(){try{
 			cursor: pointer;
 		}
 		#content {
-			width: 1024px;
+			width: var(--szem-szelesseg);
 			margin: auto;
 			position: relative;
 			z-index: 2;
+			min-height: 100vh;
+			padding: 20px 0 48px;
 		}
 		.fej {
-			width: 1024px;
+			width: var(--szem-szelesseg);
 			margin: auto;
 			color: var(--szem-text);
 			position: relative;
@@ -722,7 +743,7 @@ function init(){try{
 			height: 24px;
 		}
 		.left-background {
-			width: calc(50vw - 512px);
+			width: calc(50% - var(--szem-szelesseg) / 2);
 			height: 100vh;
 			position: fixed;
 			left: 0;
@@ -764,7 +785,7 @@ function init(){try{
 			transform: scale(-1,1);
 		}
 		.right-background {
-			width: calc(50vw - 512px);
+			width: calc(50% - var(--szem-szelesseg) / 2);
 			height: 100vh;
 			position: fixed;
 			right: 0;

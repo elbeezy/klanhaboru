@@ -94,6 +94,27 @@ function matchBraces(src, from) {
 
 /* A named top-level function, as text. Verified to parse on the way out, so a
    mis-cut fails here with a clear message instead of somewhere confusing. */
+/* The stylesheet, as the script really holds it: everything between
+   `const szemStyle = ` and the backtick closing it. */
+function szemCss() {
+	var marker = 'const szemStyle = `';
+	var start = SZEM4_SRC.indexOf(marker);
+	if (start === -1) throw new Error('nem talalom a szemStyle blokkot');
+	var end = SZEM4_SRC.indexOf('`', start + marker.length);
+	if (end === -1) throw new Error('a szemStyle blokk nincs lezarva');
+	return SZEM4_SRC.slice(start + marker.length, end);
+}
+
+/* The same, with the comments taken out.
+ *
+ * Use this for anything that scans the sheet for a value. A comment saying
+ * what a colour or a width used to be is otherwise indistinguishable from
+ * that value still being in a rule -- which is the same trap that once had a
+ * tooltip documenting ANY(...) reported as a broken control. */
+function szemCssRules() {
+	return szemCss().replace(/\/\*[\s\S]*?\*\//g, '');
+}
+
 function sliceFn(src, name) {
 	var start = src.indexOf('function ' + name + '(');
 	if (start === -1) start = src.indexOf('function ' + name + ' (');
