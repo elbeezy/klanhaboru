@@ -62,20 +62,26 @@ function styleLapBol(src) {
    here are the same drawing the interface makes rather than a lookalike. */
 let modulIkon = null;
 let stopIkon = null;
+let szemIkon = null;
 
-/* The real drawing functions, cut out of the script and used as they are, so
-   the buttons here are what the interface actually makes. */
-function ikonBetolt(src, nev) {
+/* The real drawing functions, cut out of the script and run as they are, so
+   every icon here is the one the interface actually makes. They call each
+   other, so they are compiled together in one scope rather than one by one. */
+function fuggvenyKivag(src, nev) {
 	const start = src.indexOf('function ' + nev + '(');
 	if (start === -1) throw new Error('nem találom a ' + nev + ' függvényt');
 	const end = src.indexOf('\n}', start);
 	if (end === -1) throw new Error('a ' + nev + ' függvény nincs lezárva');
-	return new Function('return (' + src.slice(start, end + 2) + ')')();
+	return src.slice(start, end + 2);
 }
 
 function modulIkonBetolt(src) {
-	modulIkon = ikonBetolt(src, 'modulIkon');
-	stopIkon = ikonBetolt(src, 'stopIkon');
+	const nevek = ['ikonSzin', 'ikonSvg', 'szemIkon', 'stopIkon', 'modulIkon'];
+	const kod = nevek.map(function (n) { return fuggvenyKivag(src, n); }).join('\n\n');
+	const api = new Function(kod + '\nreturn { szemIkon: szemIkon, stopIkon: stopIkon, modulIkon: modulIkon };')();
+	szemIkon = api.szemIkon;
+	stopIkon = api.stopIkon;
+	modulIkon = api.modulIkon;
 }
 
 function modul(id, nev, all) {
@@ -132,8 +138,8 @@ function farmPanelBol(src) {
 		'<input type="checkbox" name="' + u + '">' +
 		'</label></div>').join('');
 
-	const kitoltve = new Function('pic', 'picBuilding', 'rovidit',
-		'return `' + sablon + '`;')(pic, picBuilding, rovidit);
+	const kitoltve = new Function('pic', 'picBuilding', 'rovidit', 'szemIkon',
+		'return `' + sablon + '`;')(pic, picBuilding, rovidit, szemIkon);
 
 	/* Root-relative game art, which only resolves on the game's own domain. */
 	return kitoltve.replace(/src="\/graphic\//g, 'src="' + GAME_ASSET);
@@ -198,7 +204,7 @@ function tartalom(src) {
 					'<span class="divcell menubar_jobb">' +
 						'<a href="javascript:void 0">Napló</a> ' +
 						'<a href="javascript:void 0">Debug</a> ' +
-						'<a href="javascript:void 0"><img src="' + PIC + 'hang.png" alt="hangok"></a>' +
+						'<a href="javascript:void 0"><img src="' + szemIkon('hang') + '" alt="hangok"></a>' +
 					'</span>' +
 				'</div>' +
 			'</td></tr>' +
@@ -221,7 +227,7 @@ function tartalom(src) {
 					'<th>J?</th>' +
 					'<th style="height:20px; vertical-align:middle;">Szerelvények' +
 						'<span style="position:absolute; right:7px; top:3px; display:flex; align-items:center;">' +
-							'<img src="' + PIC + 'search.png" alt="?" style="width:15px;height:15px;">' +
+							'<img src="' + szemIkon('search') + '" alt="?" style="width:15px;height:15px;">' +
 							'<input type="checkbox">' +
 						'</span>' +
 					'</th>' +

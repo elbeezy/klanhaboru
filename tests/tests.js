@@ -31,6 +31,30 @@ function exportedNames() {
 	return block.split(',').map(function (s) { return s.trim(); }).filter(Boolean);
 }
 
+/* SZEM's icon drawing, compiled into a window that has a palette on it.
+
+   The five functions call each other -- they share one palette lookup and one
+   SVG wrapper -- so slicing a single one out and running it on its own no
+   longer works. */
+function ikonApi(win) {
+	var nevek = ['ikonSzin', 'ikonSvg', 'szemIkon', 'stopIkon', 'modulIkon'];
+	var kod = nevek.map(function (n) { return sliceFn(SZEM4_SRC, n); }).join('\n\n');
+	return win.eval('(function () {\n' + kod +
+		'\nreturn { szemIkon: szemIkon, stopIkon: stopIkon, modulIkon: modulIkon };\n})()');
+}
+
+/* A frame carrying the real stylesheet, so the icons read real tokens. */
+function palettasKeret() {
+	var keret = document.createElement('iframe');
+	keret.style.cssText = 'position:absolute; left:-9999px; top:0; width:600px; height:200px;';
+	document.body.appendChild(keret);
+	var d = keret.contentDocument;
+	d.open();
+	d.write('<!doctype html><html><head><style>' + szemCss() + '</style></head><body></body></html>');
+	d.close();
+	return keret;
+}
+
 /* ------------------------------------------------------------------------ */
 suite('The file itself', function () {
 	ok(SZEM4_SRC.length > 100000, 'source loaded', SZEM4_SRC.length + ' chars');
@@ -1203,8 +1227,8 @@ suite('The preview mirrors the real interface', function () {
 	(panel.match(/\$\{\s*([A-Za-z_$][\w$]*)\s*\(/g) || []).forEach(function (m) {
 		hivasok[m.replace(/[${(\s]/g, '')] = 1;
 	});
-	eq(Object.keys(hivasok).sort().join(','), 'pic,picBuilding,rovidit',
-	   'the panel markup still only needs the three helpers the preview stubs',
+	eq(Object.keys(hivasok).sort().join(','), 'pic,picBuilding,rovidit,szemIkon',
+	   'the panel markup still only needs the helpers the preview stubs',
 	   Object.keys(hivasok).sort().join(','));
 
 	/* Root-relative game art resolves on the game's domain and nowhere else,
@@ -1574,15 +1598,8 @@ suite('The module buttons', function () {
 
 	   Run inside an iframe carrying the real stylesheet, because the whole
 	   point is that the colours are read off :root. */
-	var keret = document.createElement('iframe');
-	keret.style.cssText = 'position:absolute; left:-9999px; top:0; width:600px; height:200px;';
-	document.body.appendChild(keret);
-	var d = keret.contentDocument;
-	d.open();
-	d.write('<!doctype html><html><head><style>' + szemCss() + '</style></head><body></body></html>');
-	d.close();
-
-	var ikon = keret.contentWindow.eval('(' + sliceFn(SZEM4_SRC, 'modulIkon') + ')');
+	var keret = palettasKeret();
+	var ikon = ikonApi(keret.contentWindow).modulIkon;
 
 	var fut = ikon(false), all = ikon(true);
 	ok(fut.indexOf('data:image/svg+xml,') === 0, 'a running module gets a drawn icon, not a fetched one');
@@ -1609,7 +1626,7 @@ suite('The module buttons', function () {
 	puszta.contentDocument.open();
 	puszta.contentDocument.write('<!doctype html><html><head></head><body></body></html>');
 	puszta.contentDocument.close();
-	var tartalek = puszta.contentWindow.eval('(' + sliceFn(SZEM4_SRC, 'modulIkon') + ')')(false);
+	var tartalek = ikonApi(puszta.contentWindow).modulIkon(false);
 	ok(tartalek.indexOf('data:image/svg+xml,') === 0 && decodeURIComponent(tartalek).indexOf('#') !== -1,
 	   'with no palette at all it still draws something visible');
 	puszta.remove();
@@ -1641,15 +1658,8 @@ suite('The stop control', function () {
 	   palette's danger colour is used, so it reads as the odd one out on
 	   purpose, while being drawn at the same size and in the same way as the
 	   module buttons so the bar still looks like one set of controls. */
-	var keret = document.createElement('iframe');
-	keret.style.cssText = 'position:absolute; left:-9999px; width:400px; height:120px;';
-	document.body.appendChild(keret);
-	var d = keret.contentDocument;
-	d.open();
-	d.write('<!doctype html><html><head><style>' + szemCss() + '</style></head><body></body></html>');
-	d.close();
-
-	var stop = keret.contentWindow.eval('(' + sliceFn(SZEM4_SRC, 'stopIkon') + ')')();
+	var keret = palettasKeret();
+	var stop = ikonApi(keret.contentWindow).stopIkon();
 	ok(stop.indexOf('data:image/svg+xml,') === 0, 'the stop sign is drawn, not fetched');
 
 	var piros = szemCss().match(/--szem-danger:\s*([^;]+);/)[1].trim();
@@ -1725,4 +1735,51 @@ suite('The module bar stays on one line', function () {
 	   would put the controls off the side of the screen instead. */
 	ok(szemCssRules().indexOf('flex-wrap: wrap;') !== -1,
 	   'and it wraps rather than overflowing if it ever cannot fit');
+});
+
+/* ------------------------------------------------------------------------ */
+suite("SZEM's own icons", function () {
+	/* The interface pulled fifteen small PNGs out of upstream's image folder.
+	   Being pictures they could not follow the palette, they were drawn by
+	   different hands, and each cost a request. The ones that belong to SZEM
+	   rather than to the game are drawn now; anything depicting something in
+	   the game still uses the game's own artwork, which is the look these are
+	   meant to sit beside. */
+	var keret = palettasKeret();
+	var api = ikonApi(keret.contentWindow);
+
+	var halvany = szemCss().match(/--szem-text-dim:\s*([^;]+);/)[1].trim();
+	var piros = szemCss().match(/--szem-danger:\s*([^;]+);/)[1].trim();
+
+	['search', 'heart', 'hang'].forEach(function (nev) {
+		var d = api.szemIkon(nev);
+		ok(d.indexOf('data:image/svg+xml,') === 0, nev + ' is drawn rather than fetched');
+		var dec = decodeURIComponent(d);
+		ok(dec.indexOf('<svg') !== -1 && dec.indexOf('</svg>') !== -1,
+		   'and is a real drawing', nev);
+	});
+
+	/* The heartbeat is the one that means "alive", so it keeps the danger
+	   colour; the other two are quiet furniture and must not shout. */
+	ok(decodeURIComponent(api.szemIkon('heart')).indexOf(piros) !== -1,
+	   'the heartbeat is drawn in the danger colour');
+	ok(decodeURIComponent(api.szemIkon('search')).indexOf(halvany) !== -1,
+	   'the magnifier is drawn in the quiet colour');
+	ok(decodeURIComponent(api.szemIkon('hang')).indexOf(piros) === -1,
+	   'and the sound icon does not shout');
+
+	eq(api.szemIkon('nincsilyen'), '', 'an unknown name draws nothing rather than a broken image');
+	keret.remove();
+
+	/* The artwork these replaced is gone from the source entirely -- a stray
+	   pic("search.png") would fetch a picture that no longer matches. */
+	['search.png', 'heart.png', 'hang.png', 'play.png', 'pause.png',
+	 'muhely_logo.png'].forEach(function (f) {
+		eq(SZEM4_SRC.indexOf(f), -1, f + ' is no longer fetched');
+	});
+
+	/* One palette lookup and one SVG wrapper for all of them: this was three
+	   copies of the same four lines before the third caller arrived. */
+	eq(SZEM4_SRC.split('getComputedStyle(document.documentElement)').length - 1, 1,
+	   'the palette is read in exactly one place');
 });

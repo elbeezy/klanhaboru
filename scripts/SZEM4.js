@@ -977,7 +977,7 @@ function init(){try{
 						<span class="divcell menubar_jobb">
 							<a href=\'javascript: nyit("naplo");\' onmouseover="sugo(this,\'Események naplója\')">Napló</a>
 							<a href=\'javascript: nyit("debug");\' onmouseover="sugo(this,\'Hibanapló\')">Debug</a>
-							<a href=\'javascript: nyit("hang");\'><img src="${pic("hang.png")}" onmouseover="sugo(this,\'Hangbeállítások\')" alt="hangok"></a>
+							<a href=\'javascript: nyit("hang");\'><img src="${szemIkon('hang')}" onmouseover="sugo(this,\'Hangbeállítások\')" alt="hangok"></a>
 						</span>
 					</div>
 				</td></tr>
@@ -1117,44 +1117,76 @@ function banyakCella(fa, agyag, vas) {
    The glyph shows the state, not the action, which is the behaviour that was
    already there: a running module is a lit triangle, a stopped one is a pair
    of dim bars. The title attribute is what names the action. */
-/* "Stop everything": a red octagon, drawn the same way and at the same size
-   as the module buttons so the bar reads as one set of controls rather than
-   an icon collection. Red is the one colour in the palette that is not the
-   accent, which is what makes this the odd one out on purpose. */
-function stopIkon() {
-	var stilus = getComputedStyle(document.documentElement);
-	function token(nev, tartalek) {
-		var ertek = stilus.getPropertyValue(nev).trim();
-		return ertek || tartalek;
-	}
-	var piros  = token('--szem-danger', '#e05252');
-	var hatter = token('--szem-surface-2', '#1a1f26');
-	/* A regular octagon inside an 18-box. */
-	var p = '5.27,1 12.73,1 17,5.27 17,12.73 12.73,17 5.27,17 1,12.73 1,5.27';
-	var svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 18 18" width="18" height="18">' +
-		'<polygon points="' + p + '" fill="' + piros + '"/>' +
-		'<rect x="6.2" y="6.2" width="5.6" height="5.6" rx="1" fill="' + hatter + '"/>' +
-		'</svg>';
-	return 'data:image/svg+xml,' + encodeURIComponent(svg);
+/* --- SZEM's own icons. ---
+
+   The interface used to pull fifteen small PNGs out of upstream's image
+   folder. Being pictures, none of them could follow the palette, they were
+   drawn by different hands at different times, and every one cost a request.
+
+   The ones that belong to SZEM rather than to the game are drawn here, from
+   the palette, at the moment of drawing. Anything that depicts something in
+   the game -- a building, a unit -- still uses the game's own artwork, which
+   is the aesthetic these are meant to sit beside. */
+function ikonSzin(nev, tartalek) {
+	var ertek = getComputedStyle(document.documentElement).getPropertyValue(nev).trim();
+	return ertek || tartalek;
 }
 
-function modulIkon(szunetel) {
-	var stilus = getComputedStyle(document.documentElement);
-	function token(nev, tartalek) {
-		var ertek = stilus.getPropertyValue(nev).trim();
-		return ertek || tartalek;
+function ikonSvg(tartalom) {
+	return 'data:image/svg+xml,' + encodeURIComponent(
+		'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 18 18" width="18" height="18">' +
+		tartalom + '</svg>');
+}
+
+function szemIkon(nev) {
+	var halvany = ikonSzin('--szem-text-dim', '#9aa4b0');
+	var piros = ikonSzin('--szem-danger', '#e05252');
+	switch (nev) {
+		case 'search':
+			return ikonSvg('<circle cx="7.6" cy="7.6" r="4.5" fill="none" stroke="' + halvany + '" stroke-width="1.6"/>' +
+				'<line x1="11.2" y1="11.2" x2="15.1" y2="15.1" stroke="' + halvany + '" stroke-width="1.8" stroke-linecap="round"/>');
+		case 'heart':
+			return ikonSvg('<path d="M9 15.1 C4.3 11.6 2 9.3 2 6.8 A3.5 3.5 0 0 1 9 5.2 A3.5 3.5 0 0 1 16 6.8 C16 9.3 13.7 11.6 9 15.1 Z" fill="' + piros + '"/>');
+		case 'hang':
+			return ikonSvg('<path d="M2.6 7 L5.6 7 L9.2 3.7 L9.2 14.3 L5.6 11 L2.6 11 Z" fill="' + halvany + '"/>' +
+				'<path d="M11.8 6.4 A4 4 0 0 1 11.8 11.6" fill="none" stroke="' + halvany + '" stroke-width="1.5" stroke-linecap="round"/>' +
+				'<path d="M13.8 4.4 A6.7 6.7 0 0 1 13.8 13.6" fill="none" stroke="' + halvany + '" stroke-width="1.4" stroke-linecap="round" opacity="0.6"/>');
+		default:
+			return '';
 	}
-	var hatter = token('--szem-surface-2', '#1a1f26');
-	var keret  = szunetel ? token('--szem-line', '#272e37') : token('--szem-accent', '#d9a441');
-	var jel    = szunetel ? token('--szem-text-dim', '#9aa4b0') : token('--szem-accent', '#d9a441');
+}
+
+/* "Stop everything": a red octagon, drawn at the same size as the module
+   buttons so the bar reads as one set of controls. Red is the one colour in
+   the palette that is not the accent, which is what makes this the odd one
+   out on purpose. */
+function stopIkon() {
+	var piros  = ikonSzin('--szem-danger', '#e05252');
+	var hatter = ikonSzin('--szem-surface-2', '#1a1f26');
+	/* A regular octagon inside an 18-box. */
+	var p = '5.27,1 12.73,1 17,5.27 17,12.73 12.73,17 5.27,17 1,12.73 1,5.27';
+	return ikonSvg('<polygon points="' + p + '" fill="' + piros + '"/>' +
+		'<rect x="6.2" y="6.2" width="5.6" height="5.6" rx="1" fill="' + hatter + '"/>');
+}
+
+/* The little button in front of every module name. The glyph shows the
+   state, not the action, which is the behaviour that was already there: a
+   running module is a lit triangle, a stopped one a pair of dim bars. The
+   title attribute is what names the action.
+
+   The element stays an <img> whose src is swapped, because setModulePause()
+   and the farm error path both find it with #kiegs img[name="..."] and
+   szunet() is handed it by the inline handler. */
+function modulIkon(szunetel) {
+	var hatter = ikonSzin('--szem-surface-2', '#1a1f26');
+	var keret  = szunetel ? ikonSzin('--szem-line', '#272e37') : ikonSzin('--szem-accent', '#d9a441');
+	var jel    = szunetel ? ikonSzin('--szem-text-dim', '#9aa4b0') : ikonSzin('--szem-accent', '#d9a441');
 	var belso  = szunetel
 		? '<rect x="6.1" y="5.2" width="2" height="7.6" rx="0.7" fill="' + jel + '"/>' +
 		  '<rect x="9.9" y="5.2" width="2" height="7.6" rx="0.7" fill="' + jel + '"/>'
 		: '<path d="M7 5.1 L13 9 L7 12.9 Z" fill="' + jel + '"/>';
-	var svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 18 18" width="18" height="18">' +
-		'<rect x="0.75" y="0.75" width="16.5" height="16.5" rx="5" fill="' + hatter +
-		'" stroke="' + keret + '" stroke-width="1.5"/>' + belso + '</svg>';
-	return 'data:image/svg+xml,' + encodeURIComponent(svg);
+	return ikonSvg('<rect x="0.75" y="0.75" width="16.5" height="16.5" rx="5" fill="' + hatter +
+		'" stroke="' + keret + '" stroke-width="1.5"/>' + belso);
 }
 
 function picBuilding(bId) {
@@ -3543,7 +3575,7 @@ ujkieg("farm","Farmoló",`<tr><td>
 		</tr><tr>
 			<td colspan="2" class="nopadding_td" onmouseover="sugo(this, 'Farmoló által küldött utolsó támadás idejét látod itt. Ha a szívre kattintasz, újraéleszted/feléleszted a farmolót a pihenésből.')">
 				<div class="heartbeat_wrapper">
-					<img src="${pic("heart.png")}" class="heartbeat_icon" onclick="restartKieg('farm')">
+					<img src="${szemIkon('heart')}" class="heartbeat_icon" onclick="restartKieg('farm')">
 					<span id="cnc_farm_heartbeat">---</span>
 				</div>
 			</td>
@@ -3555,7 +3587,7 @@ ujkieg("farm","Farmoló",`<tr><td>
 			<th onmouseover="sugo(this,'Ezen egységeket használja fel SZEM a farmoláshoz. Bármikor módosítható. <br>Pipa: egy cellán végrehajtott (duplaklikkes) művelet minden látható falura érvényes lesz.')" style="height: 20px; min-width: 100px">
 				Mivel?
 				<span style="position:absolute;right: 7px;top: 3px;display: flex;vertical-align: middle;align-items: center;">
-					<img src="${pic("search.png")}" alt="?" title="Szűrés falukra..." style="width:15px;height:15px; cursor: pointer;" onclick="szem4_farmolo_csoport('honnan')">
+					<img src="${szemIkon('search')}" alt="?" title="Szűrés falukra..." style="width:15px;height:15px; cursor: pointer;" onclick="szem4_farmolo_csoport('honnan')">
 					<input type="checkbox" id="farm_multi_honnan" onmouseover="sugo(this,'Ha bepipálod, akkor egy cellán végzett dupla klikkes művelet minden sorra érvényes lesz az adott oszlopba (tehát minden falura), ami jelenleg látszik. Légy óvatos!')">
 				</span>
 			</th>
@@ -3569,7 +3601,7 @@ ujkieg("farm","Farmoló",`<tr><td>
 			<th onmouseover="sugo(this,'Támadásokat tudod itt nyomon követni szerelvények formájában, melyek a támadási algoritmus alapjait képzik<br><br>Pipa: egy cellán végrehajtott (duplaklikkes) művelet minden látható falura érvényes lesz.')" style="height: 20px; vertical-align:middle;">
 				Szerelvények
 				<span style="position:absolute;right: 7px;top: 3px;display: flex;vertical-align: middle;align-items: center;">
-					<img src="${pic("search.png")}" alt="?" title="Szűrés falukra..." style="width:15px;height:15px;" onclick="szem4_farmolo_csoport('hova')">
+					<img src="${szemIkon('search')}" alt="?" title="Szűrés falukra..." style="width:15px;height:15px;" onclick="szem4_farmolo_csoport('hova')">
 					<input type="checkbox" id="farm_multi_hova">
 				</span>
 			</th>
@@ -4789,7 +4821,7 @@ ujkieg('gyujto','Gyűjtő',`<tr><td>
 		<table class="vis gyujto_table" id="gyujto_form_table">
 			<thead><tr>
 				<th onclick="rendez('szoveg', false, this, 'gyujto_form_table', 0)">Falu
-					<img src="${pic("search.png")}" alt="Szűrő" title="Szűrés falukra..." onclick="szem4_GYUJTO_search(event)">
+					<img src="${szemIkon('search')}" alt="Szűrő" title="Szűrés falukra..." onclick="szem4_GYUJTO_search(event)">
 					<input type="checkbox" onclick="stopEvent(event)" id="gyujto_ismass" onmouseover="sugo(this,'Tömeges kezelés: minden látott falura érvényes lesz a további művelet')" title="Tömeges kezelés"></th>
 				<th onclick="rendez('szam', false, this, 'gyujto_form_table', 1)">Pont</th>
 				<th onclick="rendez('tanya', false, this, 'gyujto_form_table', 2)">Tanya</th>
