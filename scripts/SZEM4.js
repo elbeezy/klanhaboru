@@ -2566,7 +2566,7 @@ function szem4_farmolo_3egyeztet(adatok){try{
 	// 	if (adatok.plannedArmy.nyersToFarm != a) debug("farm3","Valódi teherbírás nem egyezik a kiszámolttal. Hiba, ha nincs teherbírást módosító \"eszköz\".");
 	// }catch(e){ console.error('szem4_farmolo_3egyeztet - teherbiras',e) }
 
-	/* KÉK háttér bányára? */
+	/* Lila háttér a bányákra: kém van útban, de még nincs felderített adat. */
 	if (adatok.kem > 0 && farm_helye.cells[1].textContent == '') {
 		const scoutColor = 'rgb(213, 188, 244)';
 		farm_helye.cells[1].style.backgroundColor = scoutColor;
@@ -2812,8 +2812,8 @@ ujkieg("farm","Farmoló",`<tr><td>
 		</tr></table>\
 		<table class="vis" id="farm_hova" style="vertical-align:top; display: inline-block;"><tr>
 			<th onmouseover="sugo(this,'Ezen falukat farmolod. A háttérszín jelöli a jelentés színét: alapértelmezett=zöld jelik/nincs felderítve. Sárga=veszteség volt a falun. Piros: a támadás besült, nem megy rá több támadás.<br>Dupla klikk a koordira: a háttérszín alapértelmezettre állítása.<br>Rendezhető')" style="cursor: pointer;" onclick='rendez("szoveg",false,this,"farm_hova",0)'>Hova</th>
-			<th onmouseover="sugo(this,'Felderített bányaszintek, ha van. Kék háttér: megy rá kémtámadás.<br>Dupla klikk=az érintett sor törlése')">Bányák</th>
-			<th onmouseover="sugo(this,'Fal szintje. Szimpla klikk: Katapultozó scriptet megtanítja az adott falu épületszintjeire. Dupla klikk=háttér csere (csak megjelölésként). 2 féle lehet: a zöld háttér a falszint változására eltűnik, a kék keret viszont csak manuálisan törölhető.<br>Rendezhető.')" onclick='rendez("szam",false,this,"farm_hova",2)' style="cursor: pointer;">Fal</th>
+			<th onmouseover="sugo(this,'Felderített bányaszintek, ha van (fa, agyag, vas). Lila háttér: már megy oda kém, az adatok a jelentés megérkezésekor maguktól kitöltődnek.<br>Dupla klikk=az érintett sor törlése')">Bányák</th>
+			<th onmouseover="sugo(this,'Fal szintje. A 0-nál kisebb számok nem hibák: ha nincs fal, a falu további jelei is beszámítanak (-1 ha nincs barakk, -1 ha a főhadiszállás 2. szintű, -2 ha 1. szintű). Minél kisebb a szám, annál védtelenebb a falu, így rendezéskor a leggyengébbek kerülnek előre.<br>Szimpla klikk: Katapultozó scriptet megtanítja az adott falu épületszintjeire. Dupla klikk=háttér csere (csak megjelölésként). 2 féle lehet: a zöld háttér a falszint változására eltűnik, a kék keret viszont csak manuálisan törölhető.<br>Rendezhető.')" onclick='rendez("szam",false,this,"farm_hova",2)' style="cursor: pointer;">Fal</th>
 			<th onmouseover="sugo(this,'Számítások szerint ennyi nyers van az érintett faluba. Dupla klikk=érték módosítása.<br>Rendezhető.')" onclick='rendez("szam",false,this,"farm_hova",3)' style="cursor: pointer;">Nyers</th>
 			<th onmouseover="sugo(this,'Játékos e? Ha játékost szeretnél támadni, pipáld be a falut mint játékos uralta, így támadni fogja. Ellenben piros hátteret kap a falu. (WIP: Nem működik/nem ismer fake-limitet, csupán engedi támadni!)')">J?</th>
 			<th onmouseover="sugo(this,'Támadásokat tudod itt nyomon követni szerelvények formájában, melyek a támadási algoritmus alapjait képzik<br><br>Pipa: egy cellán végrehajtott (duplaklikkes) művelet minden látható falura érvényes lesz.')" style="height: 20px; vertical-align:middle;">
