@@ -481,6 +481,7 @@ suite('The bot-protection alarm', function () {
 			return ids.length;
 		};
 		var doc = {
+			get title() { return w.page.title || ''; },
 			getElementById: function (id) { return w.page[id] || null; },
 			querySelector: function (sel) { return w.page[sel] || null; }
 		};
@@ -629,6 +630,44 @@ suite('The bot-protection alarm', function () {
 	ok(r4 !== '', 'answering in time is reported too');
 	ok(r4.indexOf('elhallgatott') === -1, 'without claiming the alarm gave up', r4);
 	ok(w4.BOT === false, 'and the modules run again');
+
+	/* --- what counts as a bot check ---
+	   One function answers this, so that raising the alarm and deciding it
+	   has cleared can never disagree. */
+	var jel = alarmApi(alarmWorld()).botvedelemJel;
+	function lap(page) { return jel({ title: (page || {}).title || '',
+		getElementById: function (id) { return (page || {})[id] || null; } }); }
+
+	ok(lap({ botprotection_quest: {} }) !== '', 'the dismissable prompt is a check');
+	ok(lap({ bot_check: {} }) !== '', 'so is the check box');
+	ok(lap({ popup_box_bot_protection: {} }) !== '', 'so is the popup');
+	ok(lap({}) === '', 'an ordinary page is not');
+	ok(lap() === '', 'and neither is a bare page with no title at all');
+
+	/* The title used to be compared for equality with the Hungarian wording,
+	   so it never fired on any other server. */
+	ok(lap({ title: 'Bot v\u00e9delem' }) !== '', 'the Hungarian title still counts');
+	ok(lap({ title: 'Bot protection' }) !== '', 'and so does an English one');
+	ok(lap({ title: 'Bot-Schutz' }) !== '', 'and a hyphenated one');
+
+	/* Widening it must not make it trigger-happy: a false alarm halts every
+	   module until he comes back and clears it by hand. */
+	ok(lap({ title: 'Botond' }) === '', 'a village called Botond is not a bot check');
+	ok(lap({ title: 'Bottrop (500|500)' }) === '', 'nor is one called Bottrop');
+	ok(lap({ title: 'Jelent\u00e9sek' }) === '', 'nor an ordinary page title');
+
+	/* A check seen only by its title used to look cleared on the very next
+	   poll, because raising and clearing asked different questions. */
+	var w7 = alarmWorld({ '#serverTime': { innerHTML: '12:34:56' }, title: 'Bot protection' });
+	var api7 = alarmApi(w7);
+	api7.BotvedelemBe();
+	ok(w7.BOT === true, 'a check known only by its title raises the alarm');
+	pollFor(w7, 20000);
+	ok(w7.BOT === true, 'and is still raised twenty seconds later');
+	eq(w7.liveTimers().length, 1, 'with the cycle still polling');
+	w7.page = { '#serverTime': { innerHTML: '12:34:56' }, title: 'Falu \u00e1ttekint\u00e9s' };
+	pollFor(w7, 10000);
+	ok(w7.BOT === false, 'and lets go once the title says the check is gone');
 
 	/* --- how loud it gets ---
 	   It used to climb by a fifth every 2.5s until it was at full volume,

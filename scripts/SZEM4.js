@@ -1472,6 +1472,25 @@ var BOT_HANGERO = 0.5;
 var BOT_KEZDET = 0, BOT_FELADVA = false;
 var BOTORA = 0, ALTBOT2=false; /*ALTBOT2 --> megnyílt e már 1x az ablak*/
 var BOT_REF;
+/* The one place that decides whether a page is showing a bot check, so that
+   raising the alarm and deciding it has cleared can never disagree. Returns
+   the signal that fired, for the log, or '' for a clean page.
+
+   The three ids are what the game itself uses and are the same on every
+   server. The page title is only a fallback: comparing it for equality with
+   the Hungarian wording meant it contributed nothing anywhere else. It is
+   matched as a whole word at the start of the title instead, so a village
+   called Botond cannot trip it -- a false alarm halts every module, so this
+   fallback has to stay narrow. */
+function botvedelemJel(doc) {
+	try {
+		if (doc.getElementById('botprotection_quest')) return 'botprotection_quest';
+		if (doc.getElementById('bot_check')) return 'bot_check';
+		if (doc.getElementById('popup_box_bot_protection')) return 'popup_box_bot_protection';
+		if (/^bot\b/i.test(doc.title || '')) return 'c\u00edm: ' + doc.title;
+	} catch (e) { debug('botvedelemJel', e); } // cross-origin, or a window closing mid-read
+	return '';
+}
 /* Raising the alarm and polling it used to be the same function, which
    rescheduled itself every 2.5 seconds. isPageLoaded() calls it afresh every
    time a page check fails, so a second call started a second chain while
@@ -1504,7 +1523,7 @@ function botvedelemTick() {
 			if (BOT_REF.document.querySelector('#bot_check a'))
 				BOT_REF.document.querySelector('#bot_check a').click();
 		}
-		if (isload && BOT_REF.document.querySelector('#bot_check') == null && BOT_REF.document.querySelector('#popup_box_bot_protection') == null && BOT_REF.document.querySelector('#botprotection_quest') == null) {
+		if (isload && !botvedelemJel(BOT_REF.document)) {
 			BotvedelemKi();
 			return;
 		}
@@ -1577,10 +1596,11 @@ function BotvedelemKi(){
 
 function isPageLoaded(ref, faluid, address, elements=[]){try{
 	if (ref.closed) return false;
-	if (ref.document.getElementById('botprotection_quest') || ref.document.getElementById('bot_check') || ref.document.getElementById('popup_box_bot_protection') || ref.document.title=="Bot védelem") {
+	var botjel = botvedelemJel(ref.document);
+	if (botjel) {
 		/* Best-effort dismissal; the caller raises the alarm either way. */
 		try{if (ref.document.getElementById('botprotection_quest')) ref.document.getElementById('botprotection_quest').click();}catch(e){}
-		naplo("Globális","Bot védelem aktív!!!");
+		naplo("Globális","Bot védelem aktív!!! ("+botjel+")");
 		BotvedelemBe();
 		return false;
 	}
