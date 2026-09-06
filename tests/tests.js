@@ -1281,6 +1281,53 @@ suite('The tables', function () {
 	ok(szin('th1', 'backgroundColor') !== 'rgba(0, 0, 0, 0)',
 	   'and the header row paints its own background', szin('th1', 'backgroundColor'));
 
+	/* The header is the accent amber now, carrying near-black text.
+
+	   What is worth asserting is not which two tokens were named -- that is
+	   just restating the rule -- but whether the pair can actually be read.
+	   The headers reported as unreadable were dim grey on tan, a pairing that
+	   clears no contrast bar at all, and naming tokens would not have caught
+	   it. So the browser is asked what it computed and the ratio is worked
+	   out from that. 4.5:1 is the ordinary bar for body-sized text. */
+	function fenyero(s) {
+		var c = s.match(/[0-9.]+/g).slice(0, 3).map(function (v) {
+			v = Number(v) / 255;
+			return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+		});
+		return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+	}
+	function kontraszt(a, b) {
+		var la = fenyero(a), lb = fenyero(b);
+		return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+	}
+
+	/* Read the accent off the sheet rather than repeating its hex here, so
+	   this keeps testing "the header matches the wordmark" and not "the
+	   header is #d9a441", which would just have to be edited in step. */
+	var proba = d.createElement('div');
+	proba.style.color = 'var(--szem-accent)';
+	d.body.appendChild(proba);
+	var accentRgb = keret.contentWindow.getComputedStyle(proba).color;
+
+	eq(szin('th1', 'backgroundColor'), accentRgb,
+	   'a header is painted the same amber as the IV in the wordmark');
+	ok(kontraszt(szin('th1', 'backgroundColor'), szin('th1', 'color')) >= 4.5,
+	   'and its label is readable on it',
+	   kontraszt(szin('th1', 'backgroundColor'), szin('th1', 'color')).toFixed(2) + ':1');
+	proba.remove();
+
+	/* Three things live inside a header and would each have gone amber on
+	   amber if only the background had been changed. */
+	var fejSzabalyok = szemCssRules();
+	ok(/th\[onclick\]:hover\s*\{[^}]*background:/.test(fejSzabalyok),
+	   'a hovered sortable header answers with its background');
+	ok(!/th\[onclick\]:hover\s*\{[^}]*color:\s*var\(--szem-accent\)/.test(fejSzabalyok),
+	   'and not by turning its label the colour it is already painted');
+	ok(/th input\[type="checkbox"\]\s*\{[^}]*accent-color:\s*var\(--szem-on-accent\)/.test(fejSzabalyok),
+	   'the select-all tick box in a header is drawn to show up on one');
+	eq((SZEM4_SRC.match(/szemIkon\('search'\)/g) || []).length, 0,
+	   'and no search icon is left drawing itself in the panel colour inside a header');
+
 	/* Now the colour boxes, written exactly the way onWallpChange writes them.
 	   The assertions under this pin the shapes, so the copy cannot drift. */
 	ok(SZEM4_SRC.indexOf('.vis:not(#farm_honnan):not(#farm_hova) td { background: ') !== -1,
@@ -1365,7 +1412,11 @@ suite('The farm search control stays in its header', function () {
 	/* The anchor is stated once for every header now. The cell that used to
 	   carry it inline should no longer need to, and if the rule is ever lost
 	   both controls break together rather than one quietly. */
-	ok(css.indexOf('position: relative;\n\t\t\tbackground: var(--szem-surface-2);') !== -1,
+	/* Asked of the shared header rule itself rather than of two lines that
+	   happen to sit next to each other: this used to match on the anchor
+	   being immediately followed by one particular background, so recolouring
+	   the header broke it while the anchor was still perfectly in place. */
+	ok(/#content table\.vis th \{[^}]*position: relative;/.test(szemCssRules()),
 	   'the header rule is what provides the anchor');
 	eq(SZEM4_SRC.indexOf('style="position: relative; height: 20px; min-width: 100px"'), -1,
 	   'and no header states it inline any more');

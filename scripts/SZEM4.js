@@ -269,6 +269,15 @@ function init(){try{
 			--szem-accent: #d9a441;
 			--szem-accent-soft: rgba(217,164,65,0.14);
 			--szem-accent-glow: rgba(217,164,65,0.55);
+			/* What goes ON the accent: header text, and the icons and tick
+			   boxes that sit inside a header. Near-black, not the body text
+			   colour -- pale grey on a warm background is exactly the
+			   low-contrast pairing the old headers had, and reusing it here
+			   would reproduce the thing being fixed. */
+			--szem-on-accent: #0b0d10;
+			/* The accent one step down, so a sortable header can answer the
+			   mouse without the text having to change colour. */
+			--szem-accent-deep: #c08f33;
 			--szem-hover: rgba(255,255,255,0.06);
 			--szem-danger: #e05252;
 			--szem-shadow: 0 2px 24px rgba(0,0,0,0.65);
@@ -536,8 +545,13 @@ function init(){try{
 			   Szerelvények one had been sitting, its header being the one that
 			   was written without the anchor its twin has. */
 			position: relative;
-			background: var(--szem-surface-2);
-			color: var(--szem-text-dim);
+			/* The accent, the same amber as the IV in the wordmark, carrying
+			   near-black text. A header is the one place in the interface
+			   that has to be found at a glance while scanning rows, and the
+			   dim-grey-on-dark-grey it used to be made it the least legible
+			   thing on the page rather than the most. */
+			background: var(--szem-accent);
+			color: var(--szem-on-accent);
 			font-size: 11px;
 			font-weight: 600;
 			letter-spacing: 0.08em;
@@ -558,8 +572,17 @@ function init(){try{
 		#content table.vis > tbody > tr:hover > td {
 			background: var(--szem-hover);
 		}
+		/* A sortable header used to answer the mouse by turning its text the
+		   accent colour. The header IS the accent colour now, so that would
+		   have made the label vanish; it darkens the whole cell instead. */
 		#content table.vis th[onclick]:hover {
-			color: var(--szem-accent);
+			background: var(--szem-accent-deep);
+		}
+		/* The tick box in a header corner -- select-all on both farm tables
+		   and on the gatherer -- draws itself with accent-color, which on an
+		   accent-coloured header is amber on amber. */
+		#content table.vis th input[type="checkbox"] {
+			accent-color: var(--szem-on-accent);
 		}
 		/* The options tables sit on a dark panel now, so black text there was
 		   left over from the same assumption. */
@@ -1138,9 +1161,13 @@ function ikonSvg(tartalom) {
 		tartalom + '</svg>');
 }
 
-function szemIkon(nev) {
-	var halvany = ikonSzin('--szem-text-dim', '#9aa4b0');
-	var piros = ikonSzin('--szem-danger', '#e05252');
+/* nev picks the glyph. szinNev optionally names a palette token to draw it
+   in, for a glyph that has to sit on something other than the panel: every
+   search icon lives inside a table header, and headers are the accent colour
+   now, so a glyph in the usual dim grey would be nearly invisible there. */
+function szemIkon(nev, szinNev) {
+	var halvany = ikonSzin(szinNev || '--szem-text-dim', '#9aa4b0');
+	var piros = ikonSzin(szinNev || '--szem-danger', '#e05252');
 	switch (nev) {
 		case 'search':
 			return ikonSvg('<circle cx="7.6" cy="7.6" r="4.5" fill="none" stroke="' + halvany + '" stroke-width="1.6"/>' +
@@ -3587,7 +3614,7 @@ ujkieg("farm","Farmoló",`<tr><td>
 			<th onmouseover="sugo(this,'Ezen egységeket használja fel SZEM a farmoláshoz. Bármikor módosítható. <br>Pipa: egy cellán végrehajtott (duplaklikkes) művelet minden látható falura érvényes lesz.')" style="height: 20px; min-width: 100px">
 				Mivel?
 				<span style="position:absolute;right: 7px;top: 3px;display: flex;vertical-align: middle;align-items: center;">
-					<img src="${szemIkon('search')}" alt="?" title="Szűrés falukra..." style="width:15px;height:15px; cursor: pointer;" onclick="szem4_farmolo_csoport('honnan')">
+					<img src="${szemIkon('search', '--szem-on-accent')}" alt="?" title="Szűrés falukra..." style="width:15px;height:15px; cursor: pointer;" onclick="szem4_farmolo_csoport('honnan')">
 					<input type="checkbox" id="farm_multi_honnan" onmouseover="sugo(this,'Ha bepipálod, akkor egy cellán végzett dupla klikkes művelet minden sorra érvényes lesz az adott oszlopba (tehát minden falura), ami jelenleg látszik. Légy óvatos!')">
 				</span>
 			</th>
@@ -3601,7 +3628,7 @@ ujkieg("farm","Farmoló",`<tr><td>
 			<th onmouseover="sugo(this,'Támadásokat tudod itt nyomon követni szerelvények formájában, melyek a támadási algoritmus alapjait képzik<br><br>Pipa: egy cellán végrehajtott (duplaklikkes) művelet minden látható falura érvényes lesz.')" style="height: 20px; vertical-align:middle;">
 				Szerelvények
 				<span style="position:absolute;right: 7px;top: 3px;display: flex;vertical-align: middle;align-items: center;">
-					<img src="${szemIkon('search')}" alt="?" title="Szűrés falukra..." style="width:15px;height:15px;" onclick="szem4_farmolo_csoport('hova')">
+					<img src="${szemIkon('search', '--szem-on-accent')}" alt="?" title="Szűrés falukra..." style="width:15px;height:15px;" onclick="szem4_farmolo_csoport('hova')">
 					<input type="checkbox" id="farm_multi_hova">
 				</span>
 			</th>
@@ -4821,7 +4848,7 @@ ujkieg('gyujto','Gyűjtő',`<tr><td>
 		<table class="vis gyujto_table" id="gyujto_form_table">
 			<thead><tr>
 				<th onclick="rendez('szoveg', false, this, 'gyujto_form_table', 0)">Falu
-					<img src="${szemIkon('search')}" alt="Szűrő" title="Szűrés falukra..." onclick="szem4_GYUJTO_search(event)">
+					<img src="${szemIkon('search', '--szem-on-accent')}" alt="Szűrő" title="Szűrés falukra..." onclick="szem4_GYUJTO_search(event)">
 					<input type="checkbox" onclick="stopEvent(event)" id="gyujto_ismass" onmouseover="sugo(this,'Tömeges kezelés: minden látott falura érvényes lesz a további művelet')" title="Tömeges kezelés"></th>
 				<th onclick="rendez('szam', false, this, 'gyujto_form_table', 1)">Pont</th>
 				<th onclick="rendez('tanya', false, this, 'gyujto_form_table', 2)">Tanya</th>
