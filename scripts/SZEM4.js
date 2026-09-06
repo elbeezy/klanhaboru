@@ -29,8 +29,8 @@ Object.assign(window, {
 	szem4_ADAT_loadNow, szem4_ADAT_restart, szem4_ADAT_saveNow, szem4_EPITO_cscheck,
 	szem4_EPITO_csopDelete, szem4_EPITO_infoCell, szem4_EPITO_most, szem4_EPITO_perccsokkento,
 	szem4_EPITO_ujCsop, szem4_EPITO_ujFalu, szem4_GYUJTO_search, szem4_farmolo_csoport,
-	szem4_farmolo_multiclick, szem4_vije_forgot, szunet, updateDefaultProdHour,
-	validate,
+	szem4_farmolo_multiclick, szem4_vije_forgot, szunet, szunetMind,
+	updateDefaultProdHour, validate,
 });
 
 function stop(){
@@ -643,6 +643,7 @@ function init(){try{
 						<span class="divcell" id="kiegs" style="text-align:left; padding-top: 9px;width:870px;">
 							<img src="${pic("muhely_logo.png")}" alt="GIT" title="GIT C&amp;C Műhely megnyitása" onclick="window.open('https://github.com/cncDAni2/klanhaboru')">
 							<img src="${pic("kh_logo.png")}" alt="Game" title="Klánháború megnyitása" onclick="window.open(document.location.href)">
+							<a href="javascript: szunetMind();" id="szunet_mind" title="Minden modul megállítása megadott időre" onmouseover="sugo(this,'Minden futó modult megállít a megadott percre, majd önműködően újraindítja őket.')">Szünet mind</a>
 							|
 						</span>
 						<span class="divcell" style="text-align:right; width:250px">
@@ -1140,6 +1141,94 @@ function szunet(script,kep){try{
 	if (most === null) { alert2("Sikertelen script megállatás. Nincs ilyen alscript: " + script); return; }
 	setModulePause(script, !most, kep);
 }catch(e){alert2("Hiba:\n"+e);}}
+
+/* Stopping SZEM to step away means clicking every module in turn, and coming
+   back means remembering which ones had been running. This does both: it
+   records what is running now, stops exactly those, and starts exactly those
+   again when the time is up. A module stopped by hand beforehand stays
+   stopped, and one started by hand during the pause is simply left running.
+
+   Two modules are deliberately left out. "idtamad" has no pause of its own --
+   it only listens for incoming attacks and costs nothing. "adatok" only writes
+   backups, and stopping the backups while nobody is watching is the opposite
+   of what a pause is for.
+
+   The deadline is held as a timestamp rather than counted down, so a timer the
+   browser delays in a background tab resumes at the right moment rather than
+   drifting later and later. Nothing is stored: every module starts paused
+   after a reload anyway, so a pause cannot outlive the page it was set on. */
+var SZUNET_MIND_VEGE = 0, SZUNET_MIND_VISSZA = [], SZUNET_MIND_TIMER = 0;
+var SZUNET_MIND_KIVETEL = ['idtamad', 'adatok'];
+var SZUNET_MIND_MAX_PERC = 1440;
+
+function szunetMindHatralevo() {
+	return Math.max(SZUNET_MIND_VEGE - Date.now(), 0);
+}
+
+function szunetMindFelirat() {
+	var el = document.getElementById('szunet_mind');
+	if (!el) return;
+	if (!SZUNET_MIND_VEGE) {
+		el.textContent = 'Szünet mind';
+		el.title = 'Minden modul megállítása megadott időre';
+		return;
+	}
+	var mp = Math.ceil(szunetMindHatralevo() / 1000);
+	el.textContent = 'Szünet ' + Math.floor(mp / 60) + ':' + String(mp % 60).padStart(2, '0');
+	el.title = 'Kattints a folytatáshoz most';
+}
+
+function szunetMindFut(id) {
+	return !SZUNET_MIND_KIVETEL.includes(id) && moduleIsPaused(id) === false;
+}
+
+function szunetMindInditas(perc) {
+	SZUNET_MIND_VISSZA = ALL_EXTENSION.filter(szunetMindFut);
+	SZUNET_MIND_VEGE = Date.now() + perc * 60000;
+	SZUNET_MIND_VISSZA.forEach(function (id) { setModulePause(id, true); });
+	if (SZUNET_MIND_TIMER) clearInterval(SZUNET_MIND_TIMER);
+	SZUNET_MIND_TIMER = setInterval(szunetMindOra, 1000);
+	szunetMindFelirat();
+	naplo('Szünet', 'Minden modul megállítva ' + perc + ' percre. Újraindul: ' + SZUNET_MIND_VISSZA.join(', ') + '.');
+	return true;
+}
+
+function szunetMindVege(kezi) {
+	if (SZUNET_MIND_TIMER) { clearInterval(SZUNET_MIND_TIMER); SZUNET_MIND_TIMER = 0; }
+	SZUNET_MIND_VEGE = 0;
+	var vissza = SZUNET_MIND_VISSZA;
+	SZUNET_MIND_VISSZA = [];
+	/* Setting rather than toggling, so a module already restarted by hand
+	   during the pause is left alone instead of being stopped again. */
+	vissza.forEach(function (id) { setModulePause(id, false); });
+	szunetMindFelirat();
+	naplo('Szünet', (kezi ? 'Kézzel folytatva' : 'Letelt a szünet') + ', újraindítva: ' + (vissza.join(', ') || 'semmi') + '.');
+	return vissza;
+}
+
+function szunetMindOra() {
+	if (szunetMindHatralevo() > 0) { szunetMindFelirat(); return; }
+	szunetMindVege(false);
+}
+
+function szunetMind() {try{
+	if (SZUNET_MIND_VEGE) {
+		var mp = Math.ceil(szunetMindHatralevo() / 60000);
+		if (confirm('Még ' + mp + ' perc van hátra. Folytatod most a modulokat?')) szunetMindVege(true);
+		return;
+	}
+	var fut = ALL_EXTENSION.filter(szunetMindFut);
+	if (!fut.length) {
+		alert2('Jelenleg egyetlen modul se fut, nincs mit megállítani.');
+		return;
+	}
+	var valasz = prompt('Hány percre álljon meg minden futó modul?\n\nMegállítja: ' + fut.join(', ') + '\nUtána önműködően újraindulnak.\n\nA bejövő támadások figyelése és az adatmentés tovább fut.', '30');
+	if (valasz === null) return;
+	var perc = parseInt(valasz, 10);
+	if (!(perc > 0)) { alert2('Adj meg egy 0-nál nagyobb egész számot percben.'); return; }
+	if (perc > SZUNET_MIND_MAX_PERC) { alert2('Legfeljebb ' + SZUNET_MIND_MAX_PERC + ' perc adható meg.'); return; }
+	szunetMindInditas(perc);
+}catch(e){debug('szunetMind', e); alert2('Hiba:\n'+e);}}
 
 function distCalc(S,D){
 	S[0]=parseInt(S[0]);
