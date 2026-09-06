@@ -620,6 +620,24 @@ function init(){try{
 			column-gap: 6px;
 			text-align: right;
 		}
+		/* The stop control. The countdown only appears once something is
+		   actually paused, so the bar stays one icon wide the rest of the time. */
+		#szunet_mind {
+			display: inline-flex;
+			align-items: center;
+			gap: 5px;
+		}
+		#szunet_mind img {
+			width: 18px;
+			height: 18px;
+			padding: 0;
+			border: 0;
+		}
+		#szunet_mind:hover img { filter: brightness(1.25); }
+		#szunet_mind_ido:not(:empty) {
+			color: var(--szem-danger);
+			font-variant-numeric: tabular-nums;
+		}
 		/* The module buttons. The blanket img rule below adds a border colour
 		   and padding meant for the game's own pictures; these are drawn to
 		   size and want neither. */
@@ -901,7 +919,7 @@ function init(){try{
 					<div class="divrow menubar">
 						<span class="divcell" id="kiegs">
 							<img src="${pic("kh_logo.png")}" alt="Game" title="Klánháború megnyitása" onclick="window.open(document.location.href)">
-							<a href="javascript: szunetMind();" id="szunet_mind" title="Minden modul megállítása megadott időre" onmouseover="sugo(this,'Minden futó modult megállít a megadott percre, majd önműködően újraindítja őket.')">Szünet mind</a>
+							<a href="javascript: szunetMind();" id="szunet_mind" title="Minden modul megállítása megadott időre" onmouseover="sugo(this,'Minden futó modult megállít a megadott percre, majd önműködően újraindítja őket.')"><img src="${stopIkon()}" alt="Szünet mind"><span id="szunet_mind_ido"></span></a>
 							<span class="menubar_valaszto"></span>
 						</span>
 						<span class="divcell menubar_jobb">
@@ -1047,6 +1065,27 @@ function banyakCella(fa, agyag, vas) {
    The glyph shows the state, not the action, which is the behaviour that was
    already there: a running module is a lit triangle, a stopped one is a pair
    of dim bars. The title attribute is what names the action. */
+/* "Stop everything": a red octagon, drawn the same way and at the same size
+   as the module buttons so the bar reads as one set of controls rather than
+   an icon collection. Red is the one colour in the palette that is not the
+   accent, which is what makes this the odd one out on purpose. */
+function stopIkon() {
+	var stilus = getComputedStyle(document.documentElement);
+	function token(nev, tartalek) {
+		var ertek = stilus.getPropertyValue(nev).trim();
+		return ertek || tartalek;
+	}
+	var piros  = token('--szem-danger', '#e05252');
+	var hatter = token('--szem-surface-2', '#1a1f26');
+	/* A regular octagon inside an 18-box. */
+	var p = '5.27,1 12.73,1 17,5.27 17,12.73 12.73,17 5.27,17 1,12.73 1,5.27';
+	var svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 18 18" width="18" height="18">' +
+		'<polygon points="' + p + '" fill="' + piros + '"/>' +
+		'<rect x="6.2" y="6.2" width="5.6" height="5.6" rx="1" fill="' + hatter + '"/>' +
+		'</svg>';
+	return 'data:image/svg+xml,' + encodeURIComponent(svg);
+}
+
 function modulIkon(szunetel) {
 	var stilus = getComputedStyle(document.documentElement);
 	function token(nev, tartalek) {
@@ -1495,15 +1534,19 @@ function szunetMindHatralevo() {
 }
 
 function szunetMindFelirat() {
+	/* The stop sign says what the control does, so only the remaining time is
+	   written here -- writing over the link itself would take the icon with
+	   it. Empty while nothing is paused, so the bar stays one icon wide. */
 	var el = document.getElementById('szunet_mind');
-	if (!el) return;
+	var ido = document.getElementById('szunet_mind_ido');
+	if (!el || !ido) return;
 	if (!SZUNET_MIND_VEGE) {
-		el.textContent = 'Szünet mind';
+		ido.textContent = '';
 		el.title = 'Minden modul megállítása megadott időre';
 		return;
 	}
 	var mp = Math.ceil(szunetMindHatralevo() / 1000);
-	el.textContent = 'Szünet ' + Math.floor(mp / 60) + ':' + String(mp % 60).padStart(2, '0');
+	ido.textContent = Math.floor(mp / 60) + ':' + String(mp % 60).padStart(2, '0');
 	el.title = 'Kattints a folytatáshoz most';
 }
 

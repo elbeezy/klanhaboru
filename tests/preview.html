@@ -61,13 +61,21 @@ function styleLapBol(src) {
 /* The real modulIkon(), cut out of the script and used as-is, so the buttons
    here are the same drawing the interface makes rather than a lookalike. */
 let modulIkon = null;
+let stopIkon = null;
+
+/* The real drawing functions, cut out of the script and used as they are, so
+   the buttons here are what the interface actually makes. */
+function ikonBetolt(src, nev) {
+	const start = src.indexOf('function ' + nev + '(');
+	if (start === -1) throw new Error('nem találom a ' + nev + ' függvényt');
+	const end = src.indexOf('\n}', start);
+	if (end === -1) throw new Error('a ' + nev + ' függvény nincs lezárva');
+	return new Function('return (' + src.slice(start, end + 2) + ')')();
+}
 
 function modulIkonBetolt(src) {
-	const start = src.indexOf('function modulIkon(');
-	if (start === -1) throw new Error('nem találom a modulIkon függvényt');
-	const end = src.indexOf('\n}', start);
-	if (end === -1) throw new Error('a modulIkon függvény nincs lezárva');
-	modulIkon = new Function('return (' + src.slice(start, end + 2) + ')')();
+	modulIkon = ikonBetolt(src, 'modulIkon');
+	stopIkon = ikonBetolt(src, 'stopIkon');
 }
 
 function modul(id, nev, all) {
@@ -107,7 +115,8 @@ function farmSor(hova, banyak, fal, nyers, jatekos, tav) {
 function tartalom() {
 	const modulok =
 		'<img src="' + PIC + 'kh_logo.png" alt="Game" title="Klánháború">' +
-		'<a href="javascript:void 0" id="szunet_mind" title="Minden modul megállítása">Szünet mind</a>' +
+		'<a href="javascript:void 0" id="szunet_mind" title="Minden modul megállítása">' +
+			'<img src="' + stopIkon() + '" alt="Szünet mind"><span id="szunet_mind_ido"></span></a>' +
 		'<span class="menubar_valaszto"></span>' +
 		modul('farm', 'Farmoló', true) +
 		modul('vije', 'Jelentés elemző', true) +

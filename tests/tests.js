@@ -285,6 +285,7 @@ function pauseWorld() {
 		calls: [], alerts: [], logged: [], prompts: [], confirms: [],
 		answers: [], confirmAnswer: true, ticker: null, tickMs: 0,
 		img: { src: '', alt: '', title: '' },
+		link: { title: '' },
 		/* The button is drawn from the palette now; these suites only care
 		   that the right state reaches it. */
 		modulIkon: function (szunetel) { return szunetel ? 'IKON:all' : 'IKON:fut'; },
@@ -302,7 +303,13 @@ function pauseWorld() {
 	w.clearInterval = function (id) { w.calls.push('clearInterval:' + id); w.ticker = null; };
 	w.document = {
 		querySelector: function (sel) { w.calls.push('lookup:' + sel); return w.img; },
-		getElementById: function (id) { return id === 'szunet_mind' ? w.label : null; }
+		/* The countdown lives in its own span now: the link carries the stop
+		   sign, and writing over the link would take the icon with it. */
+		getElementById: function (id) {
+			if (id === 'szunet_mind') return w.link;
+			if (id === 'szunet_mind_ido') return w.label;
+			return null;
+		}
 	};
 	return w;
 }
@@ -375,18 +382,18 @@ suite('Pausing everything for a while', function () {
 	eq(api.vissza(), ['farm', 'vije', 'gyujto'], 'records what was running, in menu order');
 	eq(running(w), ['adatok'], 'stops those and leaves saving alone');
 	eq(api.vege(), start + 30 * 60000, 'the deadline is 30 minutes out');
-	eq(w.label.textContent, 'Szünet 30:00', 'the link becomes the countdown');
+	eq(w.label.textContent, '30:00', 'the countdown appears beside the stop sign');
 	eq(w.tickMs, 1000, 'and counts once a second');
 
 	tick(w, 29 * 60000);
-	eq(w.label.textContent, 'Szünet 1:00', 'the countdown counts down');
+	eq(w.label.textContent, '1:00', 'the countdown counts down');
 	eq(running(w), ['adatok'], 'still stopped');
 	tick(w, 59000);
 	eq(running(w), ['adatok'], 'not a second early');
 	tick(w, 1000);
 	eq(running(w), ['adatok', 'farm', 'gyujto', 'vije'], 'everything recorded restarts on time');
 	ok(w.EPIT_PAUSE === true, 'what was already stopped stays stopped');
-	eq(w.label.textContent, 'Szünet mind', 'the link goes back to normal');
+	eq(w.label.textContent, '', 'the link goes back to normal');
 	eq(api.vege(), 0, 'and the pause is over');
 	ok(w.calls.some(function (c) { return c === 'clearInterval:77'; }), 'the timer is cleared, not left running');
 
@@ -1591,4 +1598,45 @@ suite('The module buttons', function () {
 	/* The preview draws them with the real function rather than a lookalike. */
 	ok(PREVIEW_SRC.indexOf('modulIkonBetolt') !== -1 && PREVIEW_SRC.indexOf('play.png') === -1,
 	   'and the preview shows the same buttons the interface makes');
+});
+
+/* ------------------------------------------------------------------------ */
+suite('The stop control', function () {
+	/* "Szünet mind" was the widest thing in the module bar and the reason it
+	   spilled onto a second line. It is a red octagon now -- the one place the
+	   palette's danger colour is used, so it reads as the odd one out on
+	   purpose, while being drawn at the same size and in the same way as the
+	   module buttons so the bar still looks like one set of controls. */
+	var keret = document.createElement('iframe');
+	keret.style.cssText = 'position:absolute; left:-9999px; width:400px; height:120px;';
+	document.body.appendChild(keret);
+	var d = keret.contentDocument;
+	d.open();
+	d.write('<!doctype html><html><head><style>' + szemCss() + '</style></head><body></body></html>');
+	d.close();
+
+	var stop = keret.contentWindow.eval('(' + sliceFn(SZEM4_SRC, 'stopIkon') + ')')();
+	ok(stop.indexOf('data:image/svg+xml,') === 0, 'the stop sign is drawn, not fetched');
+
+	var piros = szemCss().match(/--szem-danger:\s*([^;]+);/)[1].trim();
+	ok(decodeURIComponent(stop).indexOf(piros) !== -1, 'and drawn in the danger colour', piros);
+	ok(decodeURIComponent(stop).indexOf('<polygon') !== -1, 'as an octagon rather than another badge');
+
+	/* It must not borrow the accent, or it stops standing out. */
+	var accent = szemCss().match(/--szem-accent:\s*([^;]+);/)[1].trim();
+	eq(decodeURIComponent(stop).indexOf(accent), -1, 'and never in the accent colour');
+	keret.remove();
+
+	/* The countdown moved into its own span: the link carries the icon, and
+	   writing over the link's text would take the icon with it. */
+	ok(SZEM4_SRC.indexOf('id="szunet_mind_ido"') !== -1, 'there is a span for the countdown');
+	ok(SZEM4_SRC.indexOf("var ido = document.getElementById('szunet_mind_ido');") !== -1,
+	   'and the countdown is written into it');
+	eq(SZEM4_SRC.indexOf("el.textContent = 'Sz\u00fcnet mind'"), -1,
+	   'nothing writes over the link itself any more');
+
+	/* The bar is one control lighter, which is what bought the room. */
+	eq(SZEM4_SRC.indexOf('muhely_logo'), -1, "upstream's workshop icon is gone");
+	ok(PREVIEW_SRC.indexOf('muhely_logo') === -1 && PREVIEW_SRC.indexOf('stopIkon') !== -1,
+	   'and the preview shows the same bar');
 });
