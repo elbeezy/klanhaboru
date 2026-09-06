@@ -2455,8 +2455,22 @@ function szem4_farmolo_2illeszto(bestPlan){try{/*FIXME: határszám alapján sz�
 	const hatarszam = SZEM4_FARM.DOMINFO_FARMS[bestPlan.farmVill].prodHour * (targetIdo / 60);
 	const C_form = FARM_REF.document.forms["units"];
 	
-	// Kiiktatja ha van kiválasztott falu
-	if (document.querySelector('#place_target .village-item')) document.querySelector('#place_target .village-item').click();
+	/* A target left over from the previous cycle sits in #place_target as a
+	   .village-item card. The game then honours that card rather than the x/y
+	   fields, and submitting produces "Kérünk adj meg célfalut" over a form
+	   that looks correctly filled in -- the farm engine stops dead without
+	   raising anything.
+
+	   This checked SZEM's own page instead of the game's, so it never fired.
+	   Rather than guess which control dismisses the card, reopen the rally
+	   point: a freshly loaded #place_target holds only the empty autocomplete
+	   input, and returning 'semmi' is the existing replan path, so the engine
+	   simply picks a target again next cycle. */
+	if (FARM_REF.document.querySelector('#place_target .village-item')) {
+		debug('szem4_farmolo_2illeszto', 'Maradék célpont a gyülekezőhelyen, újranyitom az oldalt.');
+		FARM_REF = windowOpener('farm', gameUrl({ screen: 'place', mode: null, group: null, page: null }), AZON+"_Farmolo");
+		return 'semmi';
+	}
 
 	if (!C_form) {
 		if (FARM_REF.document.getElementById('command-data-form')) {
