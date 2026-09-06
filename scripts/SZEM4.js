@@ -1405,6 +1405,7 @@ function BotvedelemKi(){
 function isPageLoaded(ref, faluid, address, elements=[]){try{
 	if (ref.closed) return false;
 	if (ref.document.getElementById('botprotection_quest') || ref.document.getElementById('bot_check') || ref.document.getElementById('popup_box_bot_protection') || ref.document.title=="Bot védelem") {
+		/* Best-effort dismissal; the caller raises the alarm either way. */
 		try{if (ref.document.getElementById('botprotection_quest')) ref.document.getElementById('botprotection_quest').click();}catch(e){}
 		naplo("Globális","Bot védelem aktív!!!");
 		document.getElementById("audio1").volume=0.2;
@@ -2419,7 +2420,7 @@ function szem4_farmolo_1kereso(){try{/*Farm keresi párját :)*/
 }catch(e){debug('szem4_farmolo_1kereso()',e); return 'ERROR';}}
 
 function szem4_farmolo_2illeszto(bestPlan){try{/*FIXME: határszám alapján számolódjon a min. sereg*/
-	try{TamadUpdt(FARM_REF);}catch(e){}
+	TamadUpdt(FARM_REF); // reports its own failures
 	const allOptions = document.getElementById('farmolo_options');
 	const minSereg = parseInt(allOptions.minsereg.value,10);
 	const kemPerMin = parseInt(allOptions.kemperc.value,10);
@@ -2635,7 +2636,7 @@ function szem4_farmolo_motor(){
 								FARM_REF.close();
 							else
 								FARM_REF.document.title = 'Szem4/farmoló';
-						} catch(e) {}
+						} catch(e) { /* the window may already be gone; nothing depends on this */ }
 						break;
 				}
 				if (!isPageLoaded(FARM_REF, KTID[PM1.fromVill],"screen=place") ||
@@ -2828,7 +2829,7 @@ function szem4_vije_forgot() {
 }
 function szem4_VIJE_1kivalaszt(){try{
 	/*Eredménye: jelentés azon (0=nincs meló);farm koord;jelentés SZÍNe;volt e checkbox-olt jeli*/
-	try{TamadUpdt(VIJE_REF1);}catch(e){}
+	TamadUpdt(VIJE_REF1); // reports its own failures
 	VT = gameEl(VIJE_REF1, '#report_list', 'jelentes lista').rows;
 	if (VT.length<3) return [0,0,"",false];
 	var isAnalize=false;
@@ -3455,7 +3456,7 @@ function buildingCost(row) {
 }
 
 function szem4_EPITO_IntettiBuild(buildOrder){try{
-	try{TamadUpdt(EPIT_REF);}catch(e){}
+	TamadUpdt(EPIT_REF); // reports its own failures
 	var buildList=""; /*Current BuildingList IDs*/
 	var allBuildTime=0; /*Ennyi perc építési idő, csak kiírás végett*/
 	var firstBuildTime=0; /*Az első épület építési ideje*/
@@ -3471,7 +3472,7 @@ function szem4_EPITO_IntettiBuild(buildOrder){try{
 			allBuildTime+=parseInt(textTime[0])*60+parseInt(textTime[1])+(parseInt(textTime[2])/60);
 			if (firstBuildTime==0) firstBuildTime=allBuildTime;
 			buildList+=";";
-		}catch(e){}}
+		}catch(e){ debug('szem4_EPITO_IntettiBuild', `Az építési sor ${i}. sorát nem sikerült értelmezni, a hátralévő idő emiatt kevesebb lehet: ${e}`); }}
 
 		allBuildTime = Math.round(allBuildTime);
 		firstBuildTime = Math.ceil(firstBuildTime);
