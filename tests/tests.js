@@ -506,7 +506,7 @@ suite('The bot-protection alarm', function () {
 		return sandbox(w, [sliceFn(SZEM4_SRC, 'stopSound'),
 		                   sliceFrom(SZEM4_SRC, 'var BOT_HATARIDO_MS', 'BotvedelemKi')],
 			{ kezdet: 'BOT_KEZDET', feladva: 'BOT_FELADVA', hatarido: 'BOT_HATARIDO_MS',
-			  botora: 'BOTORA', botref: 'BOT_REF' });
+			  botora: 'BOTORA', botref: 'BOT_REF', hangero: 'BOT_HANGERO' });
 	}
 	/* Poll the alarm forward by `ms`, in the 2.5s steps it really uses. */
 	function pollFor(w, ms) {
@@ -629,6 +629,22 @@ suite('The bot-protection alarm', function () {
 	ok(r4 !== '', 'answering in time is reported too');
 	ok(r4.indexOf('elhallgatott') === -1, 'without claiming the alarm gave up', r4);
 	ok(w4.BOT === false, 'and the modules run again');
+
+	/* --- how loud it gets ---
+	   It used to climb by a fifth every 2.5s until it was at full volume,
+	   which is unbearable in a flat you are not in. It has to stay put. */
+	var w6 = alarmWorld(checkShowing()), api6 = alarmApi(w6);
+	api6.BotvedelemBe();
+	pollFor(w6, 60000);
+	var levels = w6.sounds.filter(function (v) { return v > 0; });
+	ok(levels.length > 3, 'the alarm keeps sounding while it waits', String(levels.length));
+	ok(levels.every(function (v) { return v === levels[0]; }),
+	   'and never gets louder than it started', levels.join(','));
+	eq(levels[0], api6.hangero(), 'staying at the one level set for it');
+	ok(api6.hangero() > 0 && api6.hangero() <= 1.0,
+	   'which is a volume the audio element will accept', String(api6.hangero()));
+	ok(SZEM4_SRC.indexOf('BOT_VOL') === -1,
+	   'and nothing is left that climbs');
 
 	/* A check cleared on its own, before the deadline, must end normally
 	   rather than being treated as unanswered. */

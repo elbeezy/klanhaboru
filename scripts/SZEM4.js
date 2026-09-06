@@ -1465,8 +1465,12 @@ function stopEvent(ev) {
    module stays halted, because the check is still there and still unanswered
    -- only the alarm gives up, never the halt it exists to enforce. */
 var BOT_HATARIDO_MS = 180000;
+/* One fixed level, not a climb. The alarm can end up ringing in an empty
+   flat, so it must never get louder than whatever was set here; if nobody
+   answers it, BOT_HATARIDO_MS silences it entirely. 0.0 - 1.0. */
+var BOT_HANGERO = 0.5;
 var BOT_KEZDET = 0, BOT_FELADVA = false;
-var BOTORA = 0, ALTBOT2=false, BOT_VOL=0.0; /*ALTBOT2 --> megnyílt e már 1x az ablak*/
+var BOTORA = 0, ALTBOT2=false; /*ALTBOT2 --> megnyílt e már 1x az ablak*/
 var BOT_REF;
 /* Raising the alarm and polling it used to be the same function, which
    rescheduled itself every 2.5 seconds. isPageLoaded() calls it afresh every
@@ -1508,9 +1512,7 @@ function botvedelemTick() {
 			botvedelemFeladas();
 			return;
 		}
-		BOT_VOL+=0.2;
-		if (BOT_VOL>1.0) BOT_VOL=1.0;
-		soundVolume(BOT_VOL);
+		soundVolume(BOT_HANGERO);
 		playSound("bot2");
 		alert2('BOT VÉDELEM!!!<br>Írd be a kódot, és kattints ide lentre!<br><br><a href="javascript: BotvedelemKi()">Beírtam a kódot, mehet tovább!</a>');
 		if (SZEM4_SETTINGS.altbot && !ALTBOT2) {
@@ -1552,7 +1554,7 @@ function BotvedelemKi(){
 		naplo('Bot v\u00e9delem', `Feloldva. Az ellen\u0151rz\u00e9s ${new Date(BOT_KEZDET).toLocaleTimeString()}-kor jelent meg, a modulok kb. ${percek} percig \u00e1lltak${BOT_FELADVA ? ', k\u00f6zben a riaszt\u00e1s magat\u00f3l elhallgatott' : ''}.`);
 	}
 	BOT_KEZDET = 0; BOT_FELADVA = false;
-	BOT=false; ALTBOT2=false; BOT_VOL=0.0;
+	BOT=false; ALTBOT2=false;
 	stopSound();
 	soundVolume(1.0); // standing down muted it; without this every later sound is silent
 	botvedelemAblakZar();
@@ -1579,7 +1581,6 @@ function isPageLoaded(ref, faluid, address, elements=[]){try{
 		/* Best-effort dismissal; the caller raises the alarm either way. */
 		try{if (ref.document.getElementById('botprotection_quest')) ref.document.getElementById('botprotection_quest').click();}catch(e){}
 		naplo("Globális","Bot védelem aktív!!!");
-		document.getElementById("audio1").volume=0.2;
 		BotvedelemBe();
 		return false;
 	}
