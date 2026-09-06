@@ -3432,6 +3432,28 @@ function szem4_EPITO_getBuildLink(ref, type) {
 	}
 }
 
+/* Reads a building's cost from its row on the headquarters screen.
+
+   The three copies this replaces each did parseInt(cell.match(/[0-9]+/g), 10).
+   Costs are printed with thousands separators, so "1.100" matches as
+   ["1","100"], which parseInt reads through the string "1,100" as 1. Every
+   cost of 1000 or more came back as its leading digits, so the resource check
+   below almost never fired: the builder believed it could afford anything,
+   clicked build, found the button hidden, and reported an unknown error or a
+   full queue instead of a shortage -- then retried on the wrong schedule.
+
+   The report analyser already strips the separators before reading numbers;
+   this simply does the same. */
+function buildingCost(row) {
+	function amount(index) {
+		const cell = row.cells[index];
+		if (!cell) return 0;
+		const digits = cell.textContent.replace(/\./g, '').match(/[0-9]+/);
+		return digits ? parseInt(digits[0], 10) : 0;
+	}
+	return { wood: amount(1), stone: amount(2), iron: amount(3), pop: amount(5) };
+}
+
 function szem4_EPITO_IntettiBuild(buildOrder){try{
 	try{TamadUpdt(EPIT_REF);}catch(e){}
 	var buildList=""; /*Current BuildingList IDs*/
@@ -3520,12 +3542,7 @@ function szem4_EPITO_IntettiBuild(buildOrder){try{
 		szem4_EPITO_addIdo(PMEP[2], firstBuildTime>0?firstBuildTime:60);
 		return;
 	}
-	var resNeed = {
-		wood: parseInt(nextToBuildRow.cells[1].textContent.match(/[0-9]+/g),10),
-		stone: parseInt(nextToBuildRow.cells[2].textContent.match(/[0-9]+/g),10),
-		iron: parseInt(nextToBuildRow.cells[3].textContent.match(/[0-9]+/g),10),
-		pop: parseInt(nextToBuildRow.cells[5].textContent.match(/[0-9]+/g),10)
-	}
+	var resNeed = buildingCost(nextToBuildRow);
 	if (Math.max(resNeed.wood, resNeed.stone, resNeed.iron) > EPIT_REF.game_data.village.storage_max) nextToBuild = 'storage+';
 	if (resNeed.pop > (EPIT_REF.game_data.village.pop_max - EPIT_REF.game_data.village.pop)) nextToBuild = 'farm+';
 	if (nextToBuild == 'farm+' && EPIT_REF.game_data.village.buildings.farm == 30) {
@@ -3541,22 +3558,14 @@ function szem4_EPITO_IntettiBuild(buildOrder){try{
 	if (nextToBuild == 'farm+' || nextToBuild == 'storage+') {
 		nextToBuild = nextToBuild.slice(0, -1);
 		nextToBuildRow = gameEl(EPIT_REF, '#main_buildrow_' + nextToBuild, `epulet sora: ${nextToBuild}`);
-		resNeed = {
-			wood: parseInt(nextToBuildRow.cells[1].textContent.match(/[0-9]+/g),10),
-			stone: parseInt(nextToBuildRow.cells[2].textContent.match(/[0-9]+/g),10),
-			iron: parseInt(nextToBuildRow.cells[3].textContent.match(/[0-9]+/g),10),
-			pop: 0
-		}
+		resNeed = buildingCost(nextToBuildRow);
+		resNeed.pop = 0; // a farm or warehouse is being inserted precisely to make room
 		// Farm kéne, de raktár nincs hozzá ~>
 		if (Math.max(resNeed.wood, resNeed.stone, resNeed.iron) > EPIT_REF.game_data.village.storage_max) {
 			nextToBuild = 'storage';
 			nextToBuildRow = gameEl(EPIT_REF, '#main_buildrow_' + nextToBuild, `epulet sora: ${nextToBuild}`);
-			resNeed = {
-				wood: parseInt(nextToBuildRow.cells[1].textContent.match(/[0-9]+/g),10),
-				stone: parseInt(nextToBuildRow.cells[2].textContent.match(/[0-9]+/g),10),
-				iron: parseInt(nextToBuildRow.cells[3].textContent.match(/[0-9]+/g),10),
-				pop: 0
-			}
+			resNeed = buildingCost(nextToBuildRow);
+			resNeed.pop = 0; // ditto
 		}
 	}
 
