@@ -2530,9 +2530,20 @@ function gameEl(ref, selector, what) {
 	return el;
 }
 
+/* Reads a whole number the game printed.
+
+   The dot is stripped first because the game writes thousands separators:
+   "1.234" matched as digit runs gives ["1","234"], and taking the first one
+   reads 1234 troops as 1. buildingCost() and two other readers in this file
+   already strip it for exactly that reason -- this one was the odd one out.
+
+   Stripping costs nothing when there is no separator, so this is safe on
+   every value either way. It is only for whole numbers, which is what both
+   callers read: units available in a village, and spies available. Nothing
+   here should be handed a value whose fractional part matters. */
 function numFrom(el, what) {
 	if (!el) throw new Error(`Hianyzo elem, nem olvashato szam: ${what}`);
-	var found = el.textContent.match(/[0-9]+/g);
+	var found = el.textContent.replace(/\./g, '').match(/[0-9]+/g);
 	if (!found) throw new Error(`Nincs szam ebben: ${what} ("${el.textContent.trim()}")`);
 	return parseInt(found[0], 10);
 }

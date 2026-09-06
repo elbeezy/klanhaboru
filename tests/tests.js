@@ -107,12 +107,25 @@ suite('Reading numbers off the game page', function () {
 	throws(function () { nf.numFrom(null, 'kemek'); }, 'a missing element throws by name', 'kemek');
 	throws(function () { nf.numFrom(fakeEl('semmi'), 'kemek'); }, 'text with no number throws by name', 'kemek');
 
-	/* PINNED, NOT ENDORSED: numFrom does not strip thousands separators the way
-	   buildingCost does. Its two callers read unit counts, and whether the game
-	   prints those as "1.234" is a question about the game's own markup that
-	   has not been answered from a saved page yet. If it does, this is a bug
-	   and this assertion is what will have to change. */
-	eq(nf.numFrom(fakeEl('1.234')), 1, 'KNOWN: numFrom stops at the separator');
+	/* This used to be pinned the other way, as "KNOWN: numFrom stops at the
+	   separator", while waiting for a saved page to say whether the game
+	   really prints unit counts as "1.234".
+
+	   That wait was the wrong call. Stripping the dot is a no-op on a number
+	   that has none, and both callers read whole numbers -- units in a
+	   village, spies available -- so there is no value the strip could
+	   damage. Meanwhile the failure it guards against is silent and severe:
+	   1234 units read as 1, feeding straight into what the farm decides to
+	   send. Three other readers in this file already strip it. */
+	eq(nf.numFrom(fakeEl('1.234')), 1234, 'a dotted thousand is read whole');
+	eq(nf.numFrom(fakeEl('12.345.678')), 12345678, 'and so is a bigger one');
+	eq(nf.numFrom(fakeEl('(1.234)')), 1234, 'the brackets the unit count comes wrapped in are ignored');
+	eq(nf.numFrom(fakeEl('999')), 999, 'a number below the separator is untouched');
+	eq(nf.numFrom(fakeEl('0')), 0, 'and so is zero');
+
+	/* The first number still wins, as before -- this changes how a number is
+	   read, not which one. */
+	eq(nf.numFrom(fakeEl('1.234 / 2.000')), 1234, 'the first number is still the one taken');
 });
 
 /* ------------------------------------------------------------------------ */
