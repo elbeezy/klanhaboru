@@ -463,13 +463,19 @@ function init(){try{
 			background: var(--szem-surface-2);
 			border-top: 1px solid var(--szem-line);
 		}
-		.menubar { padding: 5px 16px; }
+		.menubar { padding: 5px 14px; }
+		/* The bar has to hold six module names, and two of them are long. It
+		   is sized to stay on one line down to a window far narrower than
+		   anything this is used on -- it still wraps rather than overflowing
+		   below that, which is the right way to give up. */
 		#kiegs a, .menubar_jobb a {
 			text-decoration: none;
 			color: var(--szem-text-dim);
-			font-size: 12px;
-			padding: 3px 6px;
+			font-size: 11px;
+			letter-spacing: 0.02em;
+			padding: 3px 5px;
 			border-radius: 4px;
+			white-space: nowrap;
 		}
 		#kiegs a:hover, .menubar_jobb a:hover {
 			color: var(--szem-text);
@@ -609,7 +615,7 @@ function init(){try{
 			display: flex;
 			flex-wrap: wrap;
 			align-items: center;
-			column-gap: 4px;
+			column-gap: 2px;
 			row-gap: 2px;
 			text-align: left;
 		}

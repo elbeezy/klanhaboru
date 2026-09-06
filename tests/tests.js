@@ -1640,3 +1640,55 @@ suite('The stop control', function () {
 	ok(PREVIEW_SRC.indexOf('muhely_logo') === -1 && PREVIEW_SRC.indexOf('stopIkon') !== -1,
 	   'and the preview shows the same bar');
 });
+
+/* ------------------------------------------------------------------------ */
+suite('The module bar stays on one line', function () {
+	/* Six module names, two of them long, plus the stop control and the three
+	   links on the right. This spilled onto a second line in the real game and
+	   the second line sat on top of what was below it.
+
+	   Whether it fits is a question about rendered text at a given width, so
+	   the bar is built for real at several widths and the rows are counted. */
+	var keret = document.createElement('iframe');
+	keret.style.cssText = 'position:absolute; left:-9999px; top:0; height:200px; border:0;';
+	document.body.appendChild(keret);
+
+	function sorok(szelesseg) {
+		keret.style.width = szelesseg + 'px';
+		var d = keret.contentDocument;
+		d.open();
+		d.write('<!doctype html><html><head><style>' + szemCss() + '</style></head><body>' +
+			'<div class="fej"><table width="100%"><tr><td colspan="2" id="menuk">' +
+			'<div class="divrow menubar"><span class="divcell" id="kiegs">' +
+			'<a href="#" id="szunet_mind"><img alt="stop"><span id="szunet_mind_ido"></span></a>' +
+			'<img name="kh">' +
+			['farm|FARMOL\u00d3', 'vije|JELENT\u00c9S ELEMZ\u0150', 'idtamad|BEJ\u00d6V\u0150 T\u00c1MAD\u00c1SOK',
+			 'epit|\u00c9P\u00cdT\u0150', 'gyujto|GY\u0170JT\u0150', 'adatok|ADATMENT\u0150'].map(function (m) {
+				var r = m.split('|');
+				return '<img name="' + r[0] + '"> <a href="#">' + r[1] + '</a> ';
+			}).join('') +
+			'</span><span class="divcell menubar_jobb">' +
+			'<a href="#">Napl\u00f3</a><a href="#">Debug</a><a href="#"><img alt="hang"></a>' +
+			'</span></div></td></tr></table></div></body></html>');
+		d.close();
+		var linkek = [].slice.call(d.querySelectorAll('#kiegs a')).filter(function (a) {
+			return a.id !== 'szunet_mind';
+		});
+		var tetok = {};
+		linkek.forEach(function (a) { tetok[Math.round(a.getBoundingClientRect().top)] = 1; });
+		return Object.keys(tetok).length;
+	}
+
+	/* 1024 was the old fixed width and is the narrowest thing this has ever
+	   been used at; 900 is comfortably below any real window. */
+	[1600, 1280, 1100, 1024, 900].forEach(function (w) {
+		eq(sorok(w), 1, 'the bar is one line at ' + w + 'px');
+	});
+
+	keret.remove();
+
+	/* Wrapping is still what happens when it truly cannot fit -- overflowing
+	   would put the controls off the side of the screen instead. */
+	ok(szemCssRules().indexOf('flex-wrap: wrap;') !== -1,
+	   'and it wraps rather than overflowing if it ever cannot fit');
+});
