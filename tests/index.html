@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="hu">
+<head>
+<meta charset="utf-8">
+<title>SZEM4 tesztek</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font: 14px/1.5 ui-monospace, Consolas, monospace; margin: 0; padding: 24px;
+         background: #14161a; color: #d7dae0; }
+  h1 { font-size: 18px; margin: 0 0 4px; }
+  .sub { color: #8b929e; margin-bottom: 20px; }
+  #banner { padding: 12px 16px; border-radius: 6px; font-weight: bold; margin-bottom: 20px; }
+  .green { background: #17361f; color: #7ee08a; border: 1px solid #2c6b3c; }
+  .red   { background: #3a1a1c; color: #ff9a9a; border: 1px solid #7d3034; }
+  h2 { font-size: 14px; margin: 22px 0 6px; color: #cfd4dc; border-bottom: 1px solid #2a2e36; padding-bottom: 4px; }
+  .pass, .fail { padding: 1px 0 1px 22px; position: relative; white-space: pre-wrap; }
+  .pass::before { content: "OK"; position: absolute; left: 0; color: #5fbf6f; font-size: 11px; }
+  .fail::before { content: "NO"; position: absolute; left: 0; color: #ff6b6b; font-size: 11px; }
+  .fail { color: #ffb3b3; }
+  .detail { color: #8b929e; padding-left: 22px; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<h1>SZEM4 tesztek</h1>
+<div class="sub">scripts/SZEM4.js &mdash; frissíts (F5) minden változtatás után</div>
+<div id="banner">Fut…</div>
+<div id="out"></div>
+
+<script src="harness.js"></script>
+<script>
+/* The tests read the real script rather than a copy, so a change to
+   scripts/SZEM4.js shows up here on the next refresh. */
+fetch('../scripts/SZEM4.js?t=' + Date.now())
+  .then(function (r) {
+    if (!r.ok) throw new Error('HTTP ' + r.status + ' — a scripts/SZEM4.js nem érhető el');
+    return r.text();
+  })
+  .then(function (text) {
+    SZEM4_SRC = text;
+    return new Promise(function (done) {
+      var s = document.createElement('script');
+      s.src = 'tests.js?t=' + Date.now();
+      s.onload = done;
+      s.onerror = function () { throw new Error('a tests.js nem tölthető be'); };
+      document.head.appendChild(s);
+    });
+  })
+  .then(function () {
+    var res = runAll(), out = document.getElementById('out');
+    res.lines.forEach(function (suite) {
+      var h = document.createElement('h2');
+      h.textContent = suite.name;
+      out.appendChild(h);
+      suite.lines.forEach(function (line) {
+        var d = document.createElement('div');
+        d.className = line[0];
+        d.textContent = line[1];
+        out.appendChild(d);
+        if (line[2]) {
+          var x = document.createElement('div');
+          x.className = 'detail';
+          x.textContent = line[2];
+          out.appendChild(x);
+        }
+      });
+    });
+    var b = document.getElementById('banner');
+    b.className = res.fail === 0 ? 'green' : 'red';
+    b.textContent = res.fail === 0
+      ? 'MINDEN RENDBEN — ' + res.pass + ' ellenőrzés lefutott, egy se bukott el.'
+      : res.fail + ' HIBA — ' + res.pass + ' rendben. A pirosakat nézd meg lent.';
+    document.title = res.fail === 0 ? 'OK — SZEM4 tesztek' : res.fail + ' hiba — SZEM4 tesztek';
+  })
+  .catch(function (e) {
+    var b = document.getElementById('banner');
+    b.className = 'red';
+    b.textContent = 'A tesztek el sem indultak: ' + e.message;
+    document.title = 'hiba — SZEM4 tesztek';
+    var d = document.createElement('div');
+    d.className = 'detail';
+    d.textContent = e.stack || '';
+    document.getElementById('out').appendChild(d);
+  });
+</script>
+</body>
+</html>
