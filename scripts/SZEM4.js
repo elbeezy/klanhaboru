@@ -592,11 +592,7 @@ function init(){try{
 		#farm_hova > tbody > tr > td:nth-child(6) {
 			width: 135px;
 		}
-		textarea {
-			background: var(--szem-surface-2);
-			color: var(--szem-text);
-			border: 1px solid var(--szem-line);
-		}
+
 		.divrow { display: flex; align-items: center; }
 		/* The module bar. Its two halves used to carry fixed widths that added up
 		   to more than the row they sat in (870 + 250 inside 1016), so every
@@ -668,12 +664,62 @@ function init(){try{
 			padding:1px;
 		}
 		#naploka a { color: var(--szem-accent); }
-		input[type="button"] {
-			font-size:13px;
-			font-family: Century Gothic, sans-serif;
+		/* --- Form controls. ---
+
+		   Everything the panels are made of: the farm settings, the two
+		   add-a-village boxes, the build orders, the style boxes. The game
+		   dresses its own inputs, so on a game page these had always been
+		   somebody else's white boxes sitting on SZEM's dark panel. They are
+		   stated here so they belong to the interface they are in. */
+		#content input[type="text"],
+		#content input[type="number"],
+		#content input[type="password"],
+		#content select,
+		#content textarea {
+			background: var(--szem-bg);
 			color: var(--szem-text);
-			background: var(--szem-surface-2);
 			border: 1px solid var(--szem-line);
+			border-radius: 4px;
+			padding: 3px 6px;
+			font-family: inherit;
+			font-size: 12px;
+		}
+		#content textarea { padding: 6px 8px; line-height: 1.5; }
+		#content input[type="text"]:focus,
+		#content input[type="number"]:focus,
+		#content select:focus,
+		#content textarea:focus {
+			outline: none;
+			border-color: var(--szem-accent);
+		}
+		#content input::placeholder, #content textarea::placeholder {
+			color: var(--szem-text-dim);
+			opacity: 0.7;
+		}
+		/* One line to make every tick box use the accent instead of the
+		   browser's own blue, which was the loudest wrong colour left. */
+		#content input[type="checkbox"], #content input[type="radio"] {
+			accent-color: var(--szem-accent);
+			vertical-align: middle;
+			cursor: pointer;
+		}
+		#content button,
+		#content input[type="button"],
+		#content input[type="submit"] {
+			background: var(--szem-surface-2);
+			color: var(--szem-text);
+			border: 1px solid var(--szem-line);
+			border-radius: 4px;
+			padding: 4px 12px;
+			font-family: inherit;
+			font-size: 12px;
+			cursor: pointer;
+		}
+		#content button:hover,
+		#content input[type="button"]:hover,
+		#content input[type="submit"]:hover {
+			border-color: var(--szem-accent);
+			background: var(--szem-hover);
 		}
 		#adat_opts tr td,
 		#adat_opts tr th {
