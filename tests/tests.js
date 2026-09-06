@@ -285,6 +285,9 @@ function pauseWorld() {
 		calls: [], alerts: [], logged: [], prompts: [], confirms: [],
 		answers: [], confirmAnswer: true, ticker: null, tickMs: 0,
 		img: { src: '', alt: '', title: '' },
+		/* The button is drawn from the palette now; these suites only care
+		   that the right state reaches it. */
+		modulIkon: function (szunetel) { return szunetel ? 'IKON:all' : 'IKON:fut'; },
 		label: { textContent: '', title: '' }
 	};
 	w.Date = { now: function () { return w.clock; } };
@@ -329,9 +332,9 @@ suite('Pausing one module', function () {
 	   comparison would look identical no matter what the code did. */
 	api.szunet('farm', w.img);
 	ok(w.FARM_PAUSE === false, 'the sandbox really observes flag writes');
-	ok(w.img.src === 'PIC:play.png' && w.img.alt === 'Stop', 'the icon reports it is running');
+	ok(w.img.src === 'IKON:fut' && w.img.alt === 'Stop', 'the icon reports it is running');
 	api.szunet('farm', w.img);
-	ok(w.FARM_PAUSE === true && w.img.src === 'PIC:pause.png', 'and toggles back');
+	ok(w.FARM_PAUSE === true && w.img.src === 'IKON:all', 'and toggles back');
 	ok(w.calls.filter(function (c) { return c === 'shorttest'; }).length === 2,
 	   'the farm re-checks its settings either way');
 
@@ -1519,4 +1522,73 @@ suite('The Banyak cell', function () {
 	   'and so does the rebuild');
 	eq(SZEM4_SRC.split('banyakCella(').length - 1, 3,
 	   'the helper is defined once and called by exactly those two');
+});
+
+/* ------------------------------------------------------------------------ */
+suite('The module buttons', function () {
+	/* These were two PNGs pulled from the upstream repository, so they could
+	   never match the palette. They are drawn now, from the tokens, at the
+	   moment of drawing -- so the accent reaches them instead of being
+	   duplicated in an image nobody can edit.
+
+	   Run inside an iframe carrying the real stylesheet, because the whole
+	   point is that the colours are read off :root. */
+	var keret = document.createElement('iframe');
+	keret.style.cssText = 'position:absolute; left:-9999px; top:0; width:600px; height:200px;';
+	document.body.appendChild(keret);
+	var d = keret.contentDocument;
+	d.open();
+	d.write('<!doctype html><html><head><style>' + szemCss() + '</style></head><body></body></html>');
+	d.close();
+
+	var ikon = keret.contentWindow.eval('(' + sliceFn(SZEM4_SRC, 'modulIkon') + ')');
+
+	var fut = ikon(false), all = ikon(true);
+	ok(fut.indexOf('data:image/svg+xml,') === 0, 'a running module gets a drawn icon, not a fetched one');
+	ok(all.indexOf('data:image/svg+xml,') === 0, 'and so does a stopped one');
+	ok(fut !== all, 'and the two states do not look the same');
+
+	/* The accent is what marks a module as running. */
+	var accent = szemCss().match(/--szem-accent:\s*([^;]+);/)[1].trim();
+	ok(decodeURIComponent(fut).indexOf(accent) !== -1,
+	   'a running module is drawn in the accent colour', accent);
+	ok(decodeURIComponent(all).indexOf(accent) === -1,
+	   'a stopped one is not, so the bar shows at a glance what is live');
+
+	/* Shape: a triangle for running, two bars for stopped. */
+	ok(decodeURIComponent(fut).indexOf('<path') !== -1, 'running is a triangle');
+	eq((decodeURIComponent(all).match(/<rect/g) || []).length, 3,
+	   'stopped is the badge plus two bars');
+
+	/* It has to survive a page where the tokens are missing rather than
+	   drawing something invisible. */
+	var puszta = document.createElement('iframe');
+	puszta.style.cssText = 'position:absolute; left:-9999px; width:100px; height:100px;';
+	document.body.appendChild(puszta);
+	puszta.contentDocument.open();
+	puszta.contentDocument.write('<!doctype html><html><head></head><body></body></html>');
+	puszta.contentDocument.close();
+	var tartalek = puszta.contentWindow.eval('(' + sliceFn(SZEM4_SRC, 'modulIkon') + ')')(false);
+	ok(tartalek.indexOf('data:image/svg+xml,') === 0 && decodeURIComponent(tartalek).indexOf('#') !== -1,
+	   'with no palette at all it still draws something visible');
+	puszta.remove();
+	keret.remove();
+
+	/* The element stays an <img> whose src is swapped. Two places find it with
+	   #kiegs img[name="..."], and szunet() is handed it by the inline handler,
+	   so turning it into anything else would break the pause toggle. */
+	ok(SZEM4_SRC.indexOf('#kiegs img[name="\' + script + \'"]') !== -1,
+	   'the pause toggle still finds the button as an img');
+	ok(SZEM4_SRC.indexOf('kep.src   = modulIkon(paused);') !== -1,
+	   'and still swaps it by src');
+	ok(SZEM4_SRC.indexOf('src="\'+modulIkon(startsPaused.includes(id))+\'"') !== -1,
+	   'the bar is built with the same drawing');
+
+	/* And nothing fetches the old artwork any more. */
+	eq(SZEM4_SRC.indexOf('play.png'), -1, 'no play.png is fetched');
+	eq(SZEM4_SRC.indexOf('pause.png'), -1, 'and no pause.png');
+
+	/* The preview draws them with the real function rather than a lookalike. */
+	ok(PREVIEW_SRC.indexOf('modulIkonBetolt') !== -1 && PREVIEW_SRC.indexOf('play.png') === -1,
+	   'and the preview shows the same buttons the interface makes');
 });

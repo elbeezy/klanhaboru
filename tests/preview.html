@@ -58,8 +58,20 @@ function styleLapBol(src) {
 	return src.slice(start + marker.length, end);
 }
 
+/* The real modulIkon(), cut out of the script and used as-is, so the buttons
+   here are the same drawing the interface makes rather than a lookalike. */
+let modulIkon = null;
+
+function modulIkonBetolt(src) {
+	const start = src.indexOf('function modulIkon(');
+	if (start === -1) throw new Error('nem találom a modulIkon függvényt');
+	const end = src.indexOf('\n}', start);
+	if (end === -1) throw new Error('a modulIkon függvény nincs lezárva');
+	modulIkon = new Function('return (' + src.slice(start, end + 2) + ')')();
+}
+
 function modul(id, nev, all) {
-	return '<img name="' + id + '" src="' + PIC + (all ? 'pause' : 'play') + '.png" ' +
+	return '<img name="' + id + '" src="' + modulIkon(all) + '" ' +
 		'alt="Stop" title="Klikk a szüneteltetéshez"> ' +
 		'<a href="javascript:void 0">' + nev.toUpperCase() + '</a> ';
 }
@@ -198,6 +210,8 @@ fetch('../scripts/SZEM4.js')
 		const el = document.createElement('style');
 		el.textContent = styleLapBol(src);
 		document.head.appendChild(el);
+		/* After the stylesheet is in: the icons read their colours off it. */
+		modulIkonBetolt(src);
 		document.getElementById('preview_root').innerHTML = tartalom();
 	})
 	.catch(function (e) {

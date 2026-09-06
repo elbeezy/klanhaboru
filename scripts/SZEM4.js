@@ -620,6 +620,19 @@ function init(){try{
 			column-gap: 6px;
 			text-align: right;
 		}
+		/* The module buttons. The blanket img rule below adds a border colour
+		   and padding meant for the game's own pictures; these are drawn to
+		   size and want neither. */
+		#kiegs img[name] {
+			width: 18px;
+			height: 18px;
+			padding: 0;
+			border: 0;
+			vertical-align: middle;
+		}
+		#kiegs img[name]:hover {
+			filter: brightness(1.35);
+		}
 		.divcell {
 			display: table-cell;
 			text-align: center;
@@ -1020,6 +1033,40 @@ function banyakCella(fa, agyag, vas) {
 	}).join('');
 }
 
+/* The little button in front of every module name.
+
+   These were two PNGs fetched from the upstream repository, so they could
+   never match the palette and they cost a network request each. They are
+   drawn here instead, and the colours are read off the :root block at the
+   moment of drawing -- so they follow the palette rather than duplicating it,
+   and retuning the accent moves them too.
+
+   The element stays an <img> whose src is swapped, exactly as before, because
+   setModulePause() and the farm error path both find it with
+   #kiegs img[name="..."] and szunet() is handed it by the inline handler.
+
+   The glyph shows the state, not the action, which is the behaviour that was
+   already there: a running module is a lit triangle, a stopped one is a pair
+   of dim bars. The title attribute is what names the action. */
+function modulIkon(szunetel) {
+	var stilus = getComputedStyle(document.documentElement);
+	function token(nev, tartalek) {
+		var ertek = stilus.getPropertyValue(nev).trim();
+		return ertek || tartalek;
+	}
+	var hatter = token('--szem-surface-2', '#1a1f26');
+	var keret  = szunetel ? token('--szem-line', '#272e37') : token('--szem-accent', '#d9a441');
+	var jel    = szunetel ? token('--szem-text-dim', '#9aa4b0') : token('--szem-accent', '#d9a441');
+	var belso  = szunetel
+		? '<rect x="6.1" y="5.2" width="2" height="7.6" rx="0.7" fill="' + jel + '"/>' +
+		  '<rect x="9.9" y="5.2" width="2" height="7.6" rx="0.7" fill="' + jel + '"/>'
+		: '<path d="M7 5.1 L13 9 L7 12.9 Z" fill="' + jel + '"/>';
+	var svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 18 18" width="18" height="18">' +
+		'<rect x="0.75" y="0.75" width="16.5" height="16.5" rx="5" fill="' + hatter +
+		'" stroke="' + keret + '" stroke-width="1.5"/>' + belso + '</svg>';
+	return 'data:image/svg+xml,' + encodeURIComponent(svg);
+}
+
 function picBuilding(bId) {
 	return `<img src="https://dshu.innogamescdn.com/asset/88651122/graphic/buildings/mid/${bId}3.png">`;
 }
@@ -1356,7 +1403,7 @@ function ujkieg(id,nev,tartalom){
 	   paused shows the pause image. Keep this in step with the *_PAUSE initial
 	   values further down. */
 	const startsPaused = ['farm', 'vije', 'gyujto', 'epit'];
-	document.getElementById("kiegs").innerHTML+='<img onclick=\'szunet("'+id+'",this)\' name="'+id+'" onmouseover=\'sugo(this,"Az érintett scriptet tudod megállítani/elindítani.")\' src="'+pic((startsPaused.includes(id)?'pause':'play')+ ".png")+'" alt="Stop" title="Klikk a szüneteltetéshez"> <a href=\'javascript: nyit("'+id+'");\'>'+nev.toUpperCase()+'</a> ';
+	document.getElementById("kiegs").innerHTML+='<img onclick=\'szunet("'+id+'",this)\' name="'+id+'" onmouseover=\'sugo(this,"Az érintett scriptet tudod megállítani/elindítani.")\' src="'+modulIkon(startsPaused.includes(id))+'" alt="Stop" title="Klikk a szüneteltetéshez"> <a href=\'javascript: nyit("'+id+'");\'>'+nev.toUpperCase()+'</a> ';
 	document.getElementById("content").innerHTML+='<table class="menuitem" width="1024px" align="center" id="'+id+'" style="display: none">'+tartalom+'</table>';
 	return true;
 }
@@ -1403,7 +1450,7 @@ function setModulePause(script, paused, kep) {
 	   programmatically it has to be looked up by name. */
 	if (!kep) kep = document.querySelector('#kiegs img[name="' + script + '"]');
 	if (kep) {
-		kep.src   = pic(paused ? "pause.png" : "play.png");
+		kep.src   = modulIkon(paused);
 		kep.alt   = paused ? "Start" : "Stop";
 		kep.title = paused ? "Klikk a folytatáshoz" : "Klikk a szüneteltetéshez";
 	}
