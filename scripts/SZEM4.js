@@ -374,6 +374,34 @@ function init(){try{
 			color:white;
 		}
 		.divrow { display: flex; align-items: center; }
+		/* The module bar. Its two halves used to carry fixed widths that added up
+		   to more than the row they sat in (870 + 250 inside 1016), so every
+		   module added past a certain point pushed the last one onto a second
+		   line, on top of whatever was below. The left side takes whatever is
+		   left over now, and wraps within itself if it ever needs to. */
+		.menubar {
+			width: 100%;
+			align-items: flex-start;
+			column-gap: 8px;
+			padding: 4px 0;
+		}
+		#kiegs {
+			flex: 1 1 auto;
+			min-width: 0;
+			display: flex;
+			flex-wrap: wrap;
+			align-items: center;
+			column-gap: 4px;
+			row-gap: 2px;
+			text-align: left;
+		}
+		.menubar_jobb {
+			flex: 0 0 auto;
+			display: flex;
+			align-items: center;
+			column-gap: 6px;
+			text-align: right;
+		}
 		.divcell {
 			display: table-cell;
 			text-align: center;
@@ -639,14 +667,14 @@ function init(){try{
 					<td id="sugo" height="110px"></td>
 				</tr>
 				<tr><td colspan="2" id="menuk" style="">
-					<div class="divrow" style="width: 1016px">
-						<span class="divcell" id="kiegs" style="text-align:left; padding-top: 9px;width:870px;">
+					<div class="divrow menubar">
+						<span class="divcell" id="kiegs">
 							<img src="${pic("muhely_logo.png")}" alt="GIT" title="GIT C&amp;C Műhely megnyitása" onclick="window.open('https://github.com/cncDAni2/klanhaboru')">
 							<img src="${pic("kh_logo.png")}" alt="Game" title="Klánháború megnyitása" onclick="window.open(document.location.href)">
 							<a href="javascript: szunetMind();" id="szunet_mind" title="Minden modul megállítása megadott időre" onmouseover="sugo(this,'Minden futó modult megállít a megadott percre, majd önműködően újraindítja őket.')">Szünet mind</a>
 							|
 						</span>
-						<span class="divcell" style="text-align:right; width:250px">
+						<span class="divcell menubar_jobb">
 							<a href=\'javascript: nyit("naplo");\' onmouseover="sugo(this,\'Események naplója\')">Napló</a>
 							<a href=\'javascript: nyit("debug");\' onmouseover="sugo(this,\'Hibanapló\')">Debug</a>
 							<a href=\'javascript: nyit("hang");\'><img src="${pic("hang.png")}" onmouseover="sugo(this,\'Hangbeállítások\')" alt="hangok"></a>
