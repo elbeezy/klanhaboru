@@ -1178,3 +1178,80 @@ suite('The preview mirrors the real interface', function () {
 	fej = fej.slice(0, fej.indexOf('</tr>'));
 	eq((fej.match(/<th/g) || []).length, 7, 'the preview farm table still has seven columns');
 });
+
+/* ------------------------------------------------------------------------ */
+suite('The tables', function () {
+	/* The data tables used to be left to the game: "vis" is the game's class,
+	   and SZEM only set the text to black, which is readable exactly as long
+	   as the game keeps painting something pale underneath. They are stated
+	   outright now -- but the colour boxes on the sound panel have to keep
+	   beating them, or picking a colour silently stops working.
+
+	   Specificity is not something to reason about on paper, so the whole
+	   thing is built in an iframe and the browser is asked what it computed. */
+	var marker = 'const szemStyle = `';
+	var start = SZEM4_SRC.indexOf(marker);
+	var css = SZEM4_SRC.slice(start + marker.length, SZEM4_SRC.indexOf('`', start + marker.length));
+
+	var keret = document.createElement('iframe');
+	keret.style.cssText = 'position:absolute; left:-9999px; top:0; width:1200px; height:600px;';
+	document.body.appendChild(keret);
+	var d = keret.contentDocument;
+	d.open();
+	d.write('<!doctype html><html><head><style>' + css + '</style></head><body>' +
+	        '<div id="content">' +
+	        '<table class="vis" id="naploka"><tbody>' +
+	        '<tr><th id="th1">D\u00e1tum</th></tr><tr><td id="td1">most</td></tr>' +
+	        '</tbody></table>' +
+	        '<table class="vis" id="farm_hova"><tbody>' +
+	        '<tr><td id="td2">500|500</td></tr>' +
+	        '</tbody></table>' +
+	        '</div></body></html>');
+	d.close();
+
+	function szin(id, prop) {
+		return keret.contentWindow.getComputedStyle(d.getElementById(id))[prop];
+	}
+
+	/* Nothing pale is being painted underneath in here, so black text would be
+	   invisible -- which is exactly what it was on any page the game did not
+	   dress for SZEM. */
+	ok(szin('td1', 'color') !== 'rgb(0, 0, 0)',
+	   'a table cell is not black text waiting for the game to light it up', szin('td1', 'color'));
+	ok(szin('th1', 'backgroundColor') !== 'rgba(0, 0, 0, 0)',
+	   'and the header row paints its own background', szin('th1', 'backgroundColor'));
+
+	/* Now the colour boxes, written exactly the way onWallpChange writes them.
+	   The assertions under this pin the shapes, so the copy cannot drift. */
+	ok(SZEM4_SRC.indexOf('.vis:not(#farm_honnan):not(#farm_hova) td { background: ') !== -1,
+	   'the cell-background rule still has the shape this test copies');
+	ok(SZEM4_SRC.indexOf('.vis th { background: ') !== -1 && SZEM4_SRC.indexOf(' !important; }`') !== -1,
+	   'and the header rule still carries !important');
+
+	var valasztott = d.createElement('style');
+	valasztott.textContent =
+		'.vis:not(#farm_honnan):not(#farm_hova) td { background: rgb(1, 2, 3); }' +
+		'.vis:not(#farm_honnan):not(#farm_hova) td { color: rgb(4, 5, 6); }' +
+		'.vis th { background: rgb(7, 8, 9) !important; }' +
+		'.vis th { color: rgb(10, 11, 12) !important; }';
+	d.head.appendChild(valasztott);
+
+	eq(szin('td1', 'backgroundColor'), 'rgb(1, 2, 3)', 'a picked cell background still wins');
+	eq(szin('td1', 'color'), 'rgb(4, 5, 6)', 'and a picked cell colour');
+	eq(szin('th1', 'backgroundColor'), 'rgb(7, 8, 9)', 'and a picked header background');
+	eq(szin('th1', 'color'), 'rgb(10, 11, 12)', 'and a picked header colour');
+
+	/* The farm tables are left out of those rules on purpose -- they carry
+	   their own colouring per row -- so they must NOT follow the picked
+	   colour, and must still be readable on their own. */
+	eq(szin('td2', 'backgroundColor'), 'rgba(0, 0, 0, 0)',
+	   'the farm table is deliberately left out of the picked background');
+	ok(szin('td2', 'color') !== 'rgb(0, 0, 0)',
+	   'and is still readable without it', szin('td2', 'color'));
+
+	keret.remove();
+
+	/* The assumption that something else paints the background is gone. */
+	eq(css.indexOf('color: black'), -1, 'no cell is left waiting on a black-text assumption');
+	eq(css.indexOf('color:black'), -1, 'spelled either way');
+});

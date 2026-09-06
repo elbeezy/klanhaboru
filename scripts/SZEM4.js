@@ -476,8 +476,59 @@ function init(){try{
 			border-bottom: 1px solid var(--szem-line);
 			padding-bottom: 11px;
 		}
-		table.vis { color:black; }
-		table.vis td, table.vis th { padding: 3px 6px 3px 6px; }
+		/* --- The data tables. ---
+
+		   "vis" is the game's own class, so until now these were whatever the
+		   game's stylesheet made them: a light table with black text, dropped
+		   into SZEM's dark page. That is why the text was set to black -- it
+		   was readable only for as long as the game kept painting a pale
+		   background under it, and it was invisible anywhere the game did not.
+
+		   They are stated outright here instead, so a table looks the same
+		   whatever the game does around it, and so the preview shows the real
+		   thing rather than a lucky accident.
+
+		   Written as "#content table.vis" on purpose: that beats any plain
+		   class rule the game may have, while still losing to the colour boxes
+		   on the sound panel, whose <style> tags are appended later and carry
+		   an id-weighted :not() -- so a colour that was picked still wins. */
+		#content table.vis {
+			color: var(--szem-text);
+			border-collapse: collapse;
+			background: transparent;
+		}
+		#content table.vis th {
+			background: var(--szem-surface-2);
+			color: var(--szem-text-dim);
+			font-size: 11px;
+			font-weight: 600;
+			letter-spacing: 0.08em;
+			text-transform: uppercase;
+			text-align: left;
+			padding: 9px 10px;
+			border-bottom: 1px solid var(--szem-line);
+			white-space: nowrap;
+		}
+		#content table.vis td {
+			background: transparent;
+			color: var(--szem-text);
+			padding: 7px 10px;
+			border-bottom: 1px solid var(--szem-line);
+			/* Columns of numbers line up digit under digit. */
+			font-variant-numeric: tabular-nums;
+		}
+		#content table.vis > tbody > tr:hover > td {
+			background: var(--szem-hover);
+		}
+		#content table.vis th[onclick]:hover {
+			color: var(--szem-accent);
+		}
+		/* The options tables sit on a dark panel now, so black text there was
+		   left over from the same assumption. */
+		#farmolo_options table {
+			color: var(--szem-text);
+			text-align: left;
+		}
 		/* the wagons cell -- no longer last, a distance column follows it */
 		#farm_hova > tbody > tr > td:nth-child(6) {
 			width: 135px;
@@ -643,10 +694,6 @@ function init(){try{
 				height: 15px;
 				padding: 0 2px;
 			}
-		}
-		#farmolo_options table {
-			color: black;
-			text-align: left;
 		}
 		#farmolo_options table td,
 		#vije_opts table.szem4_vije_optsTable td {
