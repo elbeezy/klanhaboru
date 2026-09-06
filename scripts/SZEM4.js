@@ -900,7 +900,6 @@ function init(){try{
 				<tr><td colspan="2" id="menuk" style="">
 					<div class="divrow menubar">
 						<span class="divcell" id="kiegs">
-							<img src="${pic("muhely_logo.png")}" alt="GIT" title="GIT C&amp;C Műhely megnyitása" onclick="window.open('https://github.com/cncDAni2/klanhaboru')">
 							<img src="${pic("kh_logo.png")}" alt="Game" title="Klánháború megnyitása" onclick="window.open(document.location.href)">
 							<a href="javascript: szunetMind();" id="szunet_mind" title="Minden modul megállítása megadott időre" onmouseover="sugo(this,'Minden futó modult megállít a megadott percre, majd önműködően újraindítja őket.')">Szünet mind</a>
 							<span class="menubar_valaszto"></span>
