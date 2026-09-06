@@ -247,9 +247,31 @@ function init(){try{
 		}
 	}
 	const szemStyle = `
-		body { background: #111; scrollbar-width: none; padding-bottom: 0; }
+		/* The palette. Every colour below comes from one of these, so the whole
+		   interface can be re-tuned from one block instead of hunting hex codes
+		   through 400 lines. Near-black surfaces, one accent, used sparingly.
+
+		   The four style boxes on the sound/style panel let a colour be
+		   overridden per theme profile, and they write inline styles that beat
+		   these. Their default values are therefore the same colours spelled
+		   again in HTML attributes -- a test keeps the two copies in step. */
+		:root {
+			--szem-bg: #0b0d10;
+			--szem-surface: #12151a;
+			--szem-surface-2: #1a1f26;
+			--szem-line: #272e37;
+			--szem-text: #dfe4ea;
+			--szem-text-dim: #9aa4b0;
+			--szem-accent: #d9a441;
+			--szem-accent-soft: rgba(217,164,65,0.14);
+			--szem-accent-glow: rgba(217,164,65,0.55);
+			--szem-hover: rgba(255,255,255,0.06);
+			--szem-danger: #e05252;
+			--szem-shadow: 0 2px 24px rgba(0,0,0,0.65);
+		}
+		body { background: var(--szem-bg); scrollbar-width: none; padding-bottom: 0; }
 		body::-webkit-scrollbar { width: 0; }
-		#content > table { box-shadow: 0 0 12px black; min-height: 100vh; }
+		#content > table { box-shadow: var(--szem-shadow); min-height: 100vh; }
 		#side-notification-container {
 			pointer-events: none;
 			display: none;
@@ -259,8 +281,9 @@ function init(){try{
 		}
 		#alert2 {
 			width: 300px;
-			background-color: #0d47a1;
-			color: #FFF;
+			background-color: var(--szem-surface-2);
+			color: var(--szem-text);
+			border: 1px solid var(--szem-line);
 			position: fixed;
 			left:40%;
 			top:40%;
@@ -268,16 +291,16 @@ function init(){try{
 			padding: 5px;
 			z-index: 200;
 			border-radius: 5px;
-			box-shadow: black 0 0 7px;
+			box-shadow: var(--szem-shadow);
 			display: none;
 			animation: blinkingalert 0.5s infinite;
 		}
 		@keyframes blinkingalert {
 			0% {
-				box-shadow: #0d47a1 0 0 0px;
+				box-shadow: var(--szem-accent-glow) 0 0 0px;
 			}
 			100% {
-				box-shadow: #0d47a1 0 0 20px;
+				box-shadow: var(--szem-accent-glow) 0 0 20px;
 			}
 		}
 		#alert2head {
@@ -306,17 +329,17 @@ function init(){try{
 		.fej {
 			width: 1024px;
 			margin: auto;
-			color: white;
+			color: var(--szem-text);
 			position: relative;
-			box-shadow: 0 0 12px black;
+			box-shadow: var(--szem-shadow);
 			z-index: 3;
 		}
 		.fej a {
-			color: white;
+			color: var(--szem-text);
 		}
 		.fej > table {
 			padding:1px;
-			border: 1px solid yellow;
+			border: 1px solid var(--szem-line);
 		}
 		#global_notifications {
 			position: absolute;
@@ -347,8 +370,8 @@ function init(){try{
 			text-align: top;
 			padding: 20px;
 			margin:auto;
-			color: white;
-			border: 1px solid yellow;
+			color: var(--szem-text);
+			border: 1px solid var(--szem-line);
 		}
 		table.menuitem > tbody > tr > td {
 			padding: 0px;
@@ -361,7 +384,7 @@ function init(){try{
 		table {
 			padding: 0px;
 			margin: auto;
-			color: white;
+			color: var(--szem-text);
 		}
 		table.vis { color:black; }
 		table.vis td, table.vis th { padding: 3px 6px 3px 6px; }
@@ -370,8 +393,9 @@ function init(){try{
 			width: 135px;
 		}
 		textarea {
-			background-color: #020;
-			color:white;
+			background: var(--szem-surface-2);
+			color: var(--szem-text);
+			border: 1px solid var(--szem-line);
 		}
 		.divrow { display: flex; align-items: center; }
 		/* The module bar. Its two halves used to carry fixed widths that added up
@@ -407,20 +431,18 @@ function init(){try{
 			text-align: center;
 			vertical-align:top;
 		}
-		a { color: white; }
+		a { color: var(--szem-text); }
 		img{
-			border-color: grey;
+			border-color: var(--szem-line);
 			padding:1px;
 		}
-		#naploka a { color:blue; }
+		#naploka a { color: var(--szem-accent); }
 		input[type="button"] {
 			font-size:13px;
 			font-family: Century Gothic, sans-serif;
-			color:#FFFF77;
-			background-color:#3366CC;
-			border-style: ridge;
-			border-color:#000000;
-			border-width:3px;
+			color: var(--szem-text);
+			background: var(--szem-surface-2);
+			border: 1px solid var(--szem-line);
 		}
 		#adat_opts tr td,
 		#adat_opts tr th {
@@ -432,19 +454,19 @@ function init(){try{
 			justify-content: center;
 		}
 		.profileselector .profile {
-			background: white;
-			border: 1px solid transparent;
-			color: black;
+			background: var(--szem-surface-2);
+			border: 1px solid var(--szem-line);
+			color: var(--szem-text);
 			padding: 10px;
 			margin: 5px;
 			cursor: pointer;
 		}
 		.profileselector .profile:hover {
-			border: 1px dashed blue;
+			border: 1px solid var(--szem-accent);
 		}
 		.profileselector .profile.active {
-			background: grey;
-			border: 1px dashed black;
+			background: var(--szem-accent-soft);
+			border: 1px solid var(--szem-accent);
 		}
 		.szem4_vije_optsTable {
 			margin: initial;
@@ -460,11 +482,11 @@ function init(){try{
 		.tooltip-wrapper img { padding-left: 2px; padding-right: 0; display: table-cell; }
 		.tooltip_hover { position: relative; display: table; border-collapse: collapse; }
 		.tooltip_text {
-			position: absolute; z-index: 1; left: 50%; bottom: 100%; transform: translateX(-50%); white-space: nowrap; font-style: normal; background: gray; padding: 5px 8px; border-radius: 3px; margin-bottom: 5px; color: white; display: none; border: 1px solid black;
+			position: absolute; z-index: 1; left: 50%; bottom: 100%; transform: translateX(-50%); white-space: nowrap; font-style: normal; background: var(--szem-surface-2); padding: 5px 8px; border-radius: 3px; margin-bottom: 5px; color: var(--szem-text); display: none; border: 1px solid var(--szem-line);
 		}
 		.bottom-tooltip .tooltip_text { top: 100%; bottom: auto; }
-		.tooltip_text:after { content: ""; position: absolute; top: 100%; left: 50%; transform: translateX(-50%); border-top: 5px solid gray; border-left: 5px solid transparent; border-right: 5px solid transparent }
-		.bottom-tooltip .tooltip_text:after { top: auto; bottom: 100%; border-bottom: 5px solid gray; border-top: 5px solid transparent; }
+		.tooltip_text:after { content: ""; position: absolute; top: 100%; left: 50%; transform: translateX(-50%); border-top: 5px solid var(--szem-surface-2); border-left: 5px solid transparent; border-right: 5px solid transparent }
+		.bottom-tooltip .tooltip_text:after { top: auto; bottom: 100%; border-bottom: 5px solid var(--szem-surface-2); border-top: 5px solid transparent; }
 		table.no-bg-table td {
 			vertical-align: middle;
 			background: transparent;
@@ -483,7 +505,7 @@ function init(){try{
 			display: block;
 		}
 		.szem4_unitbox label:hover {
-			background: rgba(0,0,0,0.2);
+			background: var(--szem-hover);
 		}
 		.szem4_unitbox input {
 			cursor: pointer;
@@ -614,18 +636,18 @@ function init(){try{
 			display: none;
 		}
 		.style-settings-table { border-collapse: collapse; }
-		.style-settings-table tr { border-bottom: 1px solid black; }
+		.style-settings-table tr { border-bottom: 1px solid var(--szem-line); }
 		table.style-settings-table td { padding: 15px 4px; vertical-align: middle; }
 		.szem_old_build_tooltip {
-			border-left: 3px solid red;
+			border-left: 3px solid var(--szem-danger);
 		}
 		.szem_old_build_tooltip i {
 			font-weight: bold;
-			color: red;
+			color: var(--szem-danger);
 		}
 		.wagon_time {
 			position: absolute;
-			color: lavenderblush;
+			color: var(--szem-text);
 			font-size: 11px;
 			top: 5px;
 			width: 42px;
@@ -760,10 +782,10 @@ function init(){try{
 			<tr><td>Jobb háttérkép</td><td><input type="text" size="80"  name="wallp_right" value="${pic('default_bg_right.jpg')}" onchange="onWallpChange()"><br>
 										Videó: <input type="text" size="70" name="wallp_right_vid" value="-" onchange="onWallpChange()"><br>
 										Tükrözött? <input type="checkbox" onclick="onWallpChange()" name="wallp_right_mirror"></td></tr>
-			<tr><td>Tartalom háttérszíne</td><td><input type="text" size="30" name="content_bgcolor" value="#111" onchange="onWallpChange()"></td><td>[Default: #111] Minden CSS "background" property támogatott. <a href="https://www.w3schools.com/cssref/css3_pr_background.php" target="_BLANK">W3School link</a></td></tr>
-			<tr><td>Tartalom betűszíne</td><td><input type="text" size="30" name="content_fontcolor" value="white" onchange="onWallpChange()"></td><td>[Default: white] Minden CSS "color" property támogatott. <a href="https://www.w3schools.com/cssref/css_colors_legal.php" target="_BLANK">W3School link</a></td></tr>
-			<tr><td>Keret színe</td><td><input type="text" size="30" name="content_border" value="yellow" onchange="onWallpChange()"></td><td>[Default: yellow] Valid CSS "border-color" property támogatott. <a href="https://www.w3schools.com/css/css_border_color.asp" target="_BLANK">W3School link</a></td></tr>
-			<tr><td>Vetett árnyék</td><td><input type="text" size="30" name="content_shadow" value="0 0 12px black" onchange="onWallpChange()"></td><td>[Default: 0 0 12px black] Valid CSS "box-shadow" property támogatott. <a href="https://www.w3schools.com/cssref/css3_pr_box-shadow.php" target="_BLANK">W3School link</a></td></tr>
+			<tr><td>Tartalom háttérszíne</td><td><input type="text" size="30" name="content_bgcolor" value="#0b0d10" onchange="onWallpChange()"></td><td>[Default: #0b0d10] Minden CSS "background" property támogatott. <a href="https://www.w3schools.com/cssref/css3_pr_background.php" target="_BLANK">W3School link</a></td></tr>
+			<tr><td>Tartalom betűszíne</td><td><input type="text" size="30" name="content_fontcolor" value="#dfe4ea" onchange="onWallpChange()"></td><td>[Default: #dfe4ea] Minden CSS "color" property támogatott. <a href="https://www.w3schools.com/cssref/css_colors_legal.php" target="_BLANK">W3School link</a></td></tr>
+			<tr><td>Keret színe</td><td><input type="text" size="30" name="content_border" value="#272e37" onchange="onWallpChange()"></td><td>[Default: #272e37] Valid CSS "border-color" property támogatott. <a href="https://www.w3schools.com/css/css_border_color.asp" target="_BLANK">W3School link</a></td></tr>
+			<tr><td>Vetett árnyék</td><td><input type="text" size="30" name="content_shadow" value="0 2px 24px rgba(0,0,0,0.65)" onchange="onWallpChange()"></td><td>[Default: 0 2px 24px rgba(0,0,0,0.65)] Valid CSS "box-shadow" property támogatott. <a href="https://www.w3schools.com/cssref/css3_pr_box-shadow.php" target="_BLANK">W3School link</a></td></tr>
 			<tr><td>Beállítás táblázat háttere</td>       <td><input type="text" size="30" name="table_bgcolor"      value="-" onchange="onWallpChange(true, 'table_bgcolor')"></td>     <td>[Default: -] A háttér cellánként értendő. Minden CSS "background" property támogatott. <a href="https://www.w3schools.com/cssref/css3_pr_background.php" target="_BLANK">W3School link</a></td></tr>
 			<tr><td>Beállítás táblázat szövegszíne</td>   <td><input type="text" size="30" name="table_color"        value="-" onchange="onWallpChange(true, 'table_color')"></td>       <td>[Default: -] Minden CSS "color" property támogatott. <a href="https://www.w3schools.com/cssref/css_colors_legal.php" target="_BLANK">W3School link</a></td></tr>
 			<tr><td>Táblázatok fejlécének háttere</td>    <td><input type="text" size="30" name="table_head_bgcolor" value="-" onchange="onWallpChange(true, 'table_head_bgcolor')"></td><td>[Default: -] A háttér cellánként értendő. Minden CSS "background" property támogatott. <a href="https://www.w3schools.com/cssref/css3_pr_background.php" target="_BLANK">W3School link</a></td></tr>

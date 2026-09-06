@@ -1020,3 +1020,60 @@ suite('The interface can reach what it calls', function () {
 	   'every call-shaped name in an inline handler is exported or built in',
 	   offenders.join(', '));
 });
+
+/* ------------------------------------------------------------------------ */
+suite('The palette', function () {
+	/* Every colour in the stylesheet is meant to come from the :root block, so
+	   the interface can be retuned from one place. Four of those colours exist
+	   a second time as the default values of the style boxes on the sound
+	   panel, because onWallpChange() writes them back as inline styles that
+	   beat the stylesheet -- if the two copies drift, changing a token quietly
+	   does nothing and the old colour comes back on every start. */
+	function styleLap() {
+		var marker = 'const szemStyle = `';
+		var start = SZEM4_SRC.indexOf(marker);
+		return SZEM4_SRC.slice(start + marker.length, SZEM4_SRC.indexOf('`', start + marker.length));
+	}
+	var css = styleLap();
+
+	function token(nev) {
+		var m = css.match(new RegExp('--szem-' + nev + ':\\s*([^;]+);'));
+		return m ? m[1].trim() : '';
+	}
+	/* The value the box is born with, straight out of the built markup. */
+	function boxDefault(nev) {
+		var m = SZEM4_SRC.match(new RegExp('name="' + nev + '" value="([^"]*)"'));
+		return m ? m[1] : '';
+	}
+	/* And what the help column next to it claims that value is. */
+	function helpDefault(ertek) {
+		return SZEM4_SRC.indexOf('[Default: ' + ertek + ']') !== -1;
+	}
+
+	ok(css.indexOf(':root {') !== -1, 'the stylesheet opens with a token block');
+
+	var parok = [
+		['bg',     'content_bgcolor'],
+		['text',   'content_fontcolor'],
+		['line',   'content_border'],
+		['shadow', 'content_shadow']
+	];
+	parok.forEach(function (p) {
+		var t = token(p[0]), d = boxDefault(p[1]);
+		ok(t !== '', 'there is a --szem-' + p[0] + ' token', t);
+		eq(d, t, 'the ' + p[1] + ' box starts on the same colour as --szem-' + p[0]);
+		ok(helpDefault(t), 'and the help text beside it names that colour too', d);
+	});
+
+	/* The point of the block: no bare colour left behind in the sheet. These
+	   are the ones the old sheet actually used, and each was a real eyesore
+	   against near-black -- a yellow frame, a blue button, a white chip. */
+	['yellow', 'lavenderblush', '#0d47a1', '#3366CC', '#FFFF77', '#111'].forEach(function (szin) {
+		eq(css.indexOf(szin), -1, 'no ' + szin + ' left loose in the stylesheet');
+	});
+
+	/* The accent is meant to be the restrained one, not a second theme: it may
+	   pick out a link or a live edge, but it must not become a background for
+	   whole panels. */
+	ok(css.indexOf('--szem-accent:') !== -1, 'there is a single accent token');
+});
