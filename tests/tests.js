@@ -1255,3 +1255,59 @@ suite('The tables', function () {
 	eq(css.indexOf('color: black'), -1, 'no cell is left waiting on a black-text assumption');
 	eq(css.indexOf('color:black'), -1, 'spelled either way');
 });
+
+/* ------------------------------------------------------------------------ */
+suite('The farm search control stays in its header', function () {
+	/* Both farm tables put a search icon and a select-all box in the corner of
+	   a header cell, positioned absolutely. An absolutely positioned element
+	   measures from its nearest positioned ancestor, and #content is
+	   positioned -- so a header without an anchor of its own sends the control
+	   to the top right corner of the entire panel instead of its own corner.
+
+	   That is what had happened to the Szerelvények one: its twin over on
+	   farm_honnan carried position:relative inline and it did not. Asking the
+	   browser what the control actually measures from is the only way to see
+	   this; reading the CSS cannot. */
+	var marker = 'const szemStyle = `';
+	var start = SZEM4_SRC.indexOf(marker);
+	var css = SZEM4_SRC.slice(start + marker.length, SZEM4_SRC.indexOf('`', start + marker.length));
+
+	var keret = document.createElement('iframe');
+	keret.style.cssText = 'position:absolute; left:-9999px; top:0; width:1200px; height:600px;';
+	document.body.appendChild(keret);
+	var d = keret.contentDocument;
+	d.open();
+	/* #content is positioned in the real interface, which is the whole trap. */
+	d.write('<!doctype html><html><head><style>' + css + '</style></head><body>' +
+	        '<div id="content"><table class="menuitem"><tbody><tr><td>' +
+	        '<table class="vis" id="farm_hova"><tbody><tr>' +
+	        '<th id="fejcella" style="height: 20px; vertical-align:middle;">Szerelv\u00e9nyek' +
+	        '<span id="kereso" style="position:absolute;right: 7px;top: 3px;">x</span>' +
+	        '</th></tr></tbody></table>' +
+	        '</td></tr></tbody></table></div></body></html>');
+	d.close();
+
+	eq(keret.contentWindow.getComputedStyle(d.getElementById('content')).position, 'relative',
+	   'the trap is real: #content is a positioned ancestor');
+
+	var kereso = d.getElementById('kereso');
+	eq(kereso.offsetParent && kereso.offsetParent.id, 'fejcella',
+	   'the search control measures from its own header cell');
+
+	/* And lands inside it, not several hundred pixels away at the panel edge. */
+	var k = kereso.getBoundingClientRect(), f = d.getElementById('fejcella').getBoundingClientRect();
+	ok(k.left >= f.left - 1 && k.right <= f.right + 1,
+	   'so it sits within that cell rather than at the corner of the panel',
+	   'control ' + Math.round(k.left) + '-' + Math.round(k.right) +
+	   ', cell ' + Math.round(f.left) + '-' + Math.round(f.right));
+
+	keret.remove();
+
+	/* The anchor is stated once for every header now. The cell that used to
+	   carry it inline should no longer need to, and if the rule is ever lost
+	   both controls break together rather than one quietly. */
+	ok(css.indexOf('position: relative;\n\t\t\tbackground: var(--szem-surface-2);') !== -1,
+	   'the header rule is what provides the anchor');
+	eq(SZEM4_SRC.indexOf('style="position: relative; height: 20px; min-width: 100px"'), -1,
+	   'and no header states it inline any more');
+});

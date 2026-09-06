@@ -498,6 +498,13 @@ function init(){try{
 			background: transparent;
 		}
 		#content table.vis th {
+			/* Both farm tables hang a search icon and a select-all box in the
+			   corner of a header with position:absolute. Without an anchor
+			   here that corner is #content's corner, so the control drifts to
+			   the top right of the whole panel -- which is where the
+			   Szerelvények one had been sitting, its header being the one that
+			   was written without the anchor its twin has. */
+			position: relative;
 			background: var(--szem-surface-2);
 			color: var(--szem-text-dim);
 			font-size: 11px;
@@ -3321,7 +3328,7 @@ ujkieg("farm","Farmoló",`<tr><td>
 	<div class="szem4_farmolo_datatable_wrapper">
 		<table class="vis" id="farm_honnan" style="vertical-align:top; display: inline-block;"><tr>
 			<th width="55px" onmouseover="sugo(this,'Ezen falukból farmolsz. Dupla klikk az érintett sor koordinátájára=sor törlése.<br>Rendezhető')" style="cursor: pointer;" onclick='rendez("szoveg",false,this,"farm_honnan",0)'>Honnan</th>
-			<th onmouseover="sugo(this,'Ezen egységeket használja fel SZEM a farmoláshoz. Bármikor módosítható. <br>Pipa: egy cellán végrehajtott (duplaklikkes) művelet minden látható falura érvényes lesz.')" style="position: relative; height: 20px; min-width: 100px">
+			<th onmouseover="sugo(this,'Ezen egységeket használja fel SZEM a farmoláshoz. Bármikor módosítható. <br>Pipa: egy cellán végrehajtott (duplaklikkes) művelet minden látható falura érvényes lesz.')" style="height: 20px; min-width: 100px">
 				Mivel?
 				<span style="position:absolute;right: 7px;top: 3px;display: flex;vertical-align: middle;align-items: center;">
 					<img src="${pic("search.png")}" alt="?" title="Szűrés falukra..." style="width:15px;height:15px; cursor: pointer;" onclick="szem4_farmolo_csoport('honnan')">
