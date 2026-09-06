@@ -76,7 +76,7 @@ if (window.SZEM4_ALREADY_RUNNING) {
 	alert("Itt már fut SZEM. \n Ha ez nem igaz, nyitsd meg új lapon a játékot, és próbáld meg ott futtatni");
 	return;
 }
-var VERZIO = 'v4.6 Build 26.05.25';
+var VERZIO = 'v4.7 by elbeezy';
 var SZEM4_SETTINGS = defaultSettingsState();
 var TIME_ZONE = 0;
 try{ /*Rendszeradatok*/
@@ -4230,7 +4230,7 @@ var FARM_TESZTER_TIMEOUT;
 $(document).ready(function(){
 	nyit("naplo");
 	naplo('Globál','Verzió ['+VERZIO+'] legfrissebb állapotban, GIT-ről szedve.');
-	naplo("Indulás","SZEM 4.6 elindult.");
+	naplo("Indulás","SZEM 4.7 elindult.");
 	naplo("Indulás","Kiegészítők szünetelő módban.");
 	if (TIME_ZONE != 0) naplo('🕐 Időzóna', `Időeltolódás frissítve: eltolódás ${TIME_ZONE} perccel.`);
 	soundVolume(0.0);
