@@ -1187,6 +1187,79 @@ function szemIkon(nev, szinNev) {
 		case 'pihen':
 			return ikonSvg('<circle cx="9" cy="9" r="6.3" fill="none" stroke="' + halvany + '" stroke-width="2" opacity="0.3"/>' +
 				'<path d="M9 2.7 A6.3 6.3 0 0 1 15.3 9" fill="none" stroke="' + ekes + '" stroke-width="2" stroke-linecap="round"/>');
+
+		/* Adding something is the routine action worth finding quickly, so it
+		   is the only one of these drawn in the accent. */
+		case 'plus':
+			return ikonSvg('<line x1="9" y1="3.6" x2="9" y2="14.4" stroke="' + ekes + '" stroke-width="2" stroke-linecap="round"/>' +
+				'<line x1="3.6" y1="9" x2="14.4" y2="9" stroke="' + ekes + '" stroke-width="2" stroke-linecap="round"/>');
+		/* Deleting is the one that cannot be taken back, so it carries the
+		   danger colour -- the same signal the stop sign uses. */
+		case 'del':
+			return ikonSvg('<path d="M4 5.4 H14" stroke="' + piros + '" stroke-width="1.6" stroke-linecap="round"/>' +
+				'<path d="M7.2 5.4 V3.9 H10.8 V5.4" fill="none" stroke="' + piros + '" stroke-width="1.5" stroke-linejoin="round"/>' +
+				'<path d="M5.5 5.4 L6.2 14.5 H11.8 L12.5 5.4" fill="none" stroke="' + piros + '" stroke-width="1.5" stroke-linejoin="round"/>');
+		case 'link':
+			return ikonSvg('<path d="M10.2 3.4 H14.6 V7.8" fill="none" stroke="' + halvany + '" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>' +
+				'<line x1="14.6" y1="3.4" x2="8.4" y2="9.6" stroke="' + halvany + '" stroke-width="1.6" stroke-linecap="round"/>' +
+				'<path d="M12.4 10.6 V14 H4 V5.6 H7.4" fill="none" stroke="' + halvany + '" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>');
+		case 'load':
+			return ikonSvg('<path d="M9 3.2 V10.6" stroke="' + halvany + '" stroke-width="1.6" stroke-linecap="round"/>' +
+				'<path d="M5.8 7.6 L9 10.8 L12.2 7.6" fill="none" stroke="' + halvany + '" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>' +
+				'<path d="M3.8 12.6 V14.4 H14.2 V12.6" fill="none" stroke="' + halvany + '" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>');
+		case 'mentes':
+			return ikonSvg('<path d="M3.8 4.6 A1.2 1.2 0 0 1 5 3.4 H11.4 L14.6 6.6 V13.4 A1.2 1.2 0 0 1 13.4 14.6 H5 A1.2 1.2 0 0 1 3.8 13.4 Z" fill="none" stroke="' + halvany + '" stroke-width="1.5" stroke-linejoin="round"/>' +
+				'<path d="M6.4 3.4 V6.9 H11.2 V3.4" fill="none" stroke="' + halvany + '" stroke-width="1.4" stroke-linejoin="round"/>' +
+				'<rect x="6.2" y="9.6" width="5.6" height="5" rx="0.6" fill="none" stroke="' + halvany + '" stroke-width="1.4"/>');
+		/* In through the same wall the other one goes out of, so the pair
+		   reads as opposites rather than as two unrelated arrows. */
+		case 'import':
+			return ikonSvg('<path d="M14.4 3.6 V14.4" stroke="' + halvany + '" stroke-width="1.6" stroke-linecap="round"/>' +
+				'<path d="M3.4 9 H11.4" stroke="' + halvany + '" stroke-width="1.6" stroke-linecap="round"/>' +
+				'<path d="M8.2 5.8 L11.4 9 L8.2 12.2" fill="none" stroke="' + halvany + '" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>');
+		case 'export':
+			return ikonSvg('<path d="M3.6 3.6 V14.4" stroke="' + halvany + '" stroke-width="1.6" stroke-linecap="round"/>' +
+				'<path d="M6.6 9 H14.6" stroke="' + halvany + '" stroke-width="1.6" stroke-linecap="round"/>' +
+				'<path d="M11.4 5.8 L14.6 9 L11.4 12.2" fill="none" stroke="' + halvany + '" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>');
+		/* Overlapping solids rather than one traced outline: an arc path hand
+		   fitted into a cloud looks wrong at 18px and cannot be nudged
+		   afterwards without drawing the whole thing again. */
+		case 'cloud':
+			return ikonSvg('<circle cx="6.8" cy="10.1" r="3.1" fill="' + halvany + '"/>' +
+				'<circle cx="10.7" cy="8.6" r="3.9" fill="' + halvany + '"/>' +
+				'<rect x="4.9" y="11" width="8.8" height="2.9" rx="1.45" fill="' + halvany + '"/>');
+		case 'reset':
+			return ikonSvg('<path d="M14.2 9 A5.2 5.2 0 1 1 12 4.9" fill="none" stroke="' + halvany + '" stroke-width="1.7" stroke-linecap="round"/>' +
+				'<path d="M12.6 2.2 V5.4 H9.4" fill="none" stroke="' + halvany + '" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>');
+		case 'sebesseg':
+			return ikonSvg('<path d="M3.4 12.4 A6 6 0 1 1 14.6 12.4" fill="none" stroke="' + halvany + '" stroke-width="1.7" stroke-linecap="round"/>' +
+				'<line x1="9" y1="9.9" x2="12.1" y2="6.4" stroke="' + ekes + '" stroke-width="1.7" stroke-linecap="round"/>' +
+				'<circle cx="9" cy="9.9" r="1.15" fill="' + ekes + '"/>');
+		/* A wagon rather than upstream's locomotive: the row this labels is
+		   about the wagons the farm sends, and the game's own wagon artwork
+		   is what sits in the matching column two panels down. */
+		case 'mozdony':
+			return ikonSvg('<rect x="2.7" y="5.4" width="12.6" height="5.6" rx="1.1" fill="none" stroke="' + halvany + '" stroke-width="1.5"/>' +
+				'<line x1="2.7" y1="8.2" x2="15.3" y2="8.2" stroke="' + halvany + '" stroke-width="1.2"/>' +
+				'<circle cx="5.9" cy="13.2" r="1.6" fill="none" stroke="' + halvany + '" stroke-width="1.4"/>' +
+				'<circle cx="12.1" cy="13.2" r="1.6" fill="none" stroke="' + halvany + '" stroke-width="1.4"/>');
+		/* Eight teeth placed by rotating one, because a gear traced as a
+		   single outline is illegible at this size and unadjustable at any.
+
+		   Short, thick, and overlapping the rim on purpose: drawn thin with
+		   a gap between tooth and rim -- which is what this was first -- the
+		   whole thing reads as a sun instead, and the hub is what settles it
+		   either way. Checked at 18px, not just blown up. */
+		case 'beallitasok': {
+			var fogak = '';
+			for (var f = 0; f < 8; f++) {
+				fogak += '<line x1="9" y1="2" x2="9" y2="4.2" stroke="' + halvany +
+					'" stroke-width="2.4" stroke-linecap="round" transform="rotate(' + (f * 45) + ' 9 9)"/>';
+			}
+			return ikonSvg(fogak +
+				'<circle cx="9" cy="9" r="4.4" fill="none" stroke="' + halvany + '" stroke-width="1.7"/>' +
+				'<circle cx="9" cy="9" r="1.7" fill="none" stroke="' + halvany + '" stroke-width="1.5"/>');
+		}
 		default:
 			return '';
 	}
@@ -3572,7 +3645,7 @@ ujkieg("farm","Farmoló",`<tr><td>
 			<td colspan="2" style="text-align: center">
 			<form id="farmolo_options">
 			<table>
-			<tr><td><div class="combo-cell"><div class="imgbox"><img src="${pic('mozdony.png')}"></div><strong>Szerelvények</strong></div></td>
+			<tr><td><div class="combo-cell"><div class="imgbox"><img src="${szemIkon('mozdony')}"></div><strong>Szerelvények</strong></div></td>
 			<td>
 			Menetrend: <input name="targetIdo" value="30" onkeypress="validate(event)" type="text" size="2" onmouseover="sugo(this, 'SZEM arra fog törekedni, hogy minimum ennyi időközönként indítson támadást egy falura')">p - 
 			<input name="megbizhatosag" value="60" onkeypress="validate(event)" type="text" size="2" onmouseover="sugo(this, 'Megbízhatóság. MAX ennyi ideig létrejött termelésért indul (plusz felderített nyers)')">p
@@ -3584,7 +3657,7 @@ ujkieg("farm","Farmoló",`<tr><td>
 			<td>Ha a fal &gt; <input type="text" size="3" name="maxfal" onkeypress="validate(event)" value="3" onmouseover="sugo(this,'Élesen nagyobb! 0 esetén a fallal rendelkezőeket nem támadja.')">, nem támadja</td>
 			</tr>
 
-			<tr><td><div class="combo-cell"><div class="imgbox"><img src="${pic('beallitasok.png')}"></div><strong>Alapértékek</strong></div></td>
+			<tr><td><div class="combo-cell"><div class="imgbox"><img src="${szemIkon('beallitasok')}"></div><strong>Alapértékek</strong></div></td>
 			<td>
 			Termelés/óra: <input name="termeles" onkeypress="validate(event)" type="text" size="5" value="800" onchange="updateDefaultProdHour()" onmouseover="sugo(this,'Ha nincs felderített bányaszint, úgy veszi ennyi nyers termelődik ott óránként')">				
 			Min sereg/falu: <input name="minsereg" onkeypress="validate(event)" type="text" value="20" size="4" onmouseover="sugo(this,'Ennél kevesebb fő támadásonként nem indul. A szám tanyahely szerinti foglalásban értendő. Javasolt: Határszám 1/20-ad része')">
@@ -3598,7 +3671,7 @@ ujkieg("farm","Farmoló",`<tr><td>
 			Kém/perc: <input name="kemperc" type="text" value="60" onkeypress="validate(event)" size="3" onmouseover="sugo(this,'Max ekkora időközönként küld kémet falunként')">
 			</td></tr>
 			
-			<tr><td><div class="combo-cell"><div class="imgbox"><img src="${pic('sebesseg.png')}"></div><strong>Sebesség</strong></div></td>
+			<tr><td><div class="combo-cell"><div class="imgbox"><img src="${szemIkon('sebesseg')}"></div><strong>Sebesség</strong></div></td>
 			<td>
 			<input name="sebesseg_p" onkeypress="validate(event)" type="text" size="2" value="10" onmouseover="sugo(this,'Ha a farmoló nem talál több feladatot magának megáll, ennyi időre. Érték lehet: 1-300. Javasolt érték: 15 perc')">perc /
 						<input name="sebesseg_m" onkeypress="validate(event)" type="text" size="3" value="900" onmouseover="sugo(this,'Egyes utasítások/lapbetöltődések ennyi időközönként hajtódnak végre. Érték lehet: 200-6000. Javasolt: gépi: 500ms, emberi: 3000.')">ms.
@@ -4248,7 +4321,7 @@ function szem4_EPITO_ujFalu() {
 			var ZC = ZR.insertCell(0); ZC.innerHTML = `${ID_TO_INFO[KTID[faluCoord[i]]].name} (${faluCoord[i]})`; ZC.setAttribute("ondblclick", "sortorol(this)");
 			ZC = ZR.insertCell(1); ZC.innerHTML = lista; ZC.getElementsByTagName("select")[0].value = adat.getElementsByTagName("select")[0].value;
 			ZC = ZR.insertCell(2); ZC.style.fontSize = "x-small"; var d = getServerTime(); ZC.innerHTML = d.toLocaleString(); ZC.setAttribute("ondblclick", "szem4_EPITO_most(this)");
-			ZC = ZR.insertCell(3); ZC.innerHTML = "<i>Feldolgozás alatt...</i>" + ' <a href="' + gameUrl({ village: KTID[faluCoord[i]], screen: 'main', mode: null, group: null, page: null }) + '" target="_BLANK"><img alt="Nyit" title="Falu megnyitása" src="' + pic("link.png") + '"></a>';; ZC.setAttribute("ondblclick", 'szem4_EPITO_infoCell(this.parentNode,\'alap\',"")');
+			ZC = ZR.insertCell(3); ZC.innerHTML = "<i>Feldolgozás alatt...</i>" + ' <a href="' + gameUrl({ village: KTID[faluCoord[i]], screen: 'main', mode: null, group: null, page: null }) + '" target="_BLANK"><img alt="Nyit" title="Falu megnyitása" src="' + szemIkon('link') + '"></a>';; ZC.setAttribute("ondblclick", 'szem4_EPITO_infoCell(this.parentNode,\'alap\',"")');
 		}
 		if (str != "") alert2("Dupla megadások/nem létező faluk kiszűrve: " + str);
 		adat.getElementsByTagName("input")[0].value = "";
@@ -4354,7 +4427,7 @@ function szem4_EPITO_infoCell(sor,szin,info){try{
 	sor.cells[3].style.backgroundColor=szin;
 	let coord = sor.cells[0].textContent.split(' ');
 	coord = coord[coord.length-1].replace('(', '').replace(')','');
-	sor.cells[3].innerHTML=info+' <a href="'+gameUrl({ village: KTID[coord], screen: 'main', mode: null, group: null, page: null })+'" target="_BLANK"><img alt="Nyit" title="Falu megnyitása" src="'+pic("link.png")+'"></a>';
+	sor.cells[3].innerHTML=info+' <a href="'+gameUrl({ village: KTID[coord], screen: 'main', mode: null, group: null, page: null })+'" target="_BLANK"><img alt="Nyit" title="Falu megnyitása" src="'+szemIkon('link')+'"></a>';
 	return;
 }catch(e){debug("építő_infoCell",e);}}
 
@@ -4643,7 +4716,7 @@ try{
 }catch(e){debug('epit', 'Worker engine error: ' + e);setTimeout(function(){szem4_EPITO_motor();}, 3000);}}
 
 ujkieg_hang("Építő","epites;falu_kesz;kritikus_hiba");
-ujkieg("epit","Építő",'<tr><td><h2 align="center">Építési listák</h2><table align="center" class="vis" style="border:1px solid black;color: black;"><tr><th onmouseover=\'sugo(this,"Építési lista neve, amire később hivatkozhatunk")\'>Csoport neve</th><th onmouseover=\'sugo(this,"Az építési sorrend megadása. Saját lista esetén ellenőrizzük az OK? linkre kattintva annak helyességét!")\' style="width:800px">Építési lista</th></tr><tr><td>Alapértelmezett</td><td><input type="text" disabled="disabled" value="main 10;storage 10;wall 10;main 15;wall 15;storage 15;farm 10;main 20;wall 20;MINES 10;smith 5;barracks 5;stable 5;storage 20;farm 20;market 10;main 22;smith 12;farm 25;storage 28;farm 26;MINES 24;market 19;barracks 15;stable 10;garage 5;MINES 26;farm 28;storage 30;barracks 20;stable 15;farm 30;barracks 25;stable 20;MINES 30;smith 20;snob 1" size="125"><a onclick="szem4_EPITO_cscheck(this)" style="color:blue; cursor:pointer;"> OK?</a></td></tr></table><p align="center" style="max-width:880px; margin:8px auto 0; font-size:0.95em; line-height:1.5"><b>Kapcsolók.</b> <b>ANY(...)</b>: a felsoroltak közül arra épít, amire éppen van nyersanyagod, így nem áll le egy drága lépésnél. Több cél vesszővel elválasztva: <b>ANY(barracks 5, stable 5)</b> vagy <b>ANY(MINES 25)</b>. &nbsp; <b>FASTEST(...)</b>: a leggyorsabban felépülőt választja. A kettő egymásba ágyazható: <b>ANY(FASTEST(MINES 25))</b> = amire van nyersed, abból a leggyorsabb. Ha egyikre sincs elég nyersanyag, ugyanúgy vár, mint eddig.</p><p align="center">Csoportnév: <input type="text" value="" size="30" id="epit_ujcsopnev" placeholder="Nem tartalmazhat . _ ; karaktereket"> <a href="javascript: szem4_EPITO_ujCsop()" style="color:white;text-decoration:none;"><img src="'+pic("plus.png")+' " height="17px"> Új csoport</a></p></td></tr><tr><td><h2 align="center">Építendő faluk</h2><table align="center" class="vis" style="border:1px solid black;color: black;width:950px" id="epit_lista"><tr><th style="width: 250px;" onclick=\'rendez("szoveg",false,this,"epit_lista",0)\' onmouseover=\'sugo(this,"Rendezhető. Itt építek. Dupla klikk a falura = sor törlése")\'>Falu</th><th onclick=\'rendez("lista",false,this,"epit_lista",1)\' onmouseover=\'sugo(this,"Rendezhető. Felső táblázatban használt lista közül választhatsz egyet, melyet később bármikor megváltoztathatsz.")\' style="width: 135px;">Használt lista</th><th style="width: 130px; cursor: pointer;" onclick=\'rendez("datum",false,this,"epit_lista",2)\' onmouseover=\'sugo(this,"Rendezhető. Ekkor fogom újranézni a falut, hogy lehet e már építeni.<br>Dupla klikk=idő azonnalira állítása.")\'>Return</th><th style="cursor: pointer;" onclick=\'rendez("szoveg",false,this,"epit_lista",3)\' onmouseover=\'sugo(this,"Rendezhető. Szöveges információ a faluban zajló építésről. Sárga hátterű szöveg orvosolható; kék jelentése hogy nem tud haladni; piros pedig kritikus hibát jelöl; a szín nélküli a normális működést jelzi.<br>Dupla klikk=alaphelyzet")\'><u>Infó</u></th></tr></table><p align="center" id="epit_ujfalu_adat">Csoport: <select><option value="Alapértelmezett">Alapértelmezett</option> </select> \Faluk: <input type="text" value="" placeholder="Koordináták: 123|321 123|322 ..." size="50"> \<a href="javascript: szem4_EPITO_ujFalu()" style="color:white;text-decoration:none;"><img src="'+pic("plus.png")+'" height="17px"> Új falu(k)</a></p></td></tr>');
+ujkieg("epit","Építő",'<tr><td><h2 align="center">Építési listák</h2><table align="center" class="vis" style="border:1px solid black;color: black;"><tr><th onmouseover=\'sugo(this,"Építési lista neve, amire később hivatkozhatunk")\'>Csoport neve</th><th onmouseover=\'sugo(this,"Az építési sorrend megadása. Saját lista esetén ellenőrizzük az OK? linkre kattintva annak helyességét!")\' style="width:800px">Építési lista</th></tr><tr><td>Alapértelmezett</td><td><input type="text" disabled="disabled" value="main 10;storage 10;wall 10;main 15;wall 15;storage 15;farm 10;main 20;wall 20;MINES 10;smith 5;barracks 5;stable 5;storage 20;farm 20;market 10;main 22;smith 12;farm 25;storage 28;farm 26;MINES 24;market 19;barracks 15;stable 10;garage 5;MINES 26;farm 28;storage 30;barracks 20;stable 15;farm 30;barracks 25;stable 20;MINES 30;smith 20;snob 1" size="125"><a onclick="szem4_EPITO_cscheck(this)" style="color:blue; cursor:pointer;"> OK?</a></td></tr></table><p align="center" style="max-width:880px; margin:8px auto 0; font-size:0.95em; line-height:1.5"><b>Kapcsolók.</b> <b>ANY(...)</b>: a felsoroltak közül arra épít, amire éppen van nyersanyagod, így nem áll le egy drága lépésnél. Több cél vesszővel elválasztva: <b>ANY(barracks 5, stable 5)</b> vagy <b>ANY(MINES 25)</b>. &nbsp; <b>FASTEST(...)</b>: a leggyorsabban felépülőt választja. A kettő egymásba ágyazható: <b>ANY(FASTEST(MINES 25))</b> = amire van nyersed, abból a leggyorsabb. Ha egyikre sincs elég nyersanyag, ugyanúgy vár, mint eddig.</p><p align="center">Csoportnév: <input type="text" value="" size="30" id="epit_ujcsopnev" placeholder="Nem tartalmazhat . _ ; karaktereket"> <a href="javascript: szem4_EPITO_ujCsop()" style="color:white;text-decoration:none;"><img src="'+szemIkon('plus')+' " height="17px"> Új csoport</a></p></td></tr><tr><td><h2 align="center">Építendő faluk</h2><table align="center" class="vis" style="border:1px solid black;color: black;width:950px" id="epit_lista"><tr><th style="width: 250px;" onclick=\'rendez("szoveg",false,this,"epit_lista",0)\' onmouseover=\'sugo(this,"Rendezhető. Itt építek. Dupla klikk a falura = sor törlése")\'>Falu</th><th onclick=\'rendez("lista",false,this,"epit_lista",1)\' onmouseover=\'sugo(this,"Rendezhető. Felső táblázatban használt lista közül választhatsz egyet, melyet később bármikor megváltoztathatsz.")\' style="width: 135px;">Használt lista</th><th style="width: 130px; cursor: pointer;" onclick=\'rendez("datum",false,this,"epit_lista",2)\' onmouseover=\'sugo(this,"Rendezhető. Ekkor fogom újranézni a falut, hogy lehet e már építeni.<br>Dupla klikk=idő azonnalira állítása.")\'>Return</th><th style="cursor: pointer;" onclick=\'rendez("szoveg",false,this,"epit_lista",3)\' onmouseover=\'sugo(this,"Rendezhető. Szöveges információ a faluban zajló építésről. Sárga hátterű szöveg orvosolható; kék jelentése hogy nem tud haladni; piros pedig kritikus hibát jelöl; a szín nélküli a normális működést jelzi.<br>Dupla klikk=alaphelyzet")\'><u>Infó</u></th></tr></table><p align="center" id="epit_ujfalu_adat">Csoport: <select><option value="Alapértelmezett">Alapértelmezett</option> </select> \Faluk: <input type="text" value="" placeholder="Koordináták: 123|321 123|322 ..." size="50"> \<a href="javascript: szem4_EPITO_ujFalu()" style="color:white;text-decoration:none;"><img src="'+szemIkon('plus')+'" height="17px"> Új falu(k)</a></p></td></tr>');
 
 var EPIT_LEPES=0;
 var EPIT_REF; var EPIT_HIBA=0; var EPIT_GHIBA=0;
@@ -5285,12 +5358,12 @@ function szem4_ADAT_motor() {
 
 function szem4_ADAT_AddImageRow(tipus){
 	return '\
-	<img title="Jelenlegi adat betöltése" alt="Betölt" onclick="szem4_ADAT_loadNow(\''+tipus+'\')" width="17px" src="'+pic("load.png")+'"> \
-	<img title="Törlés" alt="Töröl" onclick="szem4_ADAT_del(\''+tipus+'\')" src="'+pic("del.png")+'" width="17px""> \
-	<img title="Jelenlegi adat kiiratása" alt="Export" onclick="szem4_ADAT_kiir(\''+tipus+'\')" width="17px" src="'+pic("Export.png")+'"> \
-	<img title="Saját adat betöltése" alt="Import" onclick="szem4_ADAT_betolt(\''+tipus+'\')" width="17px" src="'+pic("Import.png")+'"> \
-	<img title="Mentés MOST" alt="Save" onclick="szem4_ADAT_saveNow(\''+tipus+'\')" width="17px" src="'+pic("saveNow.png")+'">\
-	<img title="Reset: Helyreállítás" alt="Reset" onclick="szem4_ADAT_restart(\''+tipus+'\')" width="17px" src="'+pic("reset.png")+'">';
+	<img title="Jelenlegi adat betöltése" alt="Betölt" onclick="szem4_ADAT_loadNow(\''+tipus+'\')" width="17px" src="'+szemIkon('load')+'"> \
+	<img title="Törlés" alt="Töröl" onclick="szem4_ADAT_del(\''+tipus+'\')" src="'+szemIkon('del')+'" width="17px""> \
+	<img title="Jelenlegi adat kiiratása" alt="Export" onclick="szem4_ADAT_kiir(\''+tipus+'\')" width="17px" src="'+szemIkon('export')+'"> \
+	<img title="Saját adat betöltése" alt="Import" onclick="szem4_ADAT_betolt(\''+tipus+'\')" width="17px" src="'+szemIkon('import')+'"> \
+	<img title="Mentés MOST" alt="Save" onclick="szem4_ADAT_saveNow(\''+tipus+'\')" width="17px" src="'+szemIkon('mentes')+'">\
+	<img title="Reset: Helyreállítás" alt="Reset" onclick="szem4_ADAT_restart(\''+tipus+'\')" width="17px" src="'+szemIkon('reset')+'">';
 }
 
 ujkieg("adatok","Adatmentő",'<tr><td>\
@@ -5301,9 +5374,9 @@ ujkieg("adatok","Adatmentő",'<tr><td>\
 <tr><td><input type="checkbox" name="vije" checked></td><td>Jelentés elemző</td><td></td><td>'+szem4_ADAT_AddImageRow("vije")+'</td></tr>\
 <tr><td><input type="checkbox" name="sys" checked></td><td>Hangok, témák</td><td></td><td>'+szem4_ADAT_AddImageRow("sys")+'</td></tr>\
 <tr><td><input type="checkbox" name="gyujto" checked></td><td>Gyűjtögető</td><td></td><td>'+szem4_ADAT_AddImageRow("gyujto")+'</td></tr>\
-<tr><td><input type="checkbox" name="cloud" unchecked></td><td><img height="17px" src="'+pic('cloud.png')+'"> Cloud sync</td><td></td><td>\
-			<img title="Cloud adat betöltése a jelenlegi rendszerbe" alt="Import" onclick="loadCloudDataIntoLocal()" width="17px" src="'+pic("Import.png")+'"> \
-			<img title="Local adat lementése a Cloud rendszerbe" alt="Save" onclick="saveLocalDataToCloud(true, true)" width="17px" src="'+pic("saveNow.png")+'">\
+<tr><td><input type="checkbox" name="cloud" unchecked></td><td><img height="17px" src="'+szemIkon('cloud')+'"> Cloud sync</td><td></td><td>\
+			<img title="Cloud adat betöltése a jelenlegi rendszerbe" alt="Import" onclick="loadCloudDataIntoLocal()" width="17px" src="'+szemIkon('import')+'"> \
+			<img title="Local adat lementése a Cloud rendszerbe" alt="Save" onclick="saveLocalDataToCloud(true, true)" width="17px" src="'+szemIkon('mentes')+'">\
 </td></tr>\
 </table></form><p align="center"></p></td></tr>');
 var ADAT_PAUSE=false, ADAT_FIRST = true;

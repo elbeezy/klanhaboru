@@ -1218,18 +1218,36 @@ suite('The preview mirrors the real interface', function () {
 	ok(SZEM4_SRC.indexOf('ujkieg("farm","Farmol\u00f3",`') !== -1,
 	   'and that marker is really what the script uses');
 
-	/* The three things it has to fill in. If a fourth is ever added to that
-	   markup the preview stops building and says so, rather than rendering a
-	   panel with a hole in it. */
+	/* Every helper the markup calls has to be one the preview fills in, or
+	   the panel renders with a hole where that call was.
+
+	   Asked one helper at a time against the preview's own stub list, rather
+	   than as "the set is exactly these four". The exact-set form fires just
+	   as loudly when the markup stops NEEDING one, which is a false alarm --
+	   it went off the moment the last pic() left this panel, and a guard that
+	   cries wolf over a removal is one that gets edited without being read.
+	   What has to stay loud is a helper the preview has never heard of. */
 	var panel = SZEM4_SRC.slice(SZEM4_SRC.indexOf('ujkieg("farm","Farmol\u00f3",`'));
 	panel = panel.slice(0, panel.indexOf('`', 30));
 	var hivasok = {};
 	(panel.match(/\$\{\s*([A-Za-z_$][\w$]*)\s*\(/g) || []).forEach(function (m) {
 		hivasok[m.replace(/[${(\s]/g, '')] = 1;
 	});
-	eq(Object.keys(hivasok).sort().join(','), 'pic,picBuilding,rovidit,szemIkon',
-	   'the panel markup still only needs the helpers the preview stubs',
+
+	/* Read off the preview's own call, found by the argument that follows the
+	   stub names, because preview.html builds more than one Function. */
+	var stubVege = PREVIEW_SRC.indexOf("'return `'");
+	var stubSor = PREVIEW_SRC.slice(PREVIEW_SRC.lastIndexOf('new Function(', stubVege), stubVege);
+	var stubolt = (stubSor.match(/'([A-Za-z_$][\w$]*)'/g) || []).map(function (s) {
+		return s.replace(/'/g, '');
+	});
+
+	ok(stubolt.length >= 3, 'the preview names the helpers it fills in', stubolt.join(','));
+	ok(Object.keys(hivasok).length >= 3, 'and the panel markup really does call some',
 	   Object.keys(hivasok).sort().join(','));
+	Object.keys(hivasok).sort().forEach(function (nev) {
+		ok(stubolt.indexOf(nev) !== -1, 'the preview fills in ' + nev + ', which the markup calls');
+	});
 
 	/* Root-relative game art resolves on the game's domain and nowhere else,
 	   so the preview has to point it somewhere real or it shows broken
@@ -1866,7 +1884,9 @@ suite("SZEM's own icons", function () {
 	var halvany = szemCss().match(/--szem-text-dim:\s*([^;]+);/)[1].trim();
 	var piros = szemCss().match(/--szem-danger:\s*([^;]+);/)[1].trim();
 
-	['search', 'heart', 'hang', 'pihen'].forEach(function (nev) {
+	['search', 'heart', 'hang', 'pihen', 'plus', 'del', 'link', 'load', 'mentes',
+	 'import', 'export', 'cloud', 'reset', 'sebesseg', 'mozdony',
+	 'beallitasok'].forEach(function (nev) {
 		var d = api.szemIkon(nev);
 		ok(d.indexOf('data:image/svg+xml,') === 0, nev + ' is drawn rather than fetched');
 		var dec = decodeURIComponent(d);
@@ -1900,9 +1920,33 @@ suite("SZEM's own icons", function () {
 	/* The artwork these replaced is gone from the source entirely -- a stray
 	   pic("search.png") would fetch a picture that no longer matches. */
 	['search.png', 'heart.png', 'hang.png', 'play.png', 'pause.png',
-	 'muhely_logo.png', 'freeze.png'].forEach(function (f) {
+	 'muhely_logo.png', 'freeze.png', 'plus.png', 'del.png', 'link.png',
+	 'load.png', 'saveNow.png', 'Import.png', 'Export.png', 'cloud.png',
+	 'reset.png', 'sebesseg.png', 'mozdony.png',
+	 'beallitasok.png'].forEach(function (f) {
 		eq(SZEM4_SRC.indexOf(f), -1, f + ' is no longer fetched');
 	});
+
+	/* The other half of the rule, and the half that is easy to lose: artwork
+	   depicting something IN the game stays the game's own. Drawing those
+	   from the palette would make SZEM's idea of a resource pile sit next to
+	   the game's actual one, two pictures of the same thing that do not
+	   match. Asserted so that "finish the icons" does not quietly take them
+	   as well. */
+	['resource.png', 'kh_logo.png'].forEach(function (f) {
+		ok(SZEM4_SRC.indexOf("pic('" + f + "')") !== -1 || SZEM4_SRC.indexOf('pic("' + f + '")') !== -1,
+		   f + ' still uses the artwork, because it depicts the game rather than SZEM');
+	});
+
+	/* Counted, not just looked for.
+
+	   The presence check above passes as long as ONE call survives, and
+	   resource.png is fetched twice -- so converting one of the two left it
+	   green. Pinning the total means taking any of them still fails. A
+	   genuinely new game-art fetch has to move this number, which is the
+	   point: it should be a deliberate step, not a silent one. */
+	eq((SZEM4_SRC.match(/pic\(['"]/g) || []).length, 3,
+	   'exactly the three game-artwork fetches are left');
 
 	/* One palette lookup and one SVG wrapper for all of them: this was three
 	   copies of the same four lines before the third caller arrived. */
