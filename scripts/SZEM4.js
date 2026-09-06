@@ -7,47 +7,30 @@
 /* ============================================================================
  * PUBLIC SURFACE
  *
- * Everything below is reachable from generated HTML (inline onclick/ondblclick
- * handlers), from string-form setTimeout(), or from the injected Firebase
- * module script -- all of which resolve names against window.
+ * The names below, and only these, are reached by resolving against window:
+ * from inline handlers in the generated markup, from handlers attached with
+ * setAttribute, from javascript: links, from string-form setTimeout, or from
+ * the injected Firebase module. Everything else in this file is internal.
  *
- * The Adatmento tab builds handler names DYNAMICALLY ("szem4_ADAT_"+tipus+
- * "_load"), so this list cannot safely be narrowed by static analysis.
- * Every top-level function is exported, exactly as before the IIFE wrap.
+ * Derived by scanning for those five patterns, then checked at runtime --
+ * verifyInlineHandlers() re-reads the interface once it is built and reports
+ * any handler naming something absent here. Without that, an omission would
+ * surface only as a control that silently does nothing when clicked.
  * ========================================================================== */
 Object.assign(window, {
-	BotvedelemBe, BotvedelemKi, TamadUpdt, VIJE_IntelliAnalyst_isRequired,
-	VIJE_adatbeir, addCurrentMovementToList, addFreezeNotification, addTooltip,
-	addTooltip_build, addWagons, add_attackerRow, add_farmolando,
-	add_farmolo, alert2, buildArmy, calculateNyers,
-	clearAttacks, convertTbToTime, debug, debug_urit,
-	distCalc, drawWagons, extendArmy, findClosestTimes,
-	getAllResFromVIJE, getProdHour, getResourceProduction, getServerTime,
-	getSlowestUnit, getSpyBuildingLevels, getSpyResourceCell, gyujto_listAllVillages,
-	gyujto_setVill, hattercsere, hattertolor, hideFarms,
-	init, isPageLoaded, learnCatapult, loadCloudDataIntoLocal,
-	loadCloudSync, loadSettings, loadXMLDoc, maplink,
-	modosit_szam, multipricer, naplo, nyit,
-	onWallpChange, pic, picBuilding, planAttack,
-	playSound, prettyDatePrint, readUpVijeOpts, rebuildDOM_VIJE,
-	rebuildDOM_farm, rebuildDOM_gyujto, removeTooltip, rendez,
-	restartKieg, rovidit, saveLocalDataToCloud, saveSettings,
-	selectTheme, sendCustomEvent, setNoUnits, setTooltip,
-	shorttest, sortorol, soundVolume, stop,
-	stopEvent, subtractNyersValue, sugo, switchMobileMode,
-	szem4_ADAT_AddImageRow, szem4_ADAT_LoadAll, szem4_ADAT_StopAll, szem4_ADAT_betolt,
-	szem4_ADAT_del, szem4_ADAT_epito_load, szem4_ADAT_epito_save, szem4_ADAT_kiir,
-	szem4_ADAT_loadNow, szem4_ADAT_motor, szem4_ADAT_restart, szem4_ADAT_saveNow,
-	szem4_EPITO_IntettiBuild, szem4_EPITO_Wopen, szem4_EPITO_addIdo, szem4_EPITO_cscheck,
-	szem4_EPITO_csopDelete, szem4_EPITO_csopToList, szem4_EPITO_getBuildLink, szem4_EPITO_getlista,
-	szem4_EPITO_infoCell, szem4_EPITO_most, szem4_EPITO_motor, szem4_EPITO_perccsokkento,
-	szem4_EPITO_ujCsop, szem4_EPITO_ujFalu, szem4_GYUJTO_1keres, szem4_GYUJTO_3elindit,
-	szem4_GYUJTO_motor, szem4_GYUJTO_search, szem4_VIJE_1kivalaszt, szem4_VIJE_2elemzes,
-	szem4_VIJE_3torol, szem4_VIJE_motor, szem4_farmolo_1kereso, szem4_farmolo_2illeszto,
-	szem4_farmolo_3egyeztet, szem4_farmolo_csoport, szem4_farmolo_motor,
-	szem4_farmolo_multiclick, szem4_vije_forgot, szunet, ujkieg,
-	ujkieg_hang, updateAvailableUnits, updateDefaultProdHour, urit,
-	validate, windowOpener, writeAllBuildTime,
+	BotvedelemBe, BotvedelemKi, addTooltip_build, add_farmolando,
+	add_farmolo, alert2, debug_urit, gyujto_setVill,
+	hattercsere, hattertolor, learnCatapult, loadCloudDataIntoLocal,
+	modosit_szam, naplo, nyit, onWallpChange,
+	playSound, removeTooltip, rendez, restartKieg,
+	saveLocalDataToCloud, saveSettings, selectTheme, setTooltip,
+	sortorol, stopEvent, sugo, switchMobileMode,
+	szem4_ADAT_LoadAll, szem4_ADAT_betolt, szem4_ADAT_del, szem4_ADAT_kiir,
+	szem4_ADAT_loadNow, szem4_ADAT_restart, szem4_ADAT_saveNow, szem4_EPITO_cscheck,
+	szem4_EPITO_csopDelete, szem4_EPITO_infoCell, szem4_EPITO_most, szem4_EPITO_perccsokkento,
+	szem4_EPITO_ujCsop, szem4_EPITO_ujFalu, szem4_GYUJTO_search, szem4_farmolo_csoport,
+	szem4_farmolo_multiclick, szem4_vije_forgot, szunet, updateDefaultProdHour,
+	validate,
 });
 
 function stop(){
@@ -1304,10 +1287,6 @@ function sortorol(cella,ismulti) {
 	delete SZEM4_FARM.DOMINFO_FROM[row.cells[0].textContent];
 	row.parentNode.removeChild(row);
 	multipricer(ismulti, "del");
-}
-function urit(cella,ismulti){
-	cella.innerHTML="";
-	multipricer(ismulti,"urit");
 }
 function modosit_szam(cella){
 	var uj=prompt('Új érték?');
@@ -4227,6 +4206,29 @@ var ADAT_PAUSE=false, ADAT_FIRST = true;
 szem4_ADAT_motor();
 var FARM_TESZTER_TIMEOUT;
 
+/* The export block lists what the interface reaches through window, worked
+   out by scanning the source. This confirms it against the markup that was
+   actually built: anything a handler calls but window does not have would
+   otherwise fail silently, on click, long after the mistake. */
+function verifyInlineHandlers() {try{
+	const wanted = new Set();
+	const html = document.body.innerHTML;
+	const handler = /\bon[a-z]+\s*=\s*["']([^"']*)["']|javascript:\s*([^"'`]*)/g;
+	let found;
+	while ((found = handler.exec(html)) !== null) {
+		const body = found[1] || found[2] || '';
+		// identifiers that are called, ignoring method calls like this.select()
+		const call = /(^|[^.\w$])([A-Za-z_$][A-Za-z0-9_$]*)\s*\(/g;
+		let c;
+		while ((c = call.exec(body)) !== null) wanted.add(c[2]);
+	}
+	const missing = [...wanted].filter(name => typeof window[name] !== 'function');
+	if (missing.length) {
+		debug('verifyInlineHandlers', `A fel\u00fcleten olyan vez\u00e9rl\u0151k vannak, amik nem l\u00e9tez\u0151 f\u00fcggv\u00e9nyt h\u00edvnak: ${missing.join(', ')}`);
+		naplo('SZEM 4 \u26a0', `${missing.length} vez\u00e9rl\u0151 nem m\u0171k\u00f6dik (r\u00e9szletek a Debug f\u00fcl\u00f6n).`);
+	}
+}catch(e){ debug('verifyInlineHandlers', e); }}
+
 $(document).ready(function(){
 	nyit("naplo");
 	naplo('Globál','Verzió ['+VERZIO+'] legfrissebb állapotban, GIT-ről szedve.');
@@ -4267,6 +4269,7 @@ $(document).ready(function(){
 	document.addEventListener('click', addFreezeNotification);
 	document.addEventListener('keypress', addFreezeNotification);
 	addFreezeNotification();
+	verifyInlineHandlers();
 	window.onbeforeunload = function() {return true;}
 
 	// FARMOLÓ
