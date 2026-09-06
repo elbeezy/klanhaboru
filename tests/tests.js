@@ -455,6 +455,102 @@ suite('Pausing everything for a while', function () {
 });
 
 /* ------------------------------------------------------------------------ */
+/* The bot-protection alarm. When the game asks for a human, every module has
+   to stop and stay stopped until the code is typed in -- so what matters most
+   is that the alarm can be raised once, and can actually be switched off. */
+suite('The bot-protection alarm', function () {
+	function alarmWorld(pageState) {
+		var w = {
+			BOT: false, BOTORA: 0, ALTBOT2: false, BOT_VOL: 0.0, BOT_REF: null,
+			VILL1ST: 'https://game/village',
+			SZEM4_SETTINGS: { altbot: false },
+			timers: {}, nextTimer: 1, fired: [], alerts: [], sounds: [],
+			page: pageState || {}
+		};
+		/* Timers that can be inspected: a cancelled one disappears, an orphan
+		   left behind by the old code would still be here to run. */
+		w.setTimeout = function (fn, ms) { var id = w.nextTimer++; w.timers[id] = fn; return id; };
+		w.clearTimeout = function (id) { delete w.timers[id]; };
+		w.liveTimers = function () { return Object.keys(w.timers); };
+		w.runPending = function () {
+			var ids = Object.keys(w.timers);
+			ids.forEach(function (id) { var fn = w.timers[id]; delete w.timers[id]; w.fired.push(id); fn(); });
+			return ids.length;
+		};
+		var doc = {
+			getElementById: function (id) { return w.page[id] || null; },
+			querySelector: function (sel) { return w.page[sel] || null; }
+		};
+		w.BOT_REF = { closed: false, document: doc, close: function () { this.closed = true; } };
+		w.window = { open: function () { return w.BOT_REF; } };
+		w.document = { getElementById: function () { return { pause: function () {}, volume: 0 }; } };
+		w.soundVolume = function (v) { w.sounds.push(v); };
+		w.playSound = function () {};
+		w.alert2 = function (m) { w.alerts.push(m); };
+		w.debug = function () {};
+		w.naplo = function () {};
+		return w;
+	}
+	function alarmApi(w) {
+		return sandbox(w, [
+			sliceFn(SZEM4_SRC, 'BotvedelemBe'),
+			sliceFn(SZEM4_SRC, 'botvedelemTick'),
+			sliceFn(SZEM4_SRC, 'BotvedelemKi')
+		]);
+	}
+
+	/* A check is showing: serverTime has loaded, and bot_check is present. */
+	function checkShowing() {
+		return { '#serverTime': { innerHTML: '12:34:56' }, 'bot_check': {}, '#bot_check': {} };
+	}
+
+	var w = alarmWorld(checkShowing()), api = alarmApi(w);
+	api.BotvedelemBe();
+	ok(w.BOT === true, 'raising the alarm stops every module');
+	eq(w.liveTimers().length, 1, 'and starts exactly one polling cycle');
+
+	/* isPageLoaded() calls this afresh on every failed page check. Each call
+	   used to start another chain that could never be cancelled. */
+	api.BotvedelemBe();
+	api.BotvedelemBe();
+	api.BotvedelemBe();
+	eq(w.liveTimers().length, 1, 'raising it again does not start a second cycle');
+
+	w.runPending();
+	eq(w.liveTimers().length, 1, 'the cycle reschedules itself, still just one');
+	w.runPending(); w.runPending();
+	eq(w.liveTimers().length, 1, 'and stays one over several polls');
+
+	/* Switching it off has to leave nothing running. */
+	api.BotvedelemKi();
+	ok(w.BOT === false, 'typing the code lets the modules run again');
+	eq(w.liveTimers().length, 0, 'no polling cycle is left behind');
+	eq(w.BOTORA, 0, 'and the handle is cleared, not just the timer');
+
+	/* The bug this replaced: an orphaned cycle kept setting BOT = true after
+	   the code had been typed in, freezing every module for good. */
+	eq(w.runPending(), 0, 'nothing is left that could re-freeze the modules');
+	ok(w.BOT === false, 'so the modules stay running');
+
+	/* And the alarm must still work the next time. A stale non-zero handle
+	   would make it think a cycle was already polling and refuse. */
+	api.BotvedelemBe();
+	ok(w.BOT === true, 'a later check raises the alarm again');
+	eq(w.liveTimers().length, 1, 'with a fresh cycle');
+
+	/* Switching off must not depend on the window still being open. */
+	var w2 = alarmWorld(checkShowing()), api2 = alarmApi(w2);
+	api2.BotvedelemBe();
+	w2.BOT_REF.close = function () { throw new Error('already gone'); };
+	try { api2.BotvedelemKi(); } catch (e) { /* the throw itself is a separate bug */ }
+	eq(w2.liveTimers().length, 0, 'the cycle is cancelled even when the cleanup below it fails');
+	eq(w2.BOTORA, 0, 'and the handle with it');
+
+	ok(SZEM4_SRC.indexOf('setTimeout("BotvedelemBe()"') === -1,
+	   'the alarm no longer reschedules itself through a string');
+});
+
+/* ------------------------------------------------------------------------ */
 suite('The interface can reach what it calls', function () {
 	/* verifyInlineHandlers() runs at startup and names any control calling a
 	   function that is not on window. It cannot tell a real call from a string

@@ -1449,9 +1449,24 @@ function stopEvent(ev) {
 	ev.stopImmediatePropagation();
 }
 
-var BOTORA, ALTBOT2=false, BOT_VOL=0.0; /*ALTBOT2 --> megnyílt e már 1x az ablak*/
+var BOTORA = 0, ALTBOT2=false, BOT_VOL=0.0; /*ALTBOT2 --> megnyílt e már 1x az ablak*/
 var BOT_REF;
+/* Raising the alarm and polling it used to be the same function, which
+   rescheduled itself every 2.5 seconds. isPageLoaded() calls it afresh every
+   time a page check fails, so a second call started a second chain while
+   BOTORA only ever remembered the newest one. The older chains could not be
+   cancelled, and each kept setting BOT = true -- so after typing the captcha
+   in, every module stayed frozen and the alarm kept sounding.
+
+   Raising it is now separate from polling it, and refuses to start a second
+   cycle while one is already running. */
 function BotvedelemBe() {
+	if (BOTORA) return; // a cycle is already polling; do not start another
+	botvedelemTick();
+}
+
+function botvedelemTick() {
+	BOTORA = 0; // this tick has fired; nothing is scheduled until the end
 	try {
 		let isload = true;
 		BOT = true;
@@ -1482,15 +1497,19 @@ function BotvedelemBe() {
 		}
 	} catch(e){ debug("BotvedelemBe()",e); }
 
-	BOTORA = setTimeout("BotvedelemBe()", 2500);
+	BOTORA = setTimeout(botvedelemTick, 2500);
 }
 function BotvedelemKi(){
+	/* First, so that a failure below cannot leave a cycle running. Clearing the
+	   handle as well as the timer matters: a stale non-zero BOTORA would make
+	   BotvedelemBe() think a cycle was still polling and refuse to raise the
+	   alarm ever again. */
+	clearTimeout(BOTORA); BOTORA = 0;
 	BOT=false; ALTBOT2=false; BOT_VOL=0.0;
 	BOT_REF.close();
 	BOT_REF = null;
 	document.getElementById("audio1").pause;
 	alert2('Bot védelem rendben');
-	clearTimeout(BOTORA);
 	/*Megnyitott lapok frissítése*/
 	for (const propertyName in window) {
 		if (window.hasOwnProperty(propertyName)) {
