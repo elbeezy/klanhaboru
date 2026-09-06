@@ -3767,20 +3767,30 @@ function szem4_GYUJTO_1keres() {try{
 } catch(e) { GYUJTO_HIBA++; console.error(e); debug('szem4_GYUJTO_1keres', e); }}
 function szem4_GYUJTO_3elindit() { try{
 	const buttons = GYUJTO_REF.document.querySelectorAll('#scavenge_screen .free_send_button');
-	let startButton, scavTime;
-	if (buttons.length > 0) {
-		startButton = buttons[buttons.length-1];
-		scavTime = startButton.closest('.scavenge-option').querySelector('.duration-section');
+	/* Options are listed worst to best, so the last is the most valuable and
+	   remains the preference. But only ever testing the last one meant a single
+	   unavailable option -- not yet unlocked, or too few troops left for its
+	   share -- was read as "nothing left to send", and the remaining options sat
+	   idle. Walk back to the best option that can actually be sent. */
+	let startButton = null, scavTime = null;
+	for (let i = buttons.length - 1; i >= 0; i--) {
+		const option = buttons[i].closest('.scavenge-option');
+		const duration = option && option.querySelector('.duration-section');
+		if (duration && duration.style.display !== 'none') {
+			startButton = buttons[i];
+			scavTime = duration;
+			break;
+		}
 	}
-	if (buttons.length == 0 || scavTime.style.display == 'none') {
+	if (!startButton) {
 		if (buttons.length > 0 && GYUJTO_VILLINFO[GYUJTO_DATA].retry !== true) {
 			GYUJTO_VILLINFO[GYUJTO_DATA].retry = true;
 			GYUJTO_STATE = 0;
 			return;
 		}
 		if (buttons.length > 0) {
-			console.info(new Date().toLocaleString(), `faluId: ${GYUJTO_DATA} STILL VÉGE`, buttons.length, buttons, scavTime.style.display, scavTime.innerHTML);
-			debug('szem4_GYUJTO_3elindit', 'Hiba? Gyűjtögető úgy véli végzett, 2x is, de nem minden slot foglalt');
+			console.info(new Date().toLocaleString(), `faluId: ${GYUJTO_DATA} STILL VÉGE`, buttons.length, buttons);
+			debug('szem4_GYUJTO_3elindit', `Gyűjtögető: ${buttons.length} lehetőség közül egyik sem indítható (kétszer is ellenőrizve), pedig nem minden slot foglalt.`);
 			playSound('naplobejegyzes');
 		}
 		GYUJTO_VILLINFO[GYUJTO_DATA].retry = false;
