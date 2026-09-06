@@ -44,7 +44,7 @@ Object.assign(window, {
 	szem4_EPITO_ujCsop, szem4_EPITO_ujFalu, szem4_GYUJTO_1keres, szem4_GYUJTO_3elindit,
 	szem4_GYUJTO_motor, szem4_GYUJTO_search, szem4_VIJE_1kivalaszt, szem4_VIJE_2elemzes,
 	szem4_VIJE_3torol, szem4_VIJE_motor, szem4_farmolo_1kereso, szem4_farmolo_2illeszto,
-	szem4_farmolo_3egyeztet, szem4_farmolo_4visszaell, szem4_farmolo_csoport, szem4_farmolo_motor,
+	szem4_farmolo_3egyeztet, szem4_farmolo_csoport, szem4_farmolo_motor,
 	szem4_farmolo_multiclick, szem4_vije_forgot, szunet, ujkieg,
 	ujkieg_hang, updateAvailableUnits, updateDefaultProdHour, urit,
 	validate, windowOpener, writeAllBuildTime,
@@ -95,15 +95,12 @@ try{ /*Rendszeradatok*/
 	var KTID={}, /*Koord-ID párosok*/
 		ID_TO_INFO = {}, /*ID: name: falunév, point: pont, pop: tanya párosok*/
 		TERMELES=[5,30,35,41,47,55,64,74,86,100,117,136,158,184,214,249,289,337,391,455,530,616,717,833,969,1127,1311,1525,1774,2063,2400],
-		UNITS=["spear","sword","axe","archer","spy","light","marcher","heavy"],
-		TEHERARR=[25,15,10,10,0,80,50,50];
+		UNITS=["spear","sword","axe","archer","spy","light","marcher","heavy"];
 	if (parseFloat(CONFIG.getElementsByTagName("archer")[0].textContent) == 0) {
 		let index = UNITS.findIndex(el => el.includes("archer"));
 		UNITS.splice(index, 1);
-		TEHERARR.splice(index, 1);
 		index = UNITS.findIndex(el => el.includes("marcher"));
 		UNITS.splice(index, 1);
-		TEHERARR.splice(index, 1);
 	}
 	var TEHER = {
 		spear: 25,
@@ -115,7 +112,6 @@ try{ /*Rendszeradatok*/
 		marcher: 50,
 		heavy: 50
 	},
-	TANYAARR=[1,1,1,1,2,4,5,6],
 	TANYA = {
 		spear: 1,
 		sword: 1,
@@ -126,7 +122,6 @@ try{ /*Rendszeradatok*/
 		marcher: 5,
 		heavy: 6
 	},
-	E_SEB_ARR=[18,22,18,18,9,10,10,11],
 	E_SEB = {
 		spear: 18,
 		sword: 22,
@@ -2385,7 +2380,7 @@ function getSlowestUnit(attacker) {try{
 	if (available_units.sword) return 'sword';
 	if (isUnit) return 'spear';
 	return '';
-}catch(e) { debug('getSlowestUnit','Nem megállapítható egységsebesség, kl-t feltételezek ' + e); return E_SEB_ARR[5];}}
+}catch(e) { debug('getSlowestUnit','Nem megállapítható egységsebesség, kl-t feltételezek ' + e); return 'light';}}
 function updateAvailableUnits(attacker, isError=false) {try{
 	for (let i=0;i<UNITS.length;i++) {
 		let allUnit = gameNum(FARM_REF, `#units_entry_all_${UNITS[i]}`, `${UNITS[i]}: elerheto mennyiseg`);
@@ -2620,48 +2615,6 @@ function szem4_farmolo_3egyeztet(adatok){try{
 	/*Legyen e 3. lépés;sárga hátteres idő lesz?;honnan;---*/
 }catch(e){debug("szem4_farmolo_3egyeztet()",e); FARM_LEPES=0;}}
 
-function szem4_farmolo_4visszaell(adatok){try{
-	/*
-		true,sarga?,honnan,hova
-		vagy
-		nyers_maradt(db);all/gyalog + semmi;honnan;hova;speed_slowest
-	*/
-	var falu_helye=document.getElementById("farm_honnan").rows;
-	for (var i=1;i<falu_helye.length;i++) {
-		if (falu_helye[i].cells[0].textContent==adatok[2]) {falu_helye=falu_helye[i]; break;}
-	}
-	updateAvailableUnits(SZEM4_FARM.DOMINFO_FROM[adatok[2]], true);
-	
-	if (typeof adatok[1]=="boolean") var lehetEGyalog=adatok[1]; else {
-		if (adatok[1].indexOf("all")>-1) var lehetEGyalog=true; else var lehetEGyalog=false;
-	}
-
-	if (lehetEGyalog) { /*Sárga; de ha nincs gyalog->fehér*/
-		var backtest=false;
-		for (var i=0;i<3;i++) {
-			if (falu_helye.cells[1].getElementsByTagName("input")[i].checked) {
-				if (FARM_REF.document.getElementById("unit_input_"+UNITS[i])) {
-					if (parseInt(FARM_REF.document.getElementById("unit_input_"+UNITS[i]).parentNode.children[2].textContent.match(/[0-9]+/g)[0])>5) {
-						backtest=true;
-						break;
-					}
-				}
-			}
-		}
-		if (!backtest) lehetEGyalog=false;
-	} /*ellenben nézd meg van e bent ló amit lehet küldeni!?*/
-	
-	/*Leggyorsabb kijelölt egység*/
-	var a=falu_helye.cells[1].getElementsByTagName("input");
-	var fastest=22;
-	for (var i=0;i<a.length;i++) {
-		if (i==4) continue;
-		if (a[i].checked && E_SEB_ARR[i]<fastest) fastest=E_SEB_ARR[i];
-	}
-	fastest = fastest*(1/SPEED)*(1/UNIT_S);
-	
-}catch(e){debug("szem4_farmolo_4visszaell()",e); return;}}
-
 function szem4_farmolo_motor(){
 	var nexttime = 500;
 	var isPihen = false;
@@ -2735,16 +2688,7 @@ function szem4_farmolo_motor(){
 					FARM_HIBA=0; FARM_GHIBA=0;
 					PM1=szem4_farmolo_3egyeztet(PM1);
 					if (PM1 === 'ERROR') FARM_LEPES = 0;
-					// if (typeof(PM1)=="object" && PM1.length>0 && PM1[0]==true) { FARM_LEPES=3; } else FARM_LEPES=0;
 					FARM_LEPES = 0;
-				} else {FARM_HIBA++;}
-				break;
-		case 3: /* SOSEM KELL? Jelenleg nem megyek ide */
-				/*Támadás elküldve, időt és ID-t nézünk, ha kell.*/ 
-				/*Kell e időt nézni? Kell, ha PM1[1].indexOf("semmi")>-1 VAGY PM1[0]=TRUE; */
-				if (isPageLoaded(FARM_REF,KTID[PM1[2]],"not try=confirm")) {FARM_HIBA=0; FARM_GHIBA=0;
-					szem4_farmolo_4visszaell(PM1);
-					FARM_LEPES=0;
 				} else {FARM_HIBA++;}
 				break;
 		default: FARM_LEPES=0;
