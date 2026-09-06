@@ -1470,6 +1470,12 @@ var BOT_HATARIDO_MS = 180000;
    answers it, BOT_HATARIDO_MS silences it entirely. 0.0 - 1.0. */
 var BOT_HANGERO = 0.5;
 var BOT_KEZDET = 0, BOT_FELADVA = false;
+/* Checking a claim that the check has been solved, rather than waiting for
+   one to be. He is at the keyboard when this runs, so it stays silent and
+   gives up in seconds -- long enough for the page to come back, not so long
+   that he is left staring at nothing. */
+var BOT_ELLENORZES = false, BOT_ELLENORZES_KEZDET = 0;
+var BOT_ELLENORZES_MS = 20000;
 var BOTORA = 0, ALTBOT2=false; /*ALTBOT2 --> megnyílt e már 1x az ablak*/
 var BOT_REF;
 /* The windows SZEM opens for its modules, as a list of the ones still open.
@@ -1579,20 +1585,31 @@ function botvedelemTick() {
 			if (BOT_REF.document.querySelector('#bot_check a'))
 				BOT_REF.document.querySelector('#bot_check a').click();
 		}
+		/* The page itself says the check is gone. This is the only way out --
+		   nothing resumes on anybody's say-so, his included. */
 		if (isload && !botvedelemJel(BOT_REF.document)) {
-			BotvedelemKi();
+			botvedelemFolytatas();
 			return;
 		}
-		if (Date.now() - BOT_KEZDET >= BOT_HATARIDO_MS) {
-			botvedelemFeladas();
-			return;
-		}
-		soundVolume(BOT_HANGERO);
-		playSound("bot2");
-		alert2('BOT VÉDELEM!!!<br>Írd be a kódot, és kattints ide lentre!<br><br><a href="javascript: BotvedelemKi()">Beírtam a kódot, mehet tovább!</a>');
-		if (SZEM4_SETTINGS.altbot && !ALTBOT2) {
-			window.open(document.getElementById("altbotURL").value);
-			ALTBOT2=true;
+		if (BOT_ELLENORZES) {
+			/* Checking what he told us. Quiet, and short: if the page still shows
+			   the check after this, say so and leave everything halted. */
+			if (Date.now() - BOT_ELLENORZES_KEZDET >= BOT_ELLENORZES_MS) {
+				botvedelemEllenorzesBukott();
+				return;
+			}
+		} else {
+			if (Date.now() - BOT_KEZDET >= BOT_HATARIDO_MS) {
+				botvedelemFeladas();
+				return;
+			}
+			soundVolume(BOT_HANGERO);
+			playSound("bot2");
+			alert2('BOT VÉDELEM!!!<br>Írd be a kódot, és kattints ide lentre!<br><br><a href="javascript: BotvedelemKi()">Beírtam a kódot, mehet tovább!</a>');
+			if (SZEM4_SETTINGS.altbot && !ALTBOT2) {
+				window.open(document.getElementById("altbotURL").value);
+				ALTBOT2=true;
+			}
 		}
 	} catch(e){ debug("BotvedelemBe()",e); }
 
@@ -1616,7 +1633,45 @@ function botvedelemAblakZar() {
 	BOT_REF = null;
 }
 
+/* He says he has typed the code. Go and look.
+
+   This used to set BOT = false on the spot, on trust. If he had misread the
+   captcha, or solved it in one window while another still held it, every
+   module started up again straight into a check that was still there.
+
+   Nothing here decides anything: it fetches the page again and hands the
+   question to the polling cycle, which already knows how to wait for a page
+   to load and how to read it. Resuming happens in one place, botvedelemTick,
+   and only because the page came back clean. */
 function BotvedelemKi(){
+	if (!BOT) return; // nothing is halted; there is nothing to confirm
+	BOT_ELLENORZES = true;
+	BOT_ELLENORZES_KEZDET = Date.now();
+	stopSound();
+	naplo('Bot v\u00e9delem', 'Ellen\u0151rz\u00f6m, hogy t\u00e9nyleg elt\u0171nt-e a bot v\u00e9delem...');
+	alert2('Ellen\u0151rz\u00f6m, hogy t\u00e9nyleg feloldottad-e...');
+	/* The window is still showing the page as it was, and he may have solved
+	   the check somewhere else entirely. Ask the server, not the old DOM. */
+	try { if (BOT_REF && !BOT_REF.closed) BOT_REF.location.href = VILL1ST; }
+	catch (e) { debug('BotvedelemKi', e); botvedelemAblakZar(); } // gone; the tick opens a new one
+	clearTimeout(BOTORA); BOTORA = 0;
+	botvedelemTick();
+}
+
+/* Twenty seconds of looking and the check is still there. Say so plainly and
+   change nothing else: BOT stays true, every module stays halted, and the
+   link is still there to click again once he really has solved it. */
+function botvedelemEllenorzesBukott() {
+	BOT_ELLENORZES = false;
+	clearTimeout(BOTORA); BOTORA = 0;
+	soundVolume(1.0); // a stand-down may have muted it; do not leave it that way
+	naplo('Bot v\u00e9delem \u26a0', 'Az ellen\u0151rz\u00e9s m\u00e9g mindig l\u00e1tszik. Minden modul le\u00e1ll\u00edtva marad.');
+	alert2('M\u00e9g mindig l\u00e1tom az ellen\u0151rz\u00e9st.<br><br>Minden modul le van \u00e1ll\u00edtva. Old meg a j\u00e1t\u00e9kban, majd kattints ide \u00fajra.<br><br><a href="javascript: BotvedelemKi()">Be\u00edrtam a k\u00f3dot, mehet tov\u00e1bb!</a>');
+}
+
+/* The check really is gone -- botvedelemTick has just read the page and seen
+   nothing. Only it calls this. */
+function botvedelemFolytatas(){
 	/* First, so that a failure below cannot leave a cycle running. Clearing the
 	   handle as well as the timer matters: a stale non-zero BOTORA would make
 	   BotvedelemBe() think a cycle was still polling and refuse to raise the
@@ -1628,7 +1683,7 @@ function BotvedelemKi(){
 		const percek = Math.max(1, Math.round((Date.now() - BOT_KEZDET) / 60000));
 		naplo('Bot v\u00e9delem', `Feloldva. Az ellen\u0151rz\u00e9s ${new Date(BOT_KEZDET).toLocaleTimeString()}-kor jelent meg, a modulok kb. ${percek} percig \u00e1lltak${BOT_FELADVA ? ', k\u00f6zben a riaszt\u00e1s magat\u00f3l elhallgatott' : ''}.`);
 	}
-	BOT_KEZDET = 0; BOT_FELADVA = false;
+	BOT_KEZDET = 0; BOT_FELADVA = false; BOT_ELLENORZES = false;
 	BOT=false; ALTBOT2=false;
 	stopSound();
 	soundVolume(1.0); // standing down muted it; without this every later sound is silent
@@ -1642,7 +1697,7 @@ function BotvedelemKi(){
 	   again. Assigning to location.href is a plain GET of the same page. */
 	nyitottAblakok().forEach(function (ab) {
 		try { ab.ablak.location.href = ab.ablak.location.href; }
-		catch (e) { debug('BotvedelemKi', ab.nev + ' nem friss\u00edthet\u0151: ' + e); }
+		catch (e) { debug('botvedelemFolytatas', ab.nev + ' nem friss\u00edthet\u0151: ' + e); }
 	});
 }
 

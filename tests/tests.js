@@ -501,8 +501,12 @@ suite('The bot-protection alarm', function () {
 			getElementById: function (id) { return w.page[id] || null; },
 			querySelector: function (sel) { return w.page[sel] || null; }
 		};
-		w.BOT_REF = { closed: false, document: doc, location: fakeAblak('https://game/bot').location,
-		              close: function () { this.closed = true; } };
+		/* Kept aside: BotvedelemKi() can close this window and the tick opens a
+		   new one, so window.open has to keep handing back something usable. */
+		w.botAblak = fakeAblak('https://game/bot');
+		w.botAblak.document = doc;
+		w.botAblak.close = function () { this.closed = true; };
+		w.BOT_REF = w.botAblak;
 		/* The module windows, as nyitottAblakok() sees them: one open, one open
 		   but never used, one never opened, one already closed, and one that
 		   throws the moment it is asked whether it is closed. */
@@ -512,7 +516,7 @@ suite('The bot-protection alarm', function () {
 		w.EPIT_REF = fakeAblak('https://game/game.php?screen=main');
 		w.EPIT_REF.closed = true;
 		w.GYUJTO_REF = { get closed() { throw new Error('elt\u00fbnt'); } };
-		w.window = { open: function () { return w.BOT_REF; } };
+		w.window = { open: function () { w.botAblak.closed = false; return w.botAblak; } };
 		/* One element, not a fresh stub per call: the question is whether
 		   anything ever actually paused the clip. */
 		w.audio = { volume: 0, paused: true, pauses: 0,
@@ -535,9 +539,10 @@ suite('The bot-protection alarm', function () {
 	   rather than off the fake world. */
 	function alarmApi(w) {
 		return sandbox(w, [sliceFn(SZEM4_SRC, 'stopSound'),
-		                   sliceFrom(SZEM4_SRC, 'var BOT_HATARIDO_MS', 'BotvedelemKi')],
+		                   sliceFrom(SZEM4_SRC, 'var BOT_HATARIDO_MS', 'botvedelemFolytatas')],
 			{ kezdet: 'BOT_KEZDET', feladva: 'BOT_FELADVA', hatarido: 'BOT_HATARIDO_MS',
-			  botora: 'BOTORA', botref: 'BOT_REF', hangero: 'BOT_HANGERO' });
+			  botora: 'BOTORA', botref: 'BOT_REF', hangero: 'BOT_HANGERO',
+			  ellenorzes: 'BOT_ELLENORZES', ellenorzesMs: 'BOT_ELLENORZES_MS' });
 	}
 	/* Poll the alarm forward by `ms`, in the 2.5s steps it really uses. */
 	function pollFor(w, ms) {
@@ -551,6 +556,11 @@ suite('The bot-protection alarm', function () {
 	/* A check is showing: serverTime has loaded, and bot_check is present. */
 	function checkShowing() {
 		return { '#serverTime': { innerHTML: '12:34:56' }, 'bot_check': {}, '#bot_check': {} };
+	}
+	/* The page once the check really is gone. Resuming now depends on SZEM
+	   reading this, so every test that resumes has to put it there. */
+	function tiszta() {
+		return { '#serverTime': { innerHTML: '12:34:56' } };
 	}
 
 	var w = alarmWorld(checkShowing()), api = alarmApi(w);
@@ -572,6 +582,7 @@ suite('The bot-protection alarm', function () {
 
 	/* Switching it off has to leave nothing running. */
 	ok(w.audio.paused === false, 'the alarm is making noise while it waits');
+	w.page = tiszta();   // he really did solve it, and the page shows it
 	api.BotvedelemKi();
 	ok(w.BOT === false, 'typing the code lets the modules run again');
 	ok(w.audio.paused === true, 'and the alarm sound stops');
@@ -587,6 +598,7 @@ suite('The bot-protection alarm', function () {
 
 	/* And the alarm must still work the next time. A stale non-zero handle
 	   would make it think a cycle was already polling and refuse. */
+	w.page = checkShowing();   // a fresh check
 	api.BotvedelemBe();
 	ok(w.BOT === true, 'a later check raises the alarm again');
 	eq(w.liveTimers().length, 1, 'with a fresh cycle');
@@ -594,6 +606,7 @@ suite('The bot-protection alarm', function () {
 	/* Switching off must not depend on the window still being open. */
 	var w2 = alarmWorld(checkShowing()), api2 = alarmApi(w2);
 	api2.BotvedelemBe();
+	w2.page = tiszta();
 	w2.BOT_REF.close = function () { throw new Error('already gone'); };
 	try { api2.BotvedelemKi(); } catch (e) { /* the throw itself is a separate bug */ }
 	eq(w2.liveTimers().length, 0, 'the cycle is cancelled even when the cleanup below it fails');
@@ -634,7 +647,11 @@ suite('The bot-protection alarm', function () {
 	/* Coming back after it gave up. This is the path where BOT_REF is already
 	   null, which used to throw before anything else could run. */
 	w3.clock += 40 * 60000;
+	w3.page = tiszta();
 	api3.BotvedelemKi();
+	/* The stand-down let the window go, so there is nothing to read yet:
+	   one has to be opened and loaded before anything can be confirmed. */
+	pollFor(w3, 10000);
 	ok(w3.BOT === false, 'resuming after a stand-down works');
 	eq(api3.kezdet(), 0, 'and the alarm is fully reset');
 	ok(api3.feladva() === false, 'including the gave-up flag');
@@ -655,6 +672,7 @@ suite('The bot-protection alarm', function () {
 	var w4 = alarmWorld(checkShowing()), api4 = alarmApi(w4);
 	api4.BotvedelemBe();
 	pollFor(w4, 60000);
+	w4.page = tiszta();
 	api4.BotvedelemKi();
 	var r4 = w4.logged.filter(function (l) { return l.indexOf('Feloldva') !== -1; })[0] || '';
 	ok(r4 !== '', 'answering in time is reported too');
@@ -678,6 +696,7 @@ suite('The bot-protection alarm', function () {
 
 	/* After the check clears, the module windows are still sitting on it. */
 	api8.BotvedelemBe();
+	w8.page = tiszta();
 	api8.BotvedelemKi();
 	eq(w8.FARM_REF.navigated.length, 1, 'the farm window is sent back to its page');
 	eq(w8.VIJE_REF1.navigated.length, 1, 'and so is the report window');
@@ -772,6 +791,69 @@ suite('The bot-protection alarm', function () {
 
 	ok(stripComments(SZEM4_SRC).split('botvedelemFigyeloIndit').length - 1 >= 2,
 	   'and something actually starts the sweep at launch');
+
+	/* --- taking his word for it ---
+	   Clicking "I typed the code" used to set BOT = false on the spot. If he
+	   had misread it, or solved it in one window while another still held it,
+	   every module started up again straight into a check still standing. */
+	var w13 = alarmWorld(checkShowing()), api13 = alarmApi(w13);
+	api13.BotvedelemBe();
+	var hangok = w13.sounds.length;
+	api13.BotvedelemKi();                    // he says he has solved it
+	ok(w13.BOT === true, 'saying you typed the code does not by itself resume');
+	ok(api13.ellenorzes() === true, 'SZEM goes and looks instead');
+	eq(w13.botAblak.navigated.length, 1,
+	   'fetching the page again rather than believing the one already on screen');
+	ok(w13.audio.paused === true, 'and stops the noise while it looks');
+
+	pollFor(w13, 10000);
+	ok(w13.BOT === true, 'still halted while the check is still on the page');
+	eq(w13.sounds.length, hangok, 'and still silent -- he is sat right there');
+
+	/* It has to stop looking and say so, rather than poll for ever. */
+	pollFor(w13, 15000);
+	ok(api13.ellenorzes() === false, 'it stops looking after its own deadline');
+	ok(w13.BOT === true, 'leaving every module halted');
+	eq(w13.liveTimers().length, 0, 'and nothing left polling');
+	ok(w13.logged.some(function (l) { return l.indexOf('m\u00e9g mindig l\u00e1tszik') !== -1; }),
+	   'it says the check is still there', w13.logged.join(' | '));
+	ok(w13.alerts[w13.alerts.length - 1].indexOf('BotvedelemKi') !== -1,
+	   'and leaves the link to try again once he really has solved it');
+
+	/* Its deadline is its own: he is stood there waiting for an answer, so it
+	   must not make him wait out the three minutes an unanswered alarm gets. */
+	ok(api13.ellenorzesMs() < api13.hatarido(),
+	   'checking gives up sooner than waiting to be answered does');
+
+	/* Clicking again, once the page really is clear. */
+	w13.page = tiszta();
+	api13.BotvedelemKi();
+	ok(w13.BOT === false, 'clicking again once it is really gone does resume');
+	ok(api13.ellenorzes() === false, 'and the checking flag is cleared behind it');
+	ok(w13.logged.some(function (l) { return l.indexOf('Feloldva') !== -1; }),
+	   'with the report of what was missed', w13.logged.join(' | '));
+
+	/* Coming back long after a stand-down, when the window was let go: there is
+	   nothing left to read, so one has to be opened before anything resumes. */
+	var w14 = alarmWorld(checkShowing()), api14 = alarmApi(w14);
+	api14.BotvedelemBe();
+	pollFor(w14, 4 * 60000);
+	ok(api14.botref() === null, 'the stand-down let the window go');
+	w14.page = tiszta();
+	api14.BotvedelemKi();
+	ok(w14.BOT === true, 'which cannot be confirmed before a window has loaded');
+	pollFor(w14, 10000);
+	ok(w14.BOT === false, 'and coming back still resumes, on a page it re-read');
+
+	/* Nothing halted: the link cannot be used to poke a running SZEM. */
+	var w15 = alarmWorld(tiszta()), api15 = alarmApi(w15);
+	api15.BotvedelemKi();
+	/* Timers alone prove nothing here: on a clean page the cycle would run
+	   once and settle. What must not happen is any of it happening at all. */
+	eq(w15.logged.length, 0, 'clicking it when nothing is halted does nothing');
+	eq(w15.alerts.length, 0, 'and says nothing');
+	eq(w15.botAblak.navigated.length, 0, 'and goes poking at no pages');
+	ok(api15.ellenorzes() === false, 'and starts no check of its own');
 
 	/* --- how loud it gets ---
 	   It used to climb by a fifth every 2.5s until it was at full volume,
