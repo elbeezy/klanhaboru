@@ -1464,3 +1464,59 @@ suite('The version', function () {
 	eq(kod.indexOf('4.7'), -1, 'no 4.7 left anywhere in the script', szam);
 	eq(szam, '4.8', 'and the version is 4.8', szam);
 });
+
+/* ------------------------------------------------------------------------ */
+suite('The Banyak cell', function () {
+	/* The three mine levels now sit behind the game's own building icons. The
+	   catch is that this cell's text is a contract, not a label: addWagons()
+	   reads cells[1].textContent straight back and getProdHour() splits it on
+	   commas, expecting three numbers. That is how hourly production -- and
+	   from it every loot estimate and every target choice -- is worked out.
+
+	   So this is tested by round trip: build the cell, read its text back out
+	   of a real DOM, and put it through the real getProdHour. */
+	var api = sandbox({
+		TERMELES: [5, 30, 35, 41, 47, 55, 64, 74, 86, 100, 117, 136, 158, 184, 214, 249, 289],
+		SPEED: 1,
+		document: document
+	}, [sliceFn(SZEM4_SRC, 'banyakCella'), sliceFn(SZEM4_SRC, 'picBuilding'),
+	    sliceFn(SZEM4_SRC, 'getProdHour')]);
+
+	function szoveg(html) {
+		var el = document.createElement('td');
+		el.innerHTML = html;
+		return el;
+	}
+
+	var cella = szoveg(api.banyakCella(3, 3, 2));
+	eq(cella.textContent, '3,3,2', 'the cell still reads as three numbers and two commas');
+	eq(cella.querySelectorAll('img').length, 3, 'with an icon in front of each one');
+
+	/* The icons must contribute no text of their own, or the split breaks. */
+	eq(cella.textContent.split(',').length, 3, 'which splits into exactly three parts');
+
+	/* The number that actually matters. */
+	eq(api.getProdHour(cella.textContent), api.getProdHour('3,3,2'),
+	   'production off the rendered cell matches production off the raw levels');
+
+	/* Two digits per mine is where a sloppier separator would show up. */
+	var nagy = szoveg(api.banyakCella(12, 10, 11));
+	eq(nagy.textContent, '12,10,11', 'two-digit levels survive too');
+	eq(api.getProdHour(nagy.textContent), api.getProdHour('12,10,11'), 'and still price correctly');
+
+	/* The commas are only made invisible. Removing them would leave
+	   getProdHour() with one number and silently wrong production everywhere. */
+	ok(SZEM4_SRC.indexOf('szem4_banya_vesszo') !== -1, 'the separators are real characters in the markup');
+	ok(szemCssRules().indexOf('font-size: 0;') !== -1, 'that are hidden by size, not deleted');
+
+	/* Both places that write this cell go through the one helper -- they had
+	   drifted apart before, one building a string and one assigning an array. */
+	/* Scoped to the farm table on purpose: three other cells[1].innerHTML in
+	   the file belong to the incoming-attacks and builder-group tables. */
+	ok(SZEM4_SRC.indexOf('farm_helye.cells[1].innerHTML = banyakCella(') !== -1,
+	   'the spy report writes the cell through the helper');
+	ok(SZEM4_SRC.indexOf('c.innerHTML = banyakCella(') !== -1,
+	   'and so does the rebuild');
+	eq(SZEM4_SRC.split('banyakCella(').length - 1, 3,
+	   'the helper is defined once and called by exactly those two');
+});

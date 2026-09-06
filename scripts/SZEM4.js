@@ -561,6 +561,27 @@ function init(){try{
 			color: var(--szem-text);
 			text-align: left;
 		}
+		/* The three mine levels, each behind the game's own building icon.
+		   The separators are real commas that carry no size: addWagons()
+		   reads this cell's text back and getProdHour() splits it on them. */
+		.szem4_banya {
+			display: inline-flex;
+			align-items: center;
+			gap: 3px;
+			margin-right: 7px;
+			font-variant-numeric: tabular-nums;
+		}
+		.szem4_banya:last-child { margin-right: 0; }
+		.szem4_banya img {
+			height: 17px;
+			width: auto;
+			padding: 0;
+			border: 0;
+		}
+		.szem4_banya_vesszo {
+			font-size: 0;
+			line-height: 0;
+		}
 		/* the wagons cell -- no longer last, a distance column follows it */
 		#farm_hova > tbody > tr > td:nth-child(6) {
 			width: 135px;
@@ -980,6 +1001,25 @@ function init(){try{
 function pic(file){
 	return "https://raw.githubusercontent.com/cncDAni2/klanhaboru/main/images/szem4/"+file;
 }
+/* The Bányák cell: the three mine levels, each behind the game's own icon
+   for that building.
+
+   The cell's text is a contract, not just a label. addWagons() reads
+   cells[1].textContent straight back and hands it to getProdHour(), which
+   splits it on commas and expects exactly three numbers -- that is how a
+   village's hourly production, and from it every loot estimate, is worked
+   out. So the icons go in as images, which contribute no text, and the
+   commas stay in the markup as real characters. They are only made
+   invisible, never removed: taking them out would leave getProdHour() with
+   one number and silently wrong production for every farm. */
+function banyakCella(fa, agyag, vas) {
+	var reszek = [['wood', fa], ['stone', agyag], ['iron', vas]];
+	return reszek.map(function (r, i) {
+		return (i ? '<span class="szem4_banya_vesszo">,</span>' : '') +
+		       '<span class="szem4_banya">' + picBuilding(r[0]) + r[1] + '</span>';
+	}).join('');
+}
+
 function picBuilding(bId) {
 	return `<img src="https://dshu.innogamescdn.com/asset/88651122/graphic/buildings/mid/${bId}3.png">`;
 }
@@ -2427,7 +2467,7 @@ function rebuildDOM_farm() {try{
 			SZEM4_FARM.DOMINFO_FARMS[farm].prodHour = parseInt(document.getElementById('farmolo_options').termeles.value, 10);
 		} else {
 			let banyak = `${buildings.wood},${buildings.stone},${buildings.iron}`;
-			c.innerHTML=`${banyak}`;
+			c.innerHTML = banyakCella(buildings.wood, buildings.stone, buildings.iron);
 			SZEM4_FARM.DOMINFO_FARMS[farm].prodHour = getProdHour(banyak);
 		}
 		c.style.backgroundColor = SZEM4_FARM.DOMINFO_FARMS[farm].szin.banya;
@@ -3571,7 +3611,7 @@ function VIJE_adatbeir(koord,nyers,banya,fal,szin, hungarianDate){try{
 		if (farm_helye[i].cells[0].textContent==koord) {farm_helye=farm_helye[i]; break;}
 	}
 	if (banya!=='') {
-		farm_helye.cells[1].innerHTML=banya;
+		farm_helye.cells[1].innerHTML = banyakCella(banya[0], banya[1], banya[2]);
 		SZEM4_FARM.DOMINFO_FARMS[koord].prodHour = getProdHour(banya.join(','));
 		farm_helye.cells[1].style.backgroundColor = '';
 		SZEM4_FARM.DOMINFO_FARMS[koord].szin.banya = '';

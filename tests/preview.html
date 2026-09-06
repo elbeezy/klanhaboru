@@ -64,6 +64,20 @@ function modul(id, nev, all) {
 		'<a href="javascript:void 0">' + nev.toUpperCase() + '</a> ';
 }
 
+/* The Bányák cell exactly as banyakCella() builds it: the game's own building
+   icon in front of each mine level, with real commas between them that carry
+   no size, because addWagons() reads this cell's text back. The preview used
+   to invent fa.png/agyag.png/vas.png here -- images that have never existed in
+   the repository, so it showed three broken-image glyphs and flattered nothing. */
+const BUILDING = 'https://dshu.innogamescdn.com/asset/88651122/graphic/buildings/mid/';
+
+function banyak(fa, agyag, vas) {
+	return [['wood', fa], ['stone', agyag], ['iron', vas]].map(function (r, i) {
+		return (i ? '<span class="szem4_banya_vesszo">,</span>' : '') +
+			'<span class="szem4_banya"><img src="' + BUILDING + r[0] + '3.png">' + r[1] + '</span>';
+	}).join('');
+}
+
 function farmSor(hova, banyak, fal, nyers, jatekos, tav) {
 	return '<tr>' +
 		'<td>' + hova + '</td>' +
@@ -92,9 +106,9 @@ function tartalom() {
 		modul('adatok', 'Adatmentő', false);
 
 	const farmSorok = [
-		farmSor('500|500', '<img src="' + PIC + 'fa.png" style=\"height:14px;\">3 <img src="' + PIC + 'agyag.png" style=\"height:14px;\">3 <img src="' + PIC + 'vas.png" style=\"height:14px;\">2', '0', '1.240', false, '4.2'),
+		farmSor('500|500', banyak(3, 3, 2), '0', '1.240', false, '4.2'),
 		farmSor('501|498', '&nbsp;', '-2', '860', false, '5.0'),
-		farmSor('497|512', '<img src="' + PIC + 'fa.png" style=\"height:14px;\">1 <img src="' + PIC + 'agyag.png" style=\"height:14px;\">0 <img src="' + PIC + 'vas.png" style=\"height:14px;\">1', '5', '12.500', true, '11.8'),
+		farmSor('497|512', banyak(12, 10, 11), '5', '12.500', true, '11.8'),
 		farmSor('488|530', '&nbsp;', '3', '', false, '24.3')
 	].join('');
 
