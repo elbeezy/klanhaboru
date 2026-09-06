@@ -251,6 +251,23 @@ function init(){try{
 		}
 	}
 	const szemStyle = `
+		/* Two faces, fetched once and then cached by the browser.
+
+		   Inter for everything that gets read: it was drawn for interfaces at
+		   small sizes, and its digits are even, which matters in a screen that
+		   is mostly columns of numbers. Chakra Petch, squared off, for the
+		   headings only -- enough to give the interface a voice without
+		   putting a display face anywhere it has to be read quickly.
+
+		   An @import has to come before any rule in the sheet, so it sits
+		   above the palette rather than with the type rules it belongs to.
+
+		   Nothing depends on either font arriving. Both tokens end in the
+		   stack that was here before, so a game page that refuses the request,
+		   or a slow one, degrades to exactly the previous look rather than to
+		   a browser serif default. */
+		@import url('https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@600;700&family=Inter:wght@400;500;600&display=swap');
+
 		/* The palette. Every colour below comes from one of these, so the whole
 		   interface can be re-tuned from one block instead of hunting hex codes
 		   through 400 lines. Near-black surfaces, one accent, used sparingly.
@@ -292,6 +309,12 @@ function init(){try{
 			   narrower than 1024 that goes negative, the panes collapse and the
 			   interface runs off the side of the screen. */
 			--szem-szelesseg: min(1280px, calc(100% - 48px));
+
+			/* One place to change the type. Both stacks end in what the
+			   interface used before the webfonts, so if the download never
+			   arrives nothing here has to know. */
+			--szem-font: 'Inter', "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+			--szem-font-fej: 'Chakra Petch', "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 		}
 		body { background: var(--szem-bg); scrollbar-width: none; padding-bottom: 0; margin: 0; }
 		body::-webkit-scrollbar { width: 0; }
@@ -428,8 +451,14 @@ function init(){try{
 		   whatever colour happened to be behind them. It is type on a surface
 		   now, and the bar is its own strip. */
 		body, .fej, #content {
-			font-family: "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+			font-family: var(--szem-font);
 			font-size: 13px;
+		}
+		/* The headings, and only the headings: the wordmark, the section
+		   titles and the table headers. Everything else stays on the reading
+		   face. */
+		#fejresz h1, #content h2, #content table.vis th {
+			font-family: var(--szem-font-fej);
 		}
 		.fej > table {
 			background: var(--szem-surface);

@@ -1260,6 +1260,45 @@ suite('The preview mirrors the real interface', function () {
 });
 
 /* ------------------------------------------------------------------------ */
+suite('The type', function () {
+	var szabalyok = szemCssRules();
+
+	/* A stylesheet's @import is ignored, silently, if any rule comes before
+	   it. The palette block sits at the top of this sheet and is the obvious
+	   place for someone to add a rule, so the ordering is worth pinning: the
+	   failure mode is not an error anywhere, just the fonts quietly never
+	   arriving while the CSS still says they should. */
+	ok(szabalyok.trim().indexOf('@import') === 0,
+	   'the font import comes before any rule, or the browser drops it',
+	   szabalyok.trim().slice(0, 40));
+	ok(/fonts\.googleapis\.com/.test(szabalyok), 'and it is the font stylesheet being asked for');
+
+	/* Both faces are wanted but neither is depended on: the game page may
+	   refuse the request, and the interface has to look like itself anyway
+	   rather than falling back to a browser serif. */
+	var olvaso = szemCss().match(/--szem-font:\s*([^;]+);/)[1];
+	var fejlec = szemCss().match(/--szem-font-fej:\s*([^;]+);/)[1];
+	ok(/Inter/.test(olvaso), 'the reading face is asked for first');
+	ok(/Chakra Petch/.test(fejlec), 'and the heading face');
+	[['reading', olvaso], ['heading', fejlec]].forEach(function (p) {
+		ok(/Segoe UI/.test(p[1]) && /sans-serif\s*$/.test(p[1].trim()),
+		   'the ' + p[0] + ' stack still ends in what was there before', p[1].trim());
+	});
+
+	/* The display face belongs on headings only. Putting it on the body
+	   would be the obvious "make it all look cool" mistake, and it is the
+	   one that makes a screen of numbers harder to read. */
+	ok(/#fejresz h1, #content h2, #content table\.vis th \{\s*font-family: var\(--szem-font-fej\);/.test(szabalyok),
+	   'the heading face is named for the headings');
+	ok(/body, \.fej, #content \{\s*font-family: var\(--szem-font\);/.test(szabalyok),
+	   'and the body takes the reading face');
+
+	/* One stack, named once. It used to be spelled out on the body rule. */
+	eq(szabalyok.indexOf('font-family: "Segoe UI"'), -1,
+	   'no rule spells the stack out beside the tokens that already hold it');
+});
+
+/* ------------------------------------------------------------------------ */
 suite('The tables', function () {
 	/* The data tables used to be left to the game: "vis" is the game's class,
 	   and SZEM only set the text to black, which is readable exactly as long
