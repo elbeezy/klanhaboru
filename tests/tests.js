@@ -464,9 +464,12 @@ suite('The bot-protection alarm', function () {
 			BOT: false, BOTORA: 0, ALTBOT2: false, BOT_VOL: 0.0, BOT_REF: null,
 			VILL1ST: 'https://game/village',
 			SZEM4_SETTINGS: { altbot: false },
-			timers: {}, nextTimer: 1, fired: [], alerts: [], sounds: [],
-			page: pageState || {}
+			timers: {}, nextTimer: 1, fired: [], alerts: [], sounds: [], logged: [],
+			page: pageState || {}, clock: new Date('2026-09-06T14:00:00').getTime()
 		};
+		var RealDate = Date;
+		w.Date = function (t) { return new RealDate(t); };
+		w.Date.now = function () { return w.clock; };
 		/* Timers that can be inspected: a cancelled one disappears, an orphan
 		   left behind by the old code would still be here to run. */
 		w.setTimeout = function (fn, ms) { var id = w.nextTimer++; w.timers[id] = fn; return id; };
@@ -488,15 +491,25 @@ suite('The bot-protection alarm', function () {
 		w.playSound = function () {};
 		w.alert2 = function (m) { w.alerts.push(m); };
 		w.debug = function () {};
-		w.naplo = function () {};
+		w.naplo = function (k, m) { w.logged.push(k + ': ' + m); };
 		return w;
 	}
+	/* The whole block, declarations included -- BOT_KEZDET and friends are
+	   top-level vars, and the functions cannot run without them. They are local
+	   to the sandbox once sliced, so they are read back through accessors
+	   rather than off the fake world. */
 	function alarmApi(w) {
-		return sandbox(w, [
-			sliceFn(SZEM4_SRC, 'BotvedelemBe'),
-			sliceFn(SZEM4_SRC, 'botvedelemTick'),
-			sliceFn(SZEM4_SRC, 'BotvedelemKi')
-		]);
+		return sandbox(w, [sliceFrom(SZEM4_SRC, 'var BOT_HATARIDO_MS', 'BotvedelemKi')],
+			{ kezdet: 'BOT_KEZDET', feladva: 'BOT_FELADVA', hatarido: 'BOT_HATARIDO_MS',
+			  botora: 'BOTORA', botref: 'BOT_REF' });
+	}
+	/* Poll the alarm forward by `ms`, in the 2.5s steps it really uses. */
+	function pollFor(w, ms) {
+		var step = 2500;
+		for (var t = 0; t < ms; t += step) {
+			w.clock += step;
+			if (!w.runPending()) return;   // the cycle stopped on its own
+		}
 	}
 
 	/* A check is showing: serverTime has loaded, and bot_check is present. */
@@ -525,7 +538,7 @@ suite('The bot-protection alarm', function () {
 	api.BotvedelemKi();
 	ok(w.BOT === false, 'typing the code lets the modules run again');
 	eq(w.liveTimers().length, 0, 'no polling cycle is left behind');
-	eq(w.BOTORA, 0, 'and the handle is cleared, not just the timer');
+	eq(api.botora(), 0, 'and the handle is cleared, not just the timer');
 
 	/* The bug this replaced: an orphaned cycle kept setting BOT = true after
 	   the code had been typed in, freezing every module for good. */
@@ -544,10 +557,77 @@ suite('The bot-protection alarm', function () {
 	w2.BOT_REF.close = function () { throw new Error('already gone'); };
 	try { api2.BotvedelemKi(); } catch (e) { /* the throw itself is a separate bug */ }
 	eq(w2.liveTimers().length, 0, 'the cycle is cancelled even when the cleanup below it fails');
-	eq(w2.BOTORA, 0, 'and the handle with it');
+	eq(api2.botora(), 0, 'and the handle with it');
 
 	ok(SZEM4_SRC.indexOf('setTimeout("BotvedelemBe()"') === -1,
 	   'the alarm no longer reschedules itself through a string');
+
+	/* --- standing down when nobody answers --- */
+	var w3 = alarmWorld(checkShowing()), api3 = alarmApi(w3);
+	eq(api3.hatarido(), 180000, 'the alarm gives up after three minutes');
+
+	api3.BotvedelemBe();
+	eq(api3.kezdet(), w3.clock, 'it remembers when the check appeared');
+	pollFor(w3, 2 * 60000);
+	eq(w3.liveTimers().length, 1, 'still calling for you two minutes in');
+	ok(w3.BOT === true, 'and everything is still halted');
+	ok(api3.feladva() === false, 'it has not given up yet');
+
+	pollFor(w3, 90000);
+	eq(w3.liveTimers().length, 0, 'past three minutes it stops calling');
+	ok(api3.feladva() === true, 'and records that it gave up');
+	ok(w3.sounds[w3.sounds.length - 1] === 0.0, 'the alarm goes quiet');
+	ok(api3.botref() === null, 'the window it opened is let go');
+
+	/* The point of the whole thing: giving up on being answered must never
+	   mean carrying on. The check is still there and still unanswered. */
+	ok(w3.BOT === true, 'every module STAYS halted after it gives up');
+	eq(w3.runPending(), 0, 'and nothing is left running that could change that');
+	ok(w3.BOT === true, 'still halted');
+
+	ok(w3.logged.some(function (l) { return l.indexOf('perce nincs') !== -1; }),
+	   'it says so in the log', w3.logged.join(' | '));
+	ok(w3.alerts[w3.alerts.length - 1].indexOf('BotvedelemKi') !== -1,
+	   'and leaves you a way to resume when you get back');
+
+	/* Coming back after it gave up. This is the path where BOT_REF is already
+	   null, which used to throw before anything else could run. */
+	w3.clock += 40 * 60000;
+	api3.BotvedelemKi();
+	ok(w3.BOT === false, 'resuming after a stand-down works');
+	eq(api3.kezdet(), 0, 'and the alarm is fully reset');
+	ok(api3.feladva() === false, 'including the gave-up flag');
+	ok(w3.sounds[w3.sounds.length - 1] === 1.0,
+	   'sound is turned back up, or every later alarm would be silent');
+
+	/* --- what you missed --- */
+	var report = w3.logged.filter(function (l) { return l.indexOf('Feloldva') !== -1; })[0] || '';
+	ok(report !== '', 'coming back gives you a report', w3.logged.join(' | '));
+	/* Locale-agnostic: toLocaleTimeString gives 14:00:00 here and 2:00:00 PM on
+	   an English machine, so match the shape rather than one rendering. */
+	ok(/\b\d{1,2}:00:00/.test(report), 'saying when the check appeared', report);
+	ok(/\b4[0-9] percig/.test(report), 'and roughly how long everything stood', report);
+	ok(report.indexOf('elhallgatott') !== -1, 'and that the alarm had given up', report);
+
+	/* Answered in time: same report, without the gave-up wording. */
+	var w4 = alarmWorld(checkShowing()), api4 = alarmApi(w4);
+	api4.BotvedelemBe();
+	pollFor(w4, 60000);
+	api4.BotvedelemKi();
+	var r4 = w4.logged.filter(function (l) { return l.indexOf('Feloldva') !== -1; })[0] || '';
+	ok(r4 !== '', 'answering in time is reported too');
+	ok(r4.indexOf('elhallgatott') === -1, 'without claiming the alarm gave up', r4);
+	ok(w4.BOT === false, 'and the modules run again');
+
+	/* A check cleared on its own, before the deadline, must end normally
+	   rather than being treated as unanswered. */
+	var w5 = alarmWorld(checkShowing()), api5 = alarmApi(w5);
+	api5.BotvedelemBe();
+	pollFor(w5, 30000);
+	w5.page = { '#serverTime': { innerHTML: '12:34:56' } };   // the check is gone
+	pollFor(w5, 10000);
+	ok(w5.BOT === false, 'a check that clears itself lets the modules run again');
+	ok(api5.feladva() === false, 'and is not recorded as unanswered');
 });
 
 /* ------------------------------------------------------------------------ */

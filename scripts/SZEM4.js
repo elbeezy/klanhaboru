@@ -1449,6 +1449,15 @@ function stopEvent(ev) {
 	ev.stopImmediatePropagation();
 }
 
+/* An unanswered check used to leave SZEM sounding an alarm and holding a
+   window open for as long as it took someone to come back. After this long it
+   stands down instead: the noise stops and the window closes.
+
+   Standing down is not the same as carrying on. BOT stays true and every
+   module stays halted, because the check is still there and still unanswered
+   -- only the alarm gives up, never the halt it exists to enforce. */
+var BOT_HATARIDO_MS = 180000;
+var BOT_KEZDET = 0, BOT_FELADVA = false;
 var BOTORA = 0, ALTBOT2=false, BOT_VOL=0.0; /*ALTBOT2 --> megnyílt e már 1x az ablak*/
 var BOT_REF;
 /* Raising the alarm and polling it used to be the same function, which
@@ -1470,6 +1479,7 @@ function botvedelemTick() {
 	try {
 		let isload = true;
 		BOT = true;
+		if (!BOT_KEZDET) BOT_KEZDET = Date.now(); // first tick of this alarm
 		if (!BOT_REF || BOT_REF.closed) {
 			BOT_REF = window.open(VILL1ST);
 			isload = false;
@@ -1486,6 +1496,10 @@ function botvedelemTick() {
 			BotvedelemKi();
 			return;
 		}
+		if (Date.now() - BOT_KEZDET >= BOT_HATARIDO_MS) {
+			botvedelemFeladas();
+			return;
+		}
 		BOT_VOL+=0.2;
 		if (BOT_VOL>1.0) BOT_VOL=1.0;
 		soundVolume(BOT_VOL);
@@ -1499,15 +1513,40 @@ function botvedelemTick() {
 
 	BOTORA = setTimeout(botvedelemTick, 2500);
 }
+/* Nobody answered in time. Stop making noise and let the window go, but
+   leave every module halted -- see BOT_HATARIDO_MS above. */
+function botvedelemFeladas() {
+	BOT_FELADVA = true;
+	clearTimeout(BOTORA); BOTORA = 0;
+	soundVolume(0.0);
+	botvedelemAblakZar();
+	naplo('Bot v\u00e9delem \u26a0', `${Math.round(BOT_HATARIDO_MS / 60000)} perce nincs v\u00e1lasz az ellen\u0151rz\u00e9sre. Minden modul le\u00e1ll\u00edtva marad, am\u00edg meg nem oldod \u00e9s itt nem jelzed.`);
+	alert2('BOT V\u00c9DELEM \u2014 nem \u00e9rkezett v\u00e1lasz.<br><br>Minden modul le van \u00e1ll\u00edtva. Old meg az ellen\u0151rz\u00e9st a j\u00e1t\u00e9kban, majd kattints ide.<br><br><a href="javascript: BotvedelemKi()">Megoldottam, mehet tov\u00e1bb!</a>');
+}
+
+/* The window may be gone already, or never have opened. */
+function botvedelemAblakZar() {
+	try { if (BOT_REF && !BOT_REF.closed) BOT_REF.close(); }
+	catch (e) { debug('botvedelemAblakZar', e); }
+	BOT_REF = null;
+}
+
 function BotvedelemKi(){
 	/* First, so that a failure below cannot leave a cycle running. Clearing the
 	   handle as well as the timer matters: a stale non-zero BOTORA would make
 	   BotvedelemBe() think a cycle was still polling and refuse to raise the
 	   alarm ever again. */
 	clearTimeout(BOTORA); BOTORA = 0;
+	/* What was missed, before the figures are reset. Standing down closes the
+	   window and nulls BOT_REF, so this path has to tolerate that. */
+	if (BOT_KEZDET) {
+		const percek = Math.max(1, Math.round((Date.now() - BOT_KEZDET) / 60000));
+		naplo('Bot v\u00e9delem', `Feloldva. Az ellen\u0151rz\u00e9s ${new Date(BOT_KEZDET).toLocaleTimeString()}-kor jelent meg, a modulok kb. ${percek} percig \u00e1lltak${BOT_FELADVA ? ', k\u00f6zben a riaszt\u00e1s magat\u00f3l elhallgatott' : ''}.`);
+	}
+	BOT_KEZDET = 0; BOT_FELADVA = false;
 	BOT=false; ALTBOT2=false; BOT_VOL=0.0;
-	BOT_REF.close();
-	BOT_REF = null;
+	soundVolume(1.0); // standing down muted it; without this every later sound is silent
+	botvedelemAblakZar();
 	document.getElementById("audio1").pause;
 	alert2('Bot védelem rendben');
 	/*Megnyitott lapok frissítése*/
