@@ -1127,6 +1127,9 @@ function szunet(script,kep){try{
 	}
 	
 	if (script=="farm") shorttest();
+	/* Starting VIJE by hand beats a synced rest -- otherwise the play icon would
+	   claim it is running while it sits out the rest of the farm's break. */
+	if (script=="vije" && !sw) VIJE_SYNC_REST_UNTIL = 0;
 }catch(e){alert2("Hiba:\n"+e);}}
 
 function distCalc(S,D){
@@ -2622,7 +2625,6 @@ function szem4_farmolo_motor(){
 						nexttime=parseInt(document.getElementById("farmolo_options").sebesseg_p.value,10);
 						nexttime*=60000;
 						isPihen = true;
-						sendCustomEvent('farm_pihen');
 						// Reset round
 						for (let aUnit in SZEM4_FARM.DOMINFO_FROM) {
 							Object.keys(SZEM4_FARM.DOMINFO_FROM[aUnit].noOfUnits).reduce((item, key) => {
@@ -2679,6 +2681,10 @@ var inga=100/((Math.random()*40)+80);
 nexttime=Math.round(nexttime*inga);
 if (isPihen) {
 	debug('Farmoló', `Farmoló pihenni megy ${Math.round(nexttime / 60000)} percre`);
+	/* Announced from here rather than from the step that decided to rest,
+	   because the jitter just above is what actually sets the wake-up time.
+	   A listener lining itself up with the farm needs that final figure. */
+	sendCustomEvent('farm_pihen', { restMs: nexttime });
 }
 try{
 	worker.postMessage({'id': 'farm', 'time': nexttime});
@@ -2810,6 +2816,30 @@ function rebuildDOM_VIJE() {
 		}
 	});
 }
+/* ---- pihenés szinkron -------------------------------------------------
+   The farm engine announces its rest periods (farm_pihen). With this option
+   on, VIJE sits them out too instead of polling reports on its own schedule.
+   Two engines taking turns opening game windows is both wasted requests and a
+   steadier pattern than one engine that goes quiet.
+
+   VIJE wakes before the farm does, so reports that landed during the rest are
+   already analysed by the time the farm picks its next targets -- the loot
+   figures it reads are current instead of one round stale. The head start is
+   capped at half the rest, so a short rest still syncs to something. */
+const VIJE_SYNC_ELORE_MS = 120000;
+
+function isVijeSyncResting() {
+	/* Written as a positive test so a NaN or undefined reads as 'not resting'. */
+	if (!(VIJE_SYNC_REST_UNTIL > Date.now())) return false;
+	/* Re-read the option on every tick instead of trusting the moment the rest
+	   was armed: unticking it should wake VIJE now, not at the end of a rest it
+	   no longer wants. */
+	try {
+		if (!document.getElementById("vije_opts").pihensync.checked) return false;
+	} catch (e) { return false; } // interface not built yet -- nothing to sync with
+	return true;
+}
+
 function VIJE_IntelliAnalyst_isRequired(koord, jelRow, jelDate) {
 	jelDate.setSeconds(59);
 	if (SZEM4_VIJE.ALL_VIJE_SAVED[koord] && SZEM4_VIJE.ALL_VIJE_SAVED[koord] > jelDate) return false;
@@ -3114,8 +3144,13 @@ function szem4_VIJE_3torol(){try{
 
 function szem4_VIJE_motor(){try{
 	var nexttime=1500;
+	var isSyncRest = false;
 	if (VIJE_PAUSE) clearAttacks();
-	if (BOT||VIJE_PAUSE||USER_ACTIVITY) {nexttime=5000;} else {
+	if (BOT||VIJE_PAUSE||USER_ACTIVITY) {nexttime=5000;}
+	else if (isVijeSyncResting()) {
+		isSyncRest = true;
+		nexttime = Math.max(VIJE_SYNC_REST_UNTIL - Date.now(), 1000);
+	} else {
 	if (VIJE_HIBA>10) {
 		VIJE_HIBA=0; VIJE_GHIBA++; 
 		if(VIJE_GHIBA>3) {
@@ -3189,8 +3224,12 @@ function szem4_VIJE_motor(){try{
 		default: VIJE_LEPES=0;
 	}}
 }catch(e){debug("szem4_VIJE_motor()","ERROR: "+e+" Lépés:"+VIJE_LEPES);}
-var inga=100/((Math.random()*40)+80);
-nexttime=Math.round(nexttime*inga);
+/* Skipped while resting in sync: that delay is a wake-up time aimed at the
+   farm's own, and 1.25x of it would land after the farm is already moving. */
+if (!isSyncRest) {
+	var inga=100/((Math.random()*40)+80);
+	nexttime=Math.round(nexttime*inga);
+}
 try{
 	worker.postMessage({'id': 'vije', 'time': nexttime});
 }catch(e){debug('vije', 'Worker engine error: ' + e);setTimeout(function(){szem4_VIJE_motor();}, 3000);}}
@@ -3212,6 +3251,7 @@ ujkieg("vije","Jelentés Elemző",`<tr><td>
 			<tr><td>${picBuilding('wall')}</td><td>"Fal" a szerver jelenlegi nyelvén</td><td><input type="text" size="15" name="wall" value="Fal"></td></tr>
 		</table>
 		<input type="checkbox" name="isdelete"> Zöld farmjelentések törlése?<br>
+		<input type="checkbox" name="pihensync" onmouseover="sugo(this,'Amikor a Farmoló pihenni megy, a VIJE is pihen -- de pár perccel előbb ébred, hogy a friss jelentések már elemezve legyenek mire a Farmoló célt választ.<br>Ajánlott, ha a zöld farmjelentések törlése be van pipálva.')"> Pihenjen a Farmolóval együtt?<br>
 		<button onclick="szem4_vije_forgot()" type="button">Jelentések újraelemzése/elfelejtése</button><br><br><br>
 	</form>
 	</td></tr>`);
@@ -3222,8 +3262,21 @@ var VIJE_REF1; var VIJE_REF2;
 var VIJE_HIBA=0; var VIJE_GHIBA=0;
 var VIJE2_HIBA=0; var VIJE2_GHIBA=0;
 var SZEM4_VIJE = defaultVijeState();
+var VIJE_SYNC_REST_UNTIL = 0;
 readUpVijeOpts();
 var PM2;
+
+document.addEventListener('farm_pihen', (ev) => {
+	if (VIJE_PAUSE) return; // stopped by hand; leave it stopped
+	try {
+		if (!document.getElementById("vije_opts").pihensync.checked) return;
+	} catch (e) { return; } // interface not built yet
+	const restMs = ev.detail && ev.detail.restMs;
+	if (!restMs || restMs <= 0) return;
+	VIJE_SYNC_REST_UNTIL = Date.now() + Math.max(restMs - VIJE_SYNC_ELORE_MS, Math.round(restMs / 2));
+	debug('Jelentés Elemző', `Farmolóval együtt pihen ${Math.round((VIJE_SYNC_REST_UNTIL - Date.now()) / 60000)} percre`);
+});
+
 szem4_VIJE_motor();
 
 /*-----------------TÁMADÁS FIGYELŐ--------------------*/
