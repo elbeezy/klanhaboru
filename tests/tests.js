@@ -883,6 +883,44 @@ suite('The bot-protection alarm', function () {
 });
 
 /* ------------------------------------------------------------------------ */
+suite('Loading the saved build data', function () {
+	function vilag(raw) {
+		var w = { AZON: 'p_w', alerts: [], logged: [], hibak: [], alkalmazva: [] };
+		w.localStorage = { getItem: function (k) { return k === 'p_w_epit' ? raw : null; },
+		                   setItem: function () {} };
+		w.szem4_EPITO_applyState = function (s) { w.alkalmazva.push(s); };
+		w.szem4_EPITO_parseLegacy = function () { return { groups: [], villages: [] }; };
+		w.alert2 = function (m) { w.alerts.push(m); };
+		w.naplo = function (k, m) { w.logged.push(k + ': ' + m); };
+		w.debug = function (k, e) { w.hibak.push(k + ': ' + e); };
+		return w;
+	}
+	function betolt(w) {
+		sandbox(w, [sliceFn(SZEM4_SRC, 'szem4_ADAT_epito_load')]).szem4_ADAT_epito_load();
+	}
+
+	var w = vilag(JSON.stringify({ v: 2, groups: [{}, {}], villages: [{}, {}, {}] }));
+	betolt(w);
+	/* The whole function is wrapped in a catch that only calls debug(), so a
+	   silent throw would otherwise look exactly like a quiet success. */
+	eq(w.hibak.length, 0, 'loading the build data does not throw', w.hibak.join(' | '));
+	eq(w.alkalmazva.length, 1, 'and does apply what it read');
+
+	/* It used to open a modal on every single start, to say nothing had gone
+	   wrong -- and it had to be clicked away before SZEM could be used. */
+	eq(w.alerts.length, 0, 'and opens no window to be dismissed on every start');
+	ok(w.logged.some(function (l) { return l.indexOf('2 csoport') !== -1 && l.indexOf('3 falu') !== -1; }),
+	   'saying what it loaded in the log instead', w.logged.join(' | '));
+
+	/* Nothing saved yet: nothing to apply, and nothing worth reporting. */
+	var w2 = vilag(null);
+	betolt(w2);
+	eq(w2.alkalmazva.length, 0, 'with nothing saved it applies nothing');
+	eq(w2.alerts.length, 0, 'and still opens no window');
+	eq(w2.logged.length, 0, 'and does not pad the log either');
+});
+
+/* ------------------------------------------------------------------------ */
 suite('Sorting a table', function () {
 	/* A real table in a real document: the bug here is about where the sorted
 	   rows end up in the DOM, which a fake table could not show. */

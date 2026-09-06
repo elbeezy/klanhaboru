@@ -4602,7 +4602,10 @@ function szem4_ADAT_epito_load(){try{
 	}
 
 	szem4_EPITO_applyState(state);
-	alert2("\u00c9p\u00edt\u00e9si adatok bet\u00f6lt\u00e9se k\u00e9sz.");
+	/* Every other data type loads without a word. This one opened a modal on
+	   every single start, which has to be dismissed before SZEM can be used --
+	   to report that nothing went wrong. It belongs in the log with the rest. */
+	naplo('\u00c9p\u00edt\u0151', `\u00c9p\u00edt\u00e9si adatok bet\u00f6ltve: ${state.groups.length} csoport, ${state.villages.length} falu.`);
 }catch(e){debug("ADAT_epito_load",e);}}
 
 function szem4_ADAT_del(tipus){try{
