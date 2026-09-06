@@ -3415,14 +3415,16 @@ function szem4_EPITO_cscheck(alma){try{
 	Z=Z.split(";");
 	
 	var epuletek=new Array("main","barracks","stable","garage","church_f","church","smith","snob","place","statue","market","wood","stone","iron","farm","storage","hide","wall","MINES");
-	var kapcsolok=new Array("ANY");
+	var kapcsolok=new Array("ANY","FASTEST");
 	for (var i=0;i<Z.length;i++) {
 		var entry = parseBuildEntry(Z[i]);
-		if (entry.modifier && kapcsolok.indexOf(entry.modifier)===-1) throw "Ismeretlen kapcsoló: "+entry.modifier+"()";
+		entry.modifiers.forEach(function(mod) {
+			if (kapcsolok.indexOf(mod)===-1) throw "Ismeretlen kapcsoló: "+mod+"()";
+		});
 		/* Caught here rather than at build time: a stray comma parses to just the
 		   first target and the rest is silently dropped, so the list would look
 		   accepted while quietly building less than it says. */
-		if (!entry.modifier && Z[i].indexOf(",")>-1) throw "Vessző csak kapcsolón belül használható, pl. ANY(...): "+Z[i];
+		if (!entry.modifiers.length && Z[i].indexOf(",")>-1) throw "Vessző csak kapcsolón belül használható, pl. ANY(...): "+Z[i];
 		entry.parts.forEach(function(part) {
 			if (epuletek.indexOf(part[0])===-1) throw "Nincs ilyen épület: "+part[0];
 			if (!(part[1]>0)) throw "Hiányzó vagy hibás épületszint: "+Z[i];
@@ -3519,18 +3521,54 @@ function buildingCost(row) {
 }
 
 /* ---- build-order entries -----------------------------------------------
-   An entry is either a plain "epulet szint" pair or a modifier wrapping one
-   or more of them, comma separated: ANY(barracks 5, stable 5), ANY(MINES 25).
-   The shape is kept general on purpose -- FASTEST() is meant to nest inside
-   ANY() later, and that should not need this rewritten. */
+   An entry is either a plain "epulet szint" pair or modifiers wrapping one or
+   more of them, comma separated: ANY(barracks 5, stable 5), ANY(MINES 25),
+   ANY(FASTEST(MINES 25)). Modifiers nest, and each one is just a transform of
+   the candidate list, so adding another means adding a case below. */
 function splitBuildTarget(text) {
 	const bits = text.trim().split(/\s+/);
 	return [bits[0], parseInt(bits[1], 10)];
 }
 function parseBuildEntry(entry) {
-	const wrapped = entry.trim().match(/^([A-Z]+)\((.*)\)$/);
-	if (!wrapped) return { modifier: '', parts: [splitBuildTarget(entry)] };
-	return { modifier: wrapped[1], parts: wrapped[2].split(',').map(splitBuildTarget) };
+	const modifiers = [];
+	let text = entry.trim(), wrapped;
+	while ((wrapped = text.match(/^([A-Z]+)\s*\((.*)\)$/))) {
+		modifiers.push(wrapped[1]);
+		text = wrapped[2].trim();
+	}
+	return { modifiers: modifiers, parts: text.split(',').map(splitBuildTarget) };
+}
+
+/* Build time is the fifth cell of a build row, written H:MM:SS. Read from the
+   right so a longer D:H:MM:SS would still add up. A row without that cell is a
+   building that cannot be raised any further -- the game replaces the whole
+   row with "Epulet teljesen felepitve" -- so it sorts last, never first. */
+function buildTimeOf(ref, id) {
+	const row = ref.document.getElementById('main_buildrow_' + id);
+	if (!row || !row.cells[4]) return Infinity;
+	const bits = row.cells[4].textContent.match(/[0-9]+/g);
+	if (!bits) return Infinity;
+	const scale = [1, 60, 3600, 86400];
+	let secs = 0;
+	bits.reverse().forEach((n, i) => { if (i < scale.length) secs += parseInt(n, 10) * scale[i]; });
+	return secs;
+}
+
+/* Each modifier reorders or narrows the candidate list; the pick is whatever
+   ends up first. ANY keeps the list untouched when nothing is affordable, so
+   the caller still lands on the old wait-or-insert-a-warehouse path. */
+function applyBuildModifier(name, candidates, ref) {
+	if (name === 'FASTEST') {
+		return candidates.slice().sort((a, b) => {
+			const ta = buildTimeOf(ref, a), tb = buildTimeOf(ref, b);
+			return ta === tb ? 0 : (ta < tb ? -1 : 1); // never Infinity - Infinity
+		});
+	}
+	if (name === 'ANY') {
+		const affordable = candidates.filter(id => canAffordBuildNow(ref, id));
+		return affordable.length ? affordable : candidates;
+	}
+	return candidates;
 }
 
 /* Every building an entry still wants, best-first. MINES keeps its original
@@ -3615,19 +3653,17 @@ function szem4_EPITO_IntettiBuild(buildOrder){try{
 	var buildOrderArr=buildOrder.split(";");
 	for (var i=0;i<buildOrderArr.length;i++) {
 		const entry = parseBuildEntry(buildOrderArr[i]);
-		const candidates = buildCandidates(entry.parts, currentBuildLvls);
+		let candidates = buildCandidates(entry.parts, currentBuildLvls);
 		if (candidates.length === 0) continue; // this entry is already met
 		/* ANY() takes the first option the village can actually pay for, so an
 		   expensive step no longer idles the village while a cheaper one in the
-		   same entry was affordable. Falling back to candidates[0] when none is
-		   affordable keeps the old behaviour -- wait, or insert the warehouse
-		   or farm that is really in the way -- rather than inventing a new way
-		   to stall. FASTEST() nests here later. */
-		if (entry.modifier === 'ANY') {
-			nextToBuild = candidates.find(id => canAffordBuildNow(EPIT_REF, id)) || candidates[0];
-		} else {
-			nextToBuild = candidates[0];
+		   same entry was affordable. FASTEST() orders them by build time. */
+		/* Innermost modifier first, so ANY(FASTEST(...)) reads as "sort by
+		   build time, then take the first one we can actually pay for". */
+		for (let m = entry.modifiers.length - 1; m >= 0; m--) {
+			candidates = applyBuildModifier(entry.modifiers[m], candidates, EPIT_REF);
 		}
+		nextToBuild = candidates[0];
 		break;
 	}
 
@@ -3735,7 +3771,7 @@ try{
 }catch(e){debug('epit', 'Worker engine error: ' + e);setTimeout(function(){szem4_EPITO_motor();}, 3000);}}
 
 ujkieg_hang("Építő","epites;falu_kesz;kritikus_hiba");
-ujkieg("epit","Építő",'<tr><td><h2 align="center">Építési listák</h2><table align="center" class="vis" style="border:1px solid black;color: black;"><tr><th onmouseover=\'sugo(this,"Építési lista neve, amire később hivatkozhatunk")\'>Csoport neve</th><th onmouseover=\'sugo(this,"Az építési sorrend megadása. Saját lista esetén ellenőrizzük az OK? linkre kattintva annak helyességét!<br><br>ANY(...): amire éppen van nyersed, azt építi a felsoroltak közül, így nem áll le várakozva egy drága lépésnél. Több cél vesszővel: ANY(barracks 5, stable 5) vagy ANY(MINES 25). Ha egyikre sincs nyers, ugyanúgy vár mint eddig.")\' style="width:800px">Építési lista</th></tr><tr><td>Alapértelmezett</td><td><input type="text" disabled="disabled" value="main 10;storage 10;wall 10;main 15;wall 15;storage 15;farm 10;main 20;wall 20;MINES 10;smith 5;barracks 5;stable 5;storage 20;farm 20;market 10;main 22;smith 12;farm 25;storage 28;farm 26;MINES 24;market 19;barracks 15;stable 10;garage 5;MINES 26;farm 28;storage 30;barracks 20;stable 15;farm 30;barracks 25;stable 20;MINES 30;smith 20;snob 1" size="125"><a onclick="szem4_EPITO_cscheck(this)" style="color:blue; cursor:pointer;"> OK?</a></td></tr></table><p align="center">Csoportnév: <input type="text" value="" size="30" id="epit_ujcsopnev" placeholder="Nem tartalmazhat . _ ; karaktereket"> <a href="javascript: szem4_EPITO_ujCsop()" style="color:white;text-decoration:none;"><img src="'+pic("plus.png")+' " height="17px"> Új csoport</a></p></td></tr><tr><td><h2 align="center">Építendő faluk</h2><table align="center" class="vis" style="border:1px solid black;color: black;width:950px" id="epit_lista"><tr><th style="width: 250px;" onclick=\'rendez("szoveg",false,this,"epit_lista",0)\' onmouseover=\'sugo(this,"Rendezhető. Itt építek. Dupla klikk a falura = sor törlése")\'>Falu</th><th onclick=\'rendez("lista",false,this,"epit_lista",1)\' onmouseover=\'sugo(this,"Rendezhető. Felső táblázatban használt lista közül választhatsz egyet, melyet később bármikor megváltoztathatsz.")\' style="width: 135px;">Használt lista</th><th style="width: 130px; cursor: pointer;" onclick=\'rendez("datum",false,this,"epit_lista",2)\' onmouseover=\'sugo(this,"Rendezhető. Ekkor fogom újranézni a falut, hogy lehet e már építeni.<br>Dupla klikk=idő azonnalira állítása.")\'>Return</th><th style="cursor: pointer;" onclick=\'rendez("szoveg",false,this,"epit_lista",3)\' onmouseover=\'sugo(this,"Rendezhető. Szöveges információ a faluban zajló építésről. Sárga hátterű szöveg orvosolható; kék jelentése hogy nem tud haladni; piros pedig kritikus hibát jelöl; a szín nélküli a normális működést jelzi.<br>Dupla klikk=alaphelyzet")\'><u>Infó</u></th></tr></table><p align="center" id="epit_ujfalu_adat">Csoport: <select><option value="Alapértelmezett">Alapértelmezett</option> </select> \Faluk: <input type="text" value="" placeholder="Koordináták: 123|321 123|322 ..." size="50"> \<a href="javascript: szem4_EPITO_ujFalu()" style="color:white;text-decoration:none;"><img src="'+pic("plus.png")+'" height="17px"> Új falu(k)</a></p></td></tr>');
+ujkieg("epit","Építő",'<tr><td><h2 align="center">Építési listák</h2><table align="center" class="vis" style="border:1px solid black;color: black;"><tr><th onmouseover=\'sugo(this,"Építési lista neve, amire később hivatkozhatunk")\'>Csoport neve</th><th onmouseover=\'sugo(this,"Az építési sorrend megadása. Saját lista esetén ellenőrizzük az OK? linkre kattintva annak helyességét!<br><br>ANY(...): amire éppen van nyersed, azt építi a felsoroltak közül, így nem áll le várakozva egy drága lépésnél. Több cél vesszővel: ANY(barracks 5, stable 5) vagy ANY(MINES 25). Ha egyikre sincs nyers, ugyanúgy vár mint eddig.<br>FASTEST(...): a leggyorsabban felépülőt választja. A kettő együtt is működik: ANY(FASTEST(MINES 25)) = amire van nyersed, abból a leggyorsabb.")\' style="width:800px">Építési lista</th></tr><tr><td>Alapértelmezett</td><td><input type="text" disabled="disabled" value="main 10;storage 10;wall 10;main 15;wall 15;storage 15;farm 10;main 20;wall 20;MINES 10;smith 5;barracks 5;stable 5;storage 20;farm 20;market 10;main 22;smith 12;farm 25;storage 28;farm 26;MINES 24;market 19;barracks 15;stable 10;garage 5;MINES 26;farm 28;storage 30;barracks 20;stable 15;farm 30;barracks 25;stable 20;MINES 30;smith 20;snob 1" size="125"><a onclick="szem4_EPITO_cscheck(this)" style="color:blue; cursor:pointer;"> OK?</a></td></tr></table><p align="center">Csoportnév: <input type="text" value="" size="30" id="epit_ujcsopnev" placeholder="Nem tartalmazhat . _ ; karaktereket"> <a href="javascript: szem4_EPITO_ujCsop()" style="color:white;text-decoration:none;"><img src="'+pic("plus.png")+' " height="17px"> Új csoport</a></p></td></tr><tr><td><h2 align="center">Építendő faluk</h2><table align="center" class="vis" style="border:1px solid black;color: black;width:950px" id="epit_lista"><tr><th style="width: 250px;" onclick=\'rendez("szoveg",false,this,"epit_lista",0)\' onmouseover=\'sugo(this,"Rendezhető. Itt építek. Dupla klikk a falura = sor törlése")\'>Falu</th><th onclick=\'rendez("lista",false,this,"epit_lista",1)\' onmouseover=\'sugo(this,"Rendezhető. Felső táblázatban használt lista közül választhatsz egyet, melyet később bármikor megváltoztathatsz.")\' style="width: 135px;">Használt lista</th><th style="width: 130px; cursor: pointer;" onclick=\'rendez("datum",false,this,"epit_lista",2)\' onmouseover=\'sugo(this,"Rendezhető. Ekkor fogom újranézni a falut, hogy lehet e már építeni.<br>Dupla klikk=idő azonnalira állítása.")\'>Return</th><th style="cursor: pointer;" onclick=\'rendez("szoveg",false,this,"epit_lista",3)\' onmouseover=\'sugo(this,"Rendezhető. Szöveges információ a faluban zajló építésről. Sárga hátterű szöveg orvosolható; kék jelentése hogy nem tud haladni; piros pedig kritikus hibát jelöl; a szín nélküli a normális működést jelzi.<br>Dupla klikk=alaphelyzet")\'><u>Infó</u></th></tr></table><p align="center" id="epit_ujfalu_adat">Csoport: <select><option value="Alapértelmezett">Alapértelmezett</option> </select> \Faluk: <input type="text" value="" placeholder="Koordináták: 123|321 123|322 ..." size="50"> \<a href="javascript: szem4_EPITO_ujFalu()" style="color:white;text-decoration:none;"><img src="'+pic("plus.png")+'" height="17px"> Új falu(k)</a></p></td></tr>');
 
 var EPIT_LEPES=0;
 var EPIT_REF; var EPIT_HIBA=0; var EPIT_GHIBA=0;
