@@ -1304,8 +1304,14 @@ function rendez(tipus, isAsc, thislink, table_azon, oszlopNo){try{
 		OBJ.deleteRow(i);
 	}
 	
+	/* Back into the tbody, not onto the table. appendChild on a <table> puts
+	   the row after the tbody rather than inside it, so every rule written as
+	   "#farm_hova > tbody > tr > td" stops matching -- which is how sorting the
+	   farm list collapsed the Szerelvenyek column, whose width is one of them.
+	   Re-appending into the tbody also repairs a table an earlier sort broke. */
+	var torzs = OBJ.tBodies[0] || OBJ;
 	for (var i=0;i<tavok.length;i++) {
-		OBJ.appendChild(sorok[indexek[i]]);
+		torzs.appendChild(sorok[indexek[i]]);
 	}
 	
 	thislink.setAttribute("onclick","rendez(\""+tipus+"\","+!isAsc+",this,\""+table_azon+"\","+oszlopNo+")");

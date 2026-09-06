@@ -883,6 +883,61 @@ suite('The bot-protection alarm', function () {
 });
 
 /* ------------------------------------------------------------------------ */
+suite('Sorting a table', function () {
+	/* A real table in a real document: the bug here is about where the sorted
+	   rows end up in the DOM, which a fake table could not show. */
+	function tabla() {
+		var wrap = document.createElement('div');
+		wrap.style.display = 'none';
+		wrap.innerHTML = '<table id="teszt_farm">' +
+			'<tr><th>Hova</th><th>Szerelv\u00e9nyek</th><th>T\u00e1v</th></tr>' +
+			'<tr><td>a</td><td>sz1</td><td>4.2</td></tr>' +
+			'<tr><td>b</td><td>sz2</td><td>1.5</td></tr>' +
+			'<tr><td>c</td><td>sz3</td><td>12.0</td></tr></table>';
+		document.body.appendChild(wrap);
+		return wrap;
+	}
+
+	var wrap = tabla();
+	var hiba = '';
+	var api = sandbox({ hideFarms: function () {}, alert2: function (m) { hiba = m; } },
+	                  [sliceFn(SZEM4_SRC, 'rendez')]);
+
+	/* The browser's parser puts rows in a tbody. Nothing below may change that. */
+	eq(document.querySelectorAll('#teszt_farm > tbody > tr').length, 4,
+	   'the table starts out with every row inside its tbody');
+
+	api.rendez('tav', false, document.createElement('a'), 'teszt_farm', 2);
+	eq(hiba, '', 'sorting by distance does not throw');
+
+	var sorok = document.querySelectorAll('#teszt_farm tr');
+	eq(sorok[1].cells[2].textContent, '1.5', 'the nearest target comes first');
+	eq(sorok[2].cells[2].textContent, '4.2', 'then the next');
+	eq(sorok[3].cells[2].textContent, '12.0', 'and the furthest last');
+
+	/* The bug: the sorted rows were put back with appendChild on the table
+	   itself, which drops them in after the tbody rather than inside it. Every
+	   rule written as "#farm_hova > tbody > tr > td" then stops matching -- which
+	   is how sorting by T\u00e1v collapsed the Szerelv\u00e9nyek column, whose width is set
+	   by exactly such a rule. */
+	eq(document.querySelectorAll('#teszt_farm > tbody > tr').length, 4,
+	   'and every row is still inside the tbody afterwards');
+	eq(document.querySelectorAll('#teszt_farm > tr').length, 0,
+	   'with none of them loose in the table');
+
+	/* Sorting again must not undo it either. */
+	api.rendez('szoveg', false, document.createElement('a'), 'teszt_farm', 0);
+	eq(document.querySelectorAll('#teszt_farm > tbody > tr').length, 4,
+	   'a second sort keeps them there too');
+
+	/* The rule the column depends on is still shaped that way. */
+	ok(SZEM4_SRC.indexOf('#farm_hova > tbody > tr > td:nth-child(6)') !== -1,
+	   'and the wagons column is still styled through the tbody');
+
+	wrap.remove();
+});
+
+/* ------------------------------------------------------------------------ */
 suite('The interface can reach what it calls', function () {
 	/* verifyInlineHandlers() runs at startup and names any control calling a
 	   function that is not on window. It cannot tell a real call from a string
