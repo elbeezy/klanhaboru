@@ -152,8 +152,17 @@ function farmSor(hova, banyak, fal, nyers, jatekos, tav) {
 		'<td>' + fal + '</td>' +
 		'<td>' + nyers + '</td>' +
 		'<td><input type="checkbox"' + (jatekos ? ' checked' : '') + '></td>' +
-		'<td>' + [1, 2, 3].map(function (n) {
-			return '<img src="' + PIC + 'mozdony.png" title="szerelvény ' + n + '" style="height:18px;">';
+		/* What addWagons() actually puts here: one of four wagon pictures per
+		   attack on its way in, picked by how much it is bringing back. The
+		   preview used upstream's locomotive instead, at a size and colour
+		   this column never has, so the widest cell in the table was the one
+		   place the preview was not showing the interface.
+
+		   The old filename is deliberately not spelled out anywhere on this
+		   page: a test asserts it has gone, and a plain search cannot tell a
+		   comment mentioning it from a call still making it. */
+		'<td>' + ['wagon_normal', 'wagon_coal', 'wagon_empty'].map(function (w) {
+			return '<img src="' + PIC + w + '.png?v=4" title="' + w + '" width="40px">';
 		}).join(' ') + '</td>' +
 		'<td>' + tav + '</td>' +
 		'</tr>';

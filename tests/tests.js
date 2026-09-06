@@ -1206,6 +1206,15 @@ suite('The preview mirrors the real interface', function () {
 	fej = fej.slice(0, fej.indexOf('</tr>'));
 	eq((fej.match(/<th/g) || []).length, 7, 'the preview farm table still has seven columns');
 
+	/* The Szerelvények column is the widest cell in that table, and the
+	   preview filled it with mozdony.png -- a locomotive, at 18px, where
+	   addWagons() puts 40px wagon pictures. So the one cell most worth
+	   looking at was the one the preview was not showing. */
+	ok(/wagon_/.test(PREVIEW_SRC),
+	   'and fills the wagon column with the pictures that column really uses');
+	eq(PREVIEW_SRC.indexOf('mozdony.png'), -1,
+	   'not with artwork the interface never puts there');
+
 	/* The Farmoló panel is no longer mirrored by hand at all -- it is built
 	   from the template literal the script really carries. A hand-written
 	   stand-in is what hid the settings block, the unit picker and the two
@@ -1985,7 +1994,17 @@ suite("SZEM's own icons", function () {
 	   genuinely new game-art fetch has to move this number, which is the
 	   point: it should be a deliberate step, not a silent one. */
 	eq((SZEM4_SRC.match(/pic\(['"]/g) || []).length, 3,
-	   'exactly the three game-artwork fetches are left');
+	   'exactly three pictures are still named outright');
+
+	/* And one more that is not named outright at all. The farm's Szerelvények
+	   column picks between wagon_normal, wagon_coal, wagon_nuclear and
+	   wagon_empty at runtime, so it reads pic(wagonType) and no search for a
+	   filename finds it -- which is how it stayed off the list of remaining
+	   artwork while that list was being worked through. Those four depict
+	   cargo the game itself draws, so they stay; asserted here so the next
+	   count of "what is left" starts from the truth. */
+	ok(SZEM4_SRC.indexOf('pic(wagonType)') !== -1,
+	   'the wagons are still the game artwork, chosen by a variable rather than named');
 
 	/* One palette lookup and one SVG wrapper for all of them: this was three
 	   copies of the same four lines before the third caller arrived. */
