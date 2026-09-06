@@ -26,24 +26,41 @@
 <div id="banner">Fut…</div>
 <div id="out"></div>
 
-<script src="harness.js"></script>
 <script>
 /* The tests read the real script rather than a copy, so a change to
-   scripts/SZEM4.js shows up here on the next refresh. */
-fetch('../scripts/SZEM4.js?t=' + Date.now())
-  .then(function (r) {
+   scripts/SZEM4.js shows up here on the next refresh. preview.html is read as
+   well, so the tests can hold its markup against the real one -- it mirrors
+   the interface by hand, and a mirror nobody checks drifts.
+ *
+ * Everything is loaded with the clock on the end of its address. Without that
+ * the browser answers F5 out of its cache, and the page then reports on a file
+ * that is no longer on disk -- which looks exactly like a test that will not
+ * go green no matter what is changed. */
+function betoltScript(nev) {
+  return new Promise(function (done, fail) {
+    var s = document.createElement('script');
+    s.src = nev + '?t=' + Date.now();
+    s.onload = done;
+    s.onerror = function () { fail(new Error('a ' + nev + ' nem tölthető be')); };
+    document.head.appendChild(s);
+  });
+}
+
+betoltScript('harness.js')
+  .then(function () { return Promise.all([
+  fetch('../scripts/SZEM4.js?t=' + Date.now()).then(function (r) {
     if (!r.ok) throw new Error('HTTP ' + r.status + ' — a scripts/SZEM4.js nem érhető el');
     return r.text();
+  }),
+  fetch('preview.html?t=' + Date.now()).then(function (r) {
+    if (!r.ok) throw new Error('HTTP ' + r.status + ' — a tests/preview.html nem érhető el');
+    return r.text();
   })
-  .then(function (text) {
-    SZEM4_SRC = text;
-    return new Promise(function (done) {
-      var s = document.createElement('script');
-      s.src = 'tests.js?t=' + Date.now();
-      s.onload = done;
-      s.onerror = function () { throw new Error('a tests.js nem tölthető be'); };
-      document.head.appendChild(s);
-    });
+]); })
+  .then(function (texts) {
+    SZEM4_SRC = texts[0];
+    PREVIEW_SRC = texts[1];
+    return betoltScript('tests.js');
   })
   .then(function () {
     var res = runAll(), out = document.getElementById('out');

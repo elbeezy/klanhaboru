@@ -82,7 +82,8 @@ function tartalom() {
 	const modulok =
 		'<img src="' + PIC + 'muhely_logo.png" alt="GIT" title="GIT C&amp;C Műhely">' +
 		'<img src="' + PIC + 'kh_logo.png" alt="Game" title="Klánháború">' +
-		'<a href="javascript:void 0" id="szunet_mind" title="Minden modul megállítása">Szünet mind</a> | ' +
+		'<a href="javascript:void 0" id="szunet_mind" title="Minden modul megállítása">Szünet mind</a>' +
+		'<span class="menubar_valaszto"></span>' +
 		modul('farm', 'Farmoló', true) +
 		modul('vije', 'Jelentés elemző', true) +
 		modul('idtamad', 'Bejövő támadások', false) +
@@ -111,10 +112,10 @@ function tartalom() {
 
 	'<div class="fej">' +
 		'<div id="global_notifications"></div>' +
-		'<table width="100%" align="center" style="background:#111; background-image:url(\'' + PIC + 'wallp.jpg\'); background-size:1024px;">' +
+		'<table width="100%" align="center">' +
 			'<tr>' +
-				'<td width="70%" id="fejresz" style="vertical-align:middle; margin:auto;"><h1><i></i></h1></td>' +
-				'<td id="sugo" height="110px">Ide kerül a súgó szövege, amikor egy vezérlő fölé viszed az egeret.</td>' +
+				'<td width="70%" id="fejresz" style="vertical-align:middle; margin:auto;"><h1>Szem <b>IV</b><i>Klánháború</i></h1></td>' +
+				'<td id="sugo">Ide kerül a súgó szövege, amikor egy vezérlő fölé viszed az egeret.</td>' +
 			'</tr>' +
 			'<tr><td colspan="2" id="menuk">' +
 				'<div class="divrow menubar">' +

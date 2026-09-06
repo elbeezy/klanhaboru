@@ -386,6 +386,96 @@ function init(){try{
 			margin: auto;
 			color: var(--szem-text);
 		}
+		/* --- The chrome: the header, the module bar and the panels. ---
+
+		   The header used to be a tiled picture with an empty <h1> sitting on
+		   top of it, which is where most of the amateur look came from: the
+		   art ran underneath the module bar as well, so the controls sat on
+		   whatever colour happened to be behind them. It is type on a surface
+		   now, and the bar is its own strip. */
+		body, .fej, #content {
+			font-family: "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+			font-size: 13px;
+		}
+		.fej > table {
+			background: var(--szem-surface);
+			border-collapse: collapse;
+		}
+		#fejresz {
+			padding: 16px 22px 14px 22px;
+		}
+		#fejresz h1 {
+			margin: 0;
+			font-size: 25px;
+			font-weight: 300;
+			letter-spacing: 0.34em;
+			text-transform: uppercase;
+			color: var(--szem-text);
+			white-space: nowrap;
+		}
+		/* The one place the accent carries the identity. */
+		#fejresz h1 b {
+			font-weight: 600;
+			color: var(--szem-accent);
+		}
+		#fejresz h1 i {
+			display: block;
+			margin-top: 5px;
+			font-size: 10px;
+			font-style: normal;
+			font-weight: 400;
+			letter-spacing: 0.22em;
+			color: var(--szem-text-dim);
+		}
+		#sugo {
+			padding: 16px 22px;
+			vertical-align: middle;
+			font-size: 12px;
+			line-height: 1.55;
+			color: var(--szem-text-dim);
+		}
+		#menuk {
+			background: var(--szem-surface-2);
+			border-top: 1px solid var(--szem-line);
+		}
+		.menubar { padding: 5px 16px; }
+		#kiegs a, .menubar_jobb a {
+			text-decoration: none;
+			color: var(--szem-text-dim);
+			font-size: 12px;
+			padding: 3px 6px;
+			border-radius: 4px;
+		}
+		#kiegs a:hover, .menubar_jobb a:hover {
+			color: var(--szem-text);
+			background: var(--szem-hover);
+		}
+		/* A rule, rather than a pipe character sitting in the text. */
+		.menubar_valaszto {
+			display: inline-block;
+			width: 1px;
+			height: 15px;
+			margin: 0 5px;
+			background: var(--szem-line);
+			vertical-align: middle;
+		}
+		/* Panels read as cards on the page rather than as bordered blocks. */
+		table.menuitem {
+			background: var(--szem-surface);
+			border-radius: 6px;
+			padding: 24px 26px;
+		}
+		table.menuitem > tbody > tr > td > h1,
+		table.menuitem h1 {
+			margin: 0 0 20px 0;
+			font-size: 14px;
+			font-weight: 600;
+			letter-spacing: 0.17em;
+			text-transform: uppercase;
+			color: var(--szem-text-dim);
+			border-bottom: 1px solid var(--szem-line);
+			padding-bottom: 11px;
+		}
 		table.vis { color:black; }
 		table.vis td, table.vis th { padding: 3px 6px 3px 6px; }
 		/* the wagons cell -- no longer last, a distance column follows it */
@@ -681,12 +771,12 @@ function init(){try{
 		</div>
 		<div class="fej">
 			<div id="global_notifications"></div>
-			<table width="100%" align="center" style="background: #111; background-image:url('${pic("wallp.jpg")}'); background-size:1024px;">
+			<table width="100%" align="center">
 				<tr>
 					<td width="70%" id="fejresz" style="vertical-align:middle; margin:auto;">
-						<h1><i></i></h1>
+						<h1>Szem <b>IV</b><i>Klánháború</i></h1>
 					</td>
-					<td id="sugo" height="110px"></td>
+					<td id="sugo"></td>
 				</tr>
 				<tr><td colspan="2" id="menuk" style="">
 					<div class="divrow menubar">
@@ -694,7 +784,7 @@ function init(){try{
 							<img src="${pic("muhely_logo.png")}" alt="GIT" title="GIT C&amp;C Műhely megnyitása" onclick="window.open('https://github.com/cncDAni2/klanhaboru')">
 							<img src="${pic("kh_logo.png")}" alt="Game" title="Klánháború megnyitása" onclick="window.open(document.location.href)">
 							<a href="javascript: szunetMind();" id="szunet_mind" title="Minden modul megállítása megadott időre" onmouseover="sugo(this,'Minden futó modult megállít a megadott percre, majd önműködően újraindítja őket.')">Szünet mind</a>
-							|
+							<span class="menubar_valaszto"></span>
 						</span>
 						<span class="divcell menubar_jobb">
 							<a href=\'javascript: nyit("naplo");\' onmouseover="sugo(this,\'Események naplója\')">Napló</a>

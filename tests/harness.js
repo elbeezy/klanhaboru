@@ -9,6 +9,7 @@
  */
 
 var SZEM4_SRC = '';          // the source text under test, filled in by index.html
+var PREVIEW_SRC = '';   /* tests/preview.html, for the mirror check */
 var SUITES = [];
 var RESULTS = { pass: 0, fail: 0, lines: [] };
 var CURRENT = null;

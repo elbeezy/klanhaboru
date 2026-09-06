@@ -1142,3 +1142,39 @@ suite('Replacing the pre-palette colours', function () {
 	eq(frissP.profile1.content_border, token('line'), 'the new frame colour is the --szem-line token');
 	eq(frissP.profile1.content_shadow, token('shadow'), 'the new shadow is the --szem-shadow token');
 });
+
+/* ------------------------------------------------------------------------ */
+suite('The preview mirrors the real interface', function () {
+	/* preview.html rebuilds a slice of the interface by hand so the styling can
+	   be looked at without a game behind it. That only works while its markup
+	   says what the real markup says -- otherwise it flatters a design that is
+	   not the one shipping. Nothing can diff the two automatically, so the
+	   pieces the stylesheet actually hangs off are named here instead. */
+	ok(PREVIEW_SRC.length > 1000, 'the preview page loaded', PREVIEW_SRC.length + ' chars');
+
+	/* Hooks the stylesheet selects on. Each must exist on both sides. */
+	['id="fejresz"', 'id="sugo"', 'id="menuk"', 'id="kiegs"',
+	 'class="divrow menubar"', 'menubar_jobb', 'menubar_valaszto',
+	 'class="fej"', 'id="content"', 'class="menuitem"',
+	 'id="alert2head"', 'id="global_notifications"',
+	 'left-background', 'right-background'].forEach(function (hook) {
+		ok(SZEM4_SRC.indexOf(hook) !== -1, 'the interface has ' + hook);
+		ok(PREVIEW_SRC.indexOf(hook) !== -1, 'and so does the preview');
+	});
+
+	/* The header wordmark: the banner used to be a picture, and the <h1> under
+	   it was empty. If one side goes back to a picture the preview stops
+	   showing what the header really looks like. */
+	ok(SZEM4_SRC.indexOf('<h1>Szem <b>IV</b><i>Kl\u00e1nh\u00e1bor\u00fa</i></h1>') !== -1,
+	   'the header names the program in type');
+	ok(PREVIEW_SRC.indexOf('<h1>Szem <b>IV</b><i>Kl\u00e1nh\u00e1bor\u00fa</i></h1>') !== -1,
+	   'and the preview shows the same header');
+	eq(SZEM4_SRC.indexOf("wallp.jpg"), -1, 'with no banner picture left behind it');
+	eq(PREVIEW_SRC.indexOf("wallp.jpg"), -1, 'on either side');
+
+	/* The farm table is the widest thing the interface holds and the one whose
+	   columns are addressed by index, so the preview has to keep all seven. */
+	var fej = PREVIEW_SRC.slice(PREVIEW_SRC.indexOf('id="farm_hova"'));
+	fej = fej.slice(0, fej.indexOf('</tr>'));
+	eq((fej.match(/<th/g) || []).length, 7, 'the preview farm table still has seven columns');
+});
