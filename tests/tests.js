@@ -1380,3 +1380,66 @@ suite('The layout holds together at any width', function () {
 	eq(szabalyok.indexOf('50vw - 512px'), -1, 'the panes are no longer half of a number spelled twice');
 	eq(szabalyok.indexOf('width: 1024px'), -1, 'and the column width is not a literal any more');
 });
+
+/* ------------------------------------------------------------------------ */
+suite('The default background', function () {
+	/* The wallpaper feature stays exactly as it was -- put a link in the box
+	   and it appears. What changed is what is in the box to begin with: it
+	   used to be the artwork out of the upstream repository, which is not a
+	   neutral thing to ship. */
+	var api = sandbox({}, [sliceFn(SZEM4_SRC, 'setWallpaper')]);
+
+	function panel() { return { style: { backgroundImage: 'url("regi.jpg")' } }; }
+
+	/* "-" is how the rest of the style settings spell "nothing here", and the
+	   help text beside these boxes already promised the background colour
+	   would be used when there was no picture. It never was: "-" went
+	   straight into url('-'), a request for a file called "-". */
+	var p = panel();
+	api.setWallpaper(p, '-');
+	eq(p.style.backgroundImage, '', 'a dash clears the wallpaper instead of asking for a file called "-"');
+
+	p = panel();
+	api.setWallpaper(p, '');
+	eq(p.style.backgroundImage, '', 'and so does an empty box');
+
+	/* The feature itself, unchanged. */
+	p = panel();
+	api.setWallpaper(p, 'https://example.invalid/kep.jpg');
+	eq(p.style.backgroundImage, "url('https://example.invalid/kep.jpg')",
+	   'a link still becomes the wallpaper');
+
+	api.setWallpaper(null, '-');   /* must not throw */
+	ok(true, 'and a missing pane is not an error');
+
+	/* What the boxes start on. */
+	function boxDefault(nev) {
+		var m = SZEM4_SRC.match(new RegExp('name="' + nev + '" value="([^"]*)"'));
+		return m ? m[1] : '(nincs)';
+	}
+	eq(boxDefault('wallp_left'), '-', 'the left wallpaper box ships empty');
+	eq(boxDefault('wallp_right'), '-', 'and the right one');
+	eq(SZEM4_SRC.indexOf('default_bg_left.jpg') === -1 &&
+	   SZEM4_SRC.indexOf('default_bg_right.jpg') === -1, false,
+	   'the old art is still named -- but only where it is being moved away from');
+
+	/* ...which is the point: an install that already has the artwork saved
+	   must move on too, or the neutral default never actually ships. */
+	var mig = sandbox({}, [sliceFrom(SZEM4_SRC, 'var REGI_STILUS_ALAP', 'upgradeStyleDefaults')]);
+	var PIC = 'https://raw.githubusercontent.com/cncDAni2/klanhaboru/main/images/szem4/';
+	var s = { profile1: { wallp_left: PIC + 'default_bg_left.jpg',
+	                      wallp_right: PIC + 'default_bg_right.jpg' } };
+	eq(mig.upgradeStyleDefaults(s), 2, 'both old wallpapers are moved on');
+	eq(s.profile1.wallp_left, '-', 'the left one to nothing');
+	eq(s.profile1.wallp_right, '-', 'and the right one');
+
+	/* A wallpaper that was actually chosen is not a default. */
+	var sajat = { profile1: { wallp_left: 'https://example.invalid/sajat.jpg' } };
+	eq(mig.upgradeStyleDefaults(sajat), 0, 'a chosen wallpaper is left alone');
+	eq(sajat.profile1.wallp_left, 'https://example.invalid/sajat.jpg', 'exactly as it was');
+
+	/* The panes have to be part of the page when empty, or a neutral default
+	   is just a hole either side of the content. */
+	ok(szemCssRules().indexOf('.left-background, .right-background {') !== -1,
+	   'and the empty panes are painted rather than left blank');
+});

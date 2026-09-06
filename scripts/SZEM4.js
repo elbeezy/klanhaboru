@@ -742,6 +742,12 @@ function init(){try{
 		#farmolo_options .imgbox img {
 			height: 24px;
 		}
+		/* With no wallpaper set these are simply the page either side of the
+		   column, which is what makes a neutral default look deliberate
+		   rather than empty. */
+		.left-background, .right-background {
+			background-color: var(--szem-bg);
+		}
 		.left-background {
 			width: calc(50% - var(--szem-szelesseg) / 2);
 			height: 100vh;
@@ -941,10 +947,10 @@ function init(){try{
 				<div class="profile" onclick="selectTheme(4)">Téma 4</div>
 			</div>
 			<table class="style-settings-table">
-			<tr><td>Bal háttérkép</td><td><input type="text" size="80" name="wallp_left" value="${pic('default_bg_left.jpg')}" onchange="onWallpChange()"><br>
+			<tr><td>Bal háttérkép</td><td><input type="text" size="80" name="wallp_left" value="-" onchange="onWallpChange()"><br>
 										Videó: <input type="text" size="70" name="wallp_left_vid" value="-" onchange="onWallpChange()"><br>
 										Tükrözött? <input type="checkbox" onclick="onWallpChange()" name="wallp_left_mirror"></td><td rowspan="2">Videólink. Ha nem szeretnél írj "-" -t, és háttérképet használ. Ha az sincs vagy érvénytelen, akkor háttérszín lesz használva</td></tr>
-			<tr><td>Jobb háttérkép</td><td><input type="text" size="80"  name="wallp_right" value="${pic('default_bg_right.jpg')}" onchange="onWallpChange()"><br>
+			<tr><td>Jobb háttérkép</td><td><input type="text" size="80"  name="wallp_right" value="-" onchange="onWallpChange()"><br>
 										Videó: <input type="text" size="70" name="wallp_right_vid" value="-" onchange="onWallpChange()"><br>
 										Tükrözött? <input type="checkbox" onclick="onWallpChange()" name="wallp_right_mirror"></td></tr>
 			<tr><td>Tartalom háttérszíne</td><td><input type="text" size="30" name="content_bgcolor" value="#0b0d10" onchange="onWallpChange()"></td><td>[Default: #0b0d10] Minden CSS "background" property támogatott. <a href="https://www.w3schools.com/cssref/css3_pr_background.php" target="_BLANK">W3School link</a></td></tr>
@@ -998,6 +1004,16 @@ function selectTheme(themeId) {
 	onWallpChange(true, 'ALL');
 }
 
+/* A wallpaper pane. "-" is how the rest of the style settings spell "nothing
+   here", and the help text next to these boxes already says the background
+   colour is used when there is no picture -- so an empty or "-" box clears
+   the picture instead of asking the browser for a file named "-". */
+function setWallpaper(el, ertek) {
+	if (!el) return;
+	if (!ertek || ertek === '-') el.style.backgroundImage = '';
+	else el.style.backgroundImage = `url('${ertek}')`;
+}
+
 function onWallpChange(isUpdate=true, changedText) {
 	const settingsForm = document.getElementById('settings');
 	for (let i=0;i<settingsForm.length;i++) {
@@ -1021,8 +1037,8 @@ function onWallpChange(isUpdate=true, changedText) {
 
 	// document.querySelector('.left-background video').src = settingsForm.wallp_left_vid.value;
 	// document.querySelector('.right-background video').src = settingsForm.wallp_right_vid.value;
-	document.getElementsByClassName('left-background')[0].style.backgroundImage = `url('${settingsForm.wallp_left.value}')`;
-	document.getElementsByClassName('right-background')[0].style.backgroundImage = `url('${settingsForm.wallp_right.value}')`;
+	setWallpaper(document.getElementsByClassName('left-background')[0], settingsForm.wallp_left.value);
+	setWallpaper(document.getElementsByClassName('right-background')[0], settingsForm.wallp_right.value);
 	if (settingsForm.wallp_left_mirror.checked)
 		document.querySelector('.left-background').classList.add('mirrored_bg');
 	else
@@ -2110,7 +2126,9 @@ var REGI_STILUS_ALAP = {
 	content_bgcolor:   { '#111': '#0b0d10' },
 	content_fontcolor: { 'white': '#dfe4ea' },
 	content_border:    { 'yellow': '#272e37' },
-	content_shadow:    { '0 0 12px black': '0 2px 24px rgba(0,0,0,0.65)' }
+	content_shadow:    { '0 0 12px black': '0 2px 24px rgba(0,0,0,0.65)' },
+	wallp_left:  { 'https://raw.githubusercontent.com/cncDAni2/klanhaboru/main/images/szem4/default_bg_left.jpg': '-' },
+	wallp_right: { 'https://raw.githubusercontent.com/cncDAni2/klanhaboru/main/images/szem4/default_bg_right.jpg': '-' }
 };
 
 function upgradeStyleDefaults(settings) {
