@@ -1016,6 +1016,12 @@ function init(){try{
 		.szem4_kapacitas strong {
 			color: var(--szem-accent);
 		}
+		.szem4_kapacitas_ajanlas {
+			color: var(--szem-text);
+		}
+		.szem4_kapacitas_ajanlas b {
+			color: var(--szem-accent);
+		}
 		.szem4_kapacitas_reszlet,
 		.szem4_kapacitas_verdikt {
 			color: var(--szem-text-dim);
@@ -2548,7 +2554,11 @@ function defaultFarmState() {
 			jelentes: 0,  // hany farm-jelentest olvastunk vissza
 			zsakmany: 0,  // amennyi nyerset tenylegesen hazahoztak
 			jelTeher: 0,  // az ezt cipelo seregek teherbirasa osszesen
-			tele: 0       // ennyiszer jott haza tele a sereg (maradt ott nyers)
+			tele: 0,      // ennyiszer jott haza tele a sereg (maradt ott nyers)
+			/* A tamado sereg merete, hogy a Min sereg/falu ajanlas ugyanabban a
+			   mertekegysegben (nepesseg) szulessen meg, mint amiben a beallitas van. */
+			pop: 0,       // a jelentesekben szereplo tamado seregek nepessege
+			popMinta: 0   // ennyi jelentesbol tudtuk kiolvasni a sereg meretet
 		}
 	};
 }
@@ -3209,7 +3219,7 @@ function farmStatElakadt(minSeregMiatt) {
    Total for the same reason as the send-path recorders -- it runs inside the
    report analyser, whose catch would report a throw here as an unreadable
    report and lose the analysis that follows. */
-function farmStatJelentes(koord, zsakmany, teherbiras) {
+function farmStatJelentes(koord, zsakmany, teherbiras, nepesseg) {
 	var s = SZEM4_FARM && SZEM4_FARM.STAT;
 	if (!s) return;
 	if (!SZEM4_FARM.DOMINFO_FARMS || !SZEM4_FARM.DOMINFO_FARMS[koord]) return;
@@ -3225,6 +3235,12 @@ function farmStatJelentes(koord, zsakmany, teherbiras) {
 	   so this trip says nothing about what was left -- except that something
 	   was. That is the opposite signal to an army walking home empty. */
 	if (zsakmany >= teherbiras) s.tele++;
+	/* Counted separately from the reports themselves: if the unit table ever
+	   moves, the fill rate must not lose its sample along with the sizes. */
+	if (nepesseg > 0) {
+		s.pop += nepesseg;
+		s.popMinta++;
+	}
 }
 /* A STAT saved before a counter existed comes back without it, and the load
    merges one level deep -- it puts the stored object in place of the default
@@ -3264,7 +3280,8 @@ var STAT_SZOVEG = {
    The fill rate is measured, not estimated: it is what the reports said the
    armies brought home, over what those same armies could have carried. */
 function farmStatErtekeles(s) {
-	var ures = { minta: 0, toltes: null, teleArany: 0, padloArany: 0, hianyArany: 0, szint: 'nincs' };
+	var ures = { minta: 0, toltes: null, teleArany: 0, padloArany: 0, hianyArany: 0,
+	             ajanlott: null, szint: 'nincs' };
 	if (!s || !s.jelentes || !(s.jelTeher > 0)) return ures;
 	var probak = s.kuldes + s.minsereg + s.keves;
 	var e = {
@@ -3273,6 +3290,7 @@ function farmStatErtekeles(s) {
 		teleArany: s.tele / s.jelentes,
 		padloArany: probak ? s.minsereg / probak : 0,
 		hianyArany: probak ? s.keves / probak : 0,
+		ajanlott: null,
 		szint: 'rendben'
 	};
 	if (s.jelentes < STAT_MIN_MINTA) e.szint = 'keves_adat';
@@ -3281,6 +3299,21 @@ function farmStatErtekeles(s) {
 	   up, and the loot they could not lift is invisible in the fill rate. */
 	else if (e.teleArany > STAT_TELE || e.hianyArany > STAT_ARANY) e.szint = 'kicsi';
 	else if (e.padloArany > STAT_ARANY || e.toltes < STAT_GYENGE) e.szint = 'nagy';
+	/* What the armies actually carried, expressed as the population that would
+	   have carried it: capacity is population times carry-per-population, so
+	   scaling the average army by the measured fill gives the size that would
+	   have come home full. Same units as the setting, whatever the unit mix.
+
+	   Withheld while the sample is thin, and withheld outright on 'kicsi'.
+	   A trip that came home full says only that the village held AT LEAST that
+	   much, so those trips are censored upward and drag the fill rate down
+	   relative to the truth -- exactly when the reading is 'kicsi'. A number
+	   derived from that would advise sending fewer troops at the one moment
+	   the evidence says to send more. */
+	if (e.szint !== 'keves_adat' && e.szint !== 'kicsi' && s.popMinta > 0) {
+		var ajanlott = Math.round((s.pop / s.popMinta) * e.toltes);
+		if (ajanlott >= 1) e.ajanlott = ajanlott;
+	}
 	return e;
 }
 /* Deliberately total, and guarded on the element: it is called from the send
@@ -3299,6 +3332,9 @@ function farmStatKiir() {
 	el.innerHTML = '<strong>Kihasználtság: ' + fej + '</strong>' +
 		(reszek.length ? '<span class="szem4_kapacitas_reszlet">' + reszek.join(' &middot; ') + '</span>' : '') +
 		'<span class="szem4_kapacitas_verdikt">' + (STAT_SZOVEG[e.szint] || '') + '</span>' +
+		(e.ajanlott === null ? '' :
+			'<span class="szem4_kapacitas_ajanlas">Javasolt Min sereg/falu: <b>' +
+			e.ajanlott + '</b></span>') +
 		'<span class="szem4_kapacitas_null" onclick="farmStatNullaz()">Nullázás</span>';
 }
 /* The counters describe the settings that were in force while they were
@@ -4286,6 +4322,41 @@ function jelentesZsakmany(doc) {
 	}
 	return null;
 }
+/* The population of the army that carried the haul.
+
+   Min sereg/falu is set in population, so the recommendation has to be
+   measured in population too -- and going through TANYA makes it agnostic to
+   what he actually farms with, since the reading is in the same currency as
+   the setting whatever the unit mix.
+
+   The quantity row is found by shape, not by index: the table opens with a
+   row of unit icons and ends with a row of losses, and BOTH count rows carry
+   data-unit-count -- summing them all would count the dead twice over. The
+   first row that has them is the army that was sent.
+
+   An army carrying a unit with no population figure here is not a farming
+   army at all, and the honest answer is to skip the report rather than sum
+   what is left: understating an army's size biases the recommendation toward
+   sending fewer troops, which is the one direction that must not be guessed
+   at. */
+function jelentesNepesseg(doc) {
+	var tabla = doc.getElementById('attack_info_att_units');
+	if (!tabla) return null;
+	for (var i = 0; i < tabla.rows.length; i++) {
+		var cellak = tabla.rows[i].querySelectorAll('[data-unit-count]');
+		if (!cellak.length) continue;
+		var pop = 0;
+		for (var j = 0; j < cellak.length; j++) {
+			var db = parseInt(cellak[j].getAttribute('data-unit-count'), 10);
+			if (!(db > 0)) continue;
+			var tipus = (String(cellak[j].className).match(/unit-item-([a-z]+)/) || [])[1];
+			if (!tipus || !(tipus in TANYA)) return null;
+			pop += db * TANYA[tipus];
+		}
+		return pop > 0 ? pop : null;
+	}
+	return null;
+}
 function getSpyBuildingLevels(doc) {
 	const spyLevels = {
 		main: 1,
@@ -4382,7 +4453,8 @@ function szem4_VIJE_2elemzes(adatok){try{
 	} else if (!isOld) {
 		var zsak = jelentesZsakmany(VIJE_REF2.document);
 		if (zsak) {
-			farmStatJelentes(adatok[1], zsak.zsakmany, zsak.teherbiras);
+			farmStatJelentes(adatok[1], zsak.zsakmany, zsak.teherbiras,
+			                 jelentesNepesseg(VIJE_REF2.document));
 			/* Short of what it could carry means the village was emptied, so
 			   record it as bare. A full army proves only that it ran out of
 			   room, and must leave the previous estimate standing. */

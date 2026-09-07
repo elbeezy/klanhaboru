@@ -3064,7 +3064,8 @@ suite('When the gatherer books its next visit', function () {
 suite('farmolo -- a sereg meretenek merese', function () {
 	function ures() {
 		return { kezdet: 0, kuldes: 0, minsereg: 0, keves: 0,
-		         jelentes: 0, zsakmany: 0, jelTeher: 0, tele: 0 };
+		         jelentes: 0, zsakmany: 0, jelTeher: 0, tele: 0,
+		         pop: 0, popMinta: 0 };
 	}
 	function api(stat) {
 		var w = { SZEM4_FARM: arguments.length ? { STAT: stat } : { STAT: ures() } };
@@ -3079,7 +3080,7 @@ suite('farmolo -- a sereg meretenek merese', function () {
 	var alap = sandbox({}, [sliceFn(SZEM4_SRC, 'defaultFarmState')]).defaultFarmState();
 	eq(Object.keys(alap.STAT).sort(),
 	   ['jelTeher', 'jelentes', 'keves', 'kezdet', 'kuldes', 'minsereg',
-	    'tele', 'zsakmany'],
+	    'pop', 'popMinta', 'tele', 'zsakmany'],
 	   'a fresh farm state carries every counter the panel reads');
 
 	var a = api();
@@ -3128,6 +3129,73 @@ suite('farmolo -- a sereg meretenek merese', function () {
 });
 
 /* ------------------------------------------------------------------------ */
+/* ------------------------------------------------------------------------ */
+/* Min sereg/falu is set in population, so the panel cannot recommend a value
+   for it without knowing what the armies in the reports actually cost. The
+   markup here is copied from his saved report: three rows, unit icons then
+   the quantity sent then the losses, and BOTH count rows carry
+   data-unit-count. */
+suite('farmolo -- mekkora sereg hozta haza', function () {
+	/* The real population table, sliced out rather than retyped: a recommen-
+	   dation measured against a made-up cost table would be measured against
+	   nothing. */
+	var tanyaKezd = SZEM4_SRC.indexOf('TANYA = {');
+	var tanyaSrc = 'var ' + SZEM4_SRC.slice(tanyaKezd, matchBraces(SZEM4_SRC, tanyaKezd)) + ';';
+	var api = sandbox({}, [tanyaSrc, sliceFn(SZEM4_SRC, 'jelentesNepesseg')],
+	                  { tanya: 'TANYA' });
+
+	function cella(tipus, db) {
+		return '<td data-unit-count="' + db + '" class="unit-item unit-item-' + tipus +
+		       (db ? '' : ' hidden') + '">' + db + '</td>';
+	}
+	function sor(mit) {
+		var h = '<td width="20%">x</td>';
+		for (var t in mit) h += cella(t, mit[t]);
+		return '<tr>' + h + '</tr>';
+	}
+	/* The icon row carries no counts at all -- that is what makes the search
+	   for the first counting row land on the quantity. */
+	var ikonSor = '<tr class="center"><td></td>' +
+		'<td><a class="unit_link" href="#" data-unit="light"><img alt="" /></a></td></tr>';
+	function doc(sorok) {
+		var wrap = document.createElement('div');
+		wrap.innerHTML = '<table id="attack_info_att_units">' + sorok + '</table>';
+		return { getElementById: function (id) { return wrap.querySelector('[id="' + id + '"]'); } };
+	}
+
+	eq(api.tanya().light, 4, 'the real cost table is the one being used');
+
+	/* His own report: five light cavalry, which is the 20 population he has
+	   Min sereg/falu set to. */
+	eq(api.jelentesNepesseg(doc(ikonSor + sor({ spear: 0, light: 5 }))), 20,
+	   'the army that went is priced in population');
+
+	/* The row of losses repeats every class the quantity row has. Summing the
+	   whole table would charge him for the dead a second time. */
+	eq(api.jelentesNepesseg(doc(ikonSor + sor({ light: 5 }) + sor({ light: 3 }))), 20,
+	   'the losses row underneath is not added to the army that was sent');
+
+	eq(api.jelentesNepesseg(doc(ikonSor + sor({ spear: 10, light: 5, heavy: 2 }))), 42,
+	   'a mixed army is priced unit by unit');
+
+	/* Rams and catapults have no population figure here, and an army carrying
+	   them was not sent to farm. Pricing what is left would understate it --
+	   and an understated army recommends sending fewer troops, the one
+	   direction this must never guess in. */
+	ok(api.jelentesNepesseg(doc(ikonSor + sor({ light: 5, ram: 3 }))) === null,
+	   'an army with a unit we cannot price is skipped rather than half-counted');
+	eq(api.jelentesNepesseg(doc(ikonSor + sor({ light: 5, ram: 0 }))), 20,
+	   'though a column merely showing a zero of one is not that');
+
+	ok(api.jelentesNepesseg(doc(ikonSor)) === null,
+	   'a report with no counts in it yields nothing');
+	ok(api.jelentesNepesseg(doc(ikonSor + sor({ light: 0 }))) === null,
+	   'and neither does an army of nobody');
+	ok(api.jelentesNepesseg({ getElementById: function () { return null; } }) === null,
+	   'nor does a report with no unit table at all');
+});
+
+/* ------------------------------------------------------------------------ */
 /* The counters only help if they resolve into one of two opposite answers:
    send fewer units per attack, or field more of them. The thresholds live in
    the source rather than here, so this pins the readings that separate those
@@ -3138,7 +3206,8 @@ suite('farmolo -- mit mondanak a szamlalok', function () {
 	                  { szoveg: 'STAT_SZOVEG', minMinta: 'STAT_MIN_MINTA' });
 	function stat(o) {
 		var s = { kezdet: 1, kuldes: 0, minsereg: 0, keves: 0,
-		          jelentes: 0, zsakmany: 0, jelTeher: 0, tele: 0 };
+		          jelentes: 0, zsakmany: 0, jelTeher: 0, tele: 0,
+		          pop: 0, popMinta: 0 };
 		for (var k in o) s[k] = o[k];
 		return s;
 	}
@@ -3192,6 +3261,38 @@ suite('farmolo -- mit mondanak a szamlalok', function () {
 	                                           zsakmany: 32000, tele: 5, minsereg: 5, keves: 5 }));
 	eq(rendben.szint, 'rendben', 'a well-fitted army is left alone rather than nagged at');
 
+	/* ---- the recommendation ---- */
+	/* The identity it rests on: capacity is population times carry per
+	   population, so scaling the average army by the share it actually filled
+	   gives the population that would have come home full. 20 population
+	   filling 60% of what it could carry says 12 would have done the same
+	   work -- which is his real number, and the reason he asked for this. */
+	var ajanl = api.farmStatErtekeles(stat({ kuldes: 100, jelentes: 100, jelTeher: 40000,
+	                                         zsakmany: 24000, pop: 2000, popMinta: 100 }));
+	eq(ajanl.ajanlott, 12, 'the recommendation is the average army scaled by how full it came home');
+
+	/* Nothing to average means nothing to say -- and dividing by it would put
+	   a NaN in the panel rather than an absence. */
+	var nincsPop = api.farmStatErtekeles(stat({ kuldes: 100, jelentes: 100, jelTeher: 40000,
+	                                            zsakmany: 24000 }));
+	ok(nincsPop.ajanlott === null, 'with no army sizes read there is no recommendation');
+
+	var korai = api.farmStatErtekeles(stat({ jelentes: 5, jelTeher: 2000, zsakmany: 1200,
+	                                         pop: 100, popMinta: 5 }));
+	ok(korai.ajanlott === null, 'and none while the sample is still too thin to advise on');
+
+	/* The one it must refuse. A trip that came home full proves only that the
+	   village held AT LEAST that much, so those trips are censored and hold
+	   the measured fill below the truth -- exactly when the reading is that
+	   the armies are too small. Scaling by it would advise sending fewer
+	   troops at the very moment the evidence says send more. */
+	var teleAjanl = api.farmStatErtekeles(stat({ kuldes: 100, jelentes: 100, jelTeher: 40000,
+	                                             zsakmany: 32000, tele: 40,
+	                                             pop: 2000, popMinta: 100 }));
+	eq(teleAjanl.szint, 'kicsi', 'armies coming home full is still read as too small');
+	ok(teleAjanl.ajanlott === null,
+	   'and no number is offered there, because any would be a number to shrink to');
+
 	/* A verdict with no sentence would render as an empty panel. */
 	var szoveg = api.szoveg();
 	['nincs', 'keves_adat', 'nagy', 'kicsi', 'rendben'].forEach(function (k) {
@@ -3208,6 +3309,30 @@ suite('farmolo -- mit mondanak a szamlalok', function () {
 	n.farmStatNullaz();
 	eq(nw.SZEM4_FARM.STAT.kuldes, 0, 'clearing puts every counter back to nothing');
 	eq(nw.SZEM4_FARM.STAT.minsereg, 0, 'including the reasons plans were abandoned');
+
+	/* ---- what actually reaches the panel ---- */
+	/* The verdict being right is not the same as it being shown. This paints
+	   into a real element and reads the text back, because a recommendation
+	   computed and then dropped on the floor is the failure this feature
+	   would be most likely to have. */
+	function kiir(stt) {
+		var el = document.createElement('div');
+		var w = { SZEM4_FARM: { STAT: stt },
+		          document: { getElementById: function (id) { return id === 'farm_kapacitas' ? el : null; } } };
+		sandbox(w, [sliceFrom(SZEM4_SRC, 'var STAT_MIN_MINTA', 'farmStatKiir')]).farmStatKiir();
+		return el;
+	}
+
+	var panel = kiir(stat({ kuldes: 100, jelentes: 100, jelTeher: 40000,
+	                        zsakmany: 24000, pop: 2000, popMinta: 100 }));
+	ok(/60%/.test(panel.textContent), 'the panel shows the measured fill rate');
+	ok(/Min sereg\/falu/.test(panel.textContent) && /12/.test(panel.textContent),
+	   'and names the value it recommends for Min sereg/falu');
+
+	var panelTele = kiir(stat({ kuldes: 100, jelentes: 100, jelTeher: 40000, zsakmany: 32000,
+	                            tele: 40, pop: 2000, popMinta: 100 }));
+	ok(!/Min sereg\/falu/.test(panelTele.textContent),
+	   'and says nothing about the setting when the armies are coming home full');
 
 	/* Wiring: the reading is worthless if nothing ever paints it. */
 	ok(SZEM4_SRC.indexOf('id="farm_kapacitas"') !== -1,
@@ -3349,7 +3474,8 @@ suite('farmolo -- a valos zsakmany a jelentesbol', function () {
 			SZEM4_FARM: {
 				DOMINFO_FARMS: farmok === undefined ? { '527|466': {} } : farmok,
 				STAT: { kezdet: 0, kuldes: 0, teher: 0, vart: 0, alul: 0, minsereg: 0,
-				        keves: 0, jelentes: 0, zsakmany: 0, jelTeher: 0, tele: 0 }
+				        keves: 0, jelentes: 0, zsakmany: 0, jelTeher: 0, tele: 0,
+				        pop: 0, popMinta: 0 }
 			},
 			Date: { now: function () { return 5000; } }
 		};
@@ -3359,12 +3485,24 @@ suite('farmolo -- a valos zsakmany a jelentesbol', function () {
 	}
 
 	var r = rec();
-	r.farmStatJelentes('527|466', 238, 400);
+	r.farmStatJelentes('527|466', 238, 400, 20);
 	eq(r.stat.jelentes, 1, 'a report about a farm is counted');
 	eq(r.stat.zsakmany, 238, 'the real haul is recorded');
 	eq(r.stat.jelTeher, 400, 'against the capacity that fetched it');
 	eq(r.stat.tele, 0, 'an army with room to spare did not come home full');
 	eq(r.stat.kezdet, 5000, 'and the measurement records when it began');
+	eq(r.stat.pop, 20, 'the size of the army that fetched it is recorded too');
+	eq(r.stat.popMinta, 1, 'against its own sample count');
+
+	/* Kept apart from the report count on purpose: if the unit table ever
+	   moves, the fill rate must keep its sample rather than losing it to a
+	   size that could not be read. */
+	var p = rec();
+	p.farmStatJelentes('527|466', 238, 400);
+	p.farmStatJelentes('527|466', 238, 400, 0);
+	eq(p.stat.jelentes, 2, 'a report whose army could not be sized still counts as a report');
+	eq(p.stat.popMinta, 0, 'but not toward the sizes');
+	eq(p.stat.pop, 0, 'and adds nothing to them');
 
 	r.farmStatJelentes('527|466', 400, 400);
 	eq(r.stat.tele, 1, 'an army that filled up is counted -- it left loot behind');
@@ -3423,6 +3561,8 @@ suite('farmolo -- a valos zsakmany a jelentesbol', function () {
 	   'the analyser reads the haul off every report it can');
 	ok(elemzo.indexOf('farmStatJelentes(adatok[1]') !== -1,
 	   'and records it against the village it came from');
+	ok(codeOnly(elemzo).indexOf('jelentesNepesseg(VIJE_REF2.document)') !== -1,
+	   'and reads the size of the army that fetched it, from the same report');
 	ok(codeOnly(sliceFn(SZEM4_SRC, 'szem4_ADAT_loadNow')).indexOf('upgradeFarmStat(') !== -1,
 	   'a loaded farm state is brought up to the current counter shape');
 });
