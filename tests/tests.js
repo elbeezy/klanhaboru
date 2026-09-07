@@ -2024,3 +2024,114 @@ suite("SZEM's own icons", function () {
 	eq(SZEM4_SRC.split('getComputedStyle(document.documentElement)').length - 1, 1,
 	   'the palette is read in exactly one place');
 });
+
+
+/* --------------------------------------------------------------- epitesi sor
+   Read off his saved build page (Building.htm), not imagined: the queue is a
+   <tbody id="buildqueue"> whose first row is the <th> header, whose orders
+   carry class="... buildorder_<id>" and a .webp building picture, and between
+   the orders sits a progress-bar row -- one colspan cell, no image at all.
+   That row and the .webp are exactly what broke the old filename parse, so
+   the fixture keeps both. */
+function queueRow(html, cls) {
+	var tr = document.createElement('tr');
+	if (cls) tr.className = cls;
+	tr.innerHTML = html;
+	return tr;
+}
+function buildQueueEl(rows) {
+	var table = document.createElement('table');
+	var tbody = document.createElement('tbody');
+	tbody.id = 'buildqueue';
+	tbody.appendChild(queueRow('<th>Építés</th><th>Időtartam</th><th>Sebesség</th><th>Elkészül</th><th>Törlés</th><th></th>'));
+	rows.forEach(function (r) { tbody.appendChild(r); });
+	table.appendChild(tbody);
+	return tbody;
+}
+/* An order exactly as the game writes it, .webp picture included. */
+function orderRow(id, ido, kep) {
+	return queueRow(
+		'<td class="lit-item"><img src="https://dshu.innogamescdn.com/asset/db281c7a/graphic/buildings/mid/' +
+		(kep || id + '2.webp') + '" title="x" class="bmain_list_img" />' + id + '<br />19. szint</td>' +
+		'<td class="nowrap lit-item"><span class="timer">' + ido + '</span></td>' +
+		'<td class="lit-item"></td><td class="lit-item">ma ekkor: 13:33:21</td>' +
+		'<td class="lit-item"><a class="btn btn-cancel">Visszavonás</a></td>',
+		'lit nodrag buildorder_' + id);
+}
+/* The progress bar the game inserts under the order it is currently working
+   on. One cell, spanning five, holding a div -- no image anywhere. */
+function progressRow() {
+	return queueRow('<td colspan="5" class="order-progress-cell"><div class="order-progress"></div></td>', 'lit');
+}
+
+suite('epito -- az epitesi sor kiolvasasa', function () {
+	function api(naplo) {
+		return sandbox({ debug: function (a, b) { if (naplo) naplo.push(String(b)); } },
+		               [sliceFn(SZEM4_SRC, 'readBuildQueue')]);
+	}
+
+	/* The whole bug, in one assertion. This exact shape -- order, progress,
+	   order, order -- is what his overnight log was failing on, four rows
+	   reported every pass. */
+	var sor = buildQueueEl([orderRow('iron', '0:40:41'), progressRow(),
+	                        orderRow('stone', '1:00:00'), orderRow('farm', '0:30:00')]);
+	var hibak = [];
+	var r = api(hibak).readBuildQueue(sor);
+	eq(r.list, 'iron;stone;farm;', 'every queued building is read, in order');
+	eq(hibak, [], 'and nothing is reported as a failure');
+
+	/* The times, so that "how long until the queue frees up" is right again.
+	   40:41 -> 40.68 perc, plus an hour, plus a half hour. */
+	eq(Math.round(r.allBuildTime), 131, 'the whole queue is 131 minutes');
+	eq(Math.ceil(r.firstBuildTime), 41, 'the first building has 41 minutes left');
+
+	/* The progress row is skipped in silence. It is not an order and it is
+	   not a fault; reporting it is what filled his log all night. */
+	var csak = buildQueueEl([progressRow()]);
+	var h2 = [];
+	eq(api(h2).readBuildQueue(csak).list, '', 'a queue of nothing but a progress row reads as empty');
+	eq(h2, [], 'and stays quiet about it');
+
+	/* Mutation test for the .webp cause: the picture is now irrelevant, so
+	   the same row with the old .png name -- or with no picture at all --
+	   must still read. If this ever goes back to parsing the filename, the
+	   no-picture case fails immediately. */
+	eq(api().readBuildQueue(buildQueueEl([orderRow('wood', '0:10:00', 'wood1.png')])).list,
+	   'wood;', 'a .png picture reads the same way');
+	var kepNelkul = queueRow('<td class="lit-item">fa</td><td><span>0:10:00</span></td>',
+	                         'lit buildorder_wood');
+	eq(api().readBuildQueue(buildQueueEl([kepNelkul])).list, 'wood;',
+	   'and a row with no picture at all still reads');
+
+	/* A building whose clock cannot be read is still a building that is
+	   queued. Getting this wrong is worse than a short time estimate: the
+	   builder adds the queued levels to the current ones to decide what to
+	   raise next, so dropping one makes it queue the same building twice. */
+	var romlott = queueRow('<td class="lit-item">x</td><td class="nowrap"><span class="timer"></span></td>',
+	                       'lit nodrag buildorder_main');
+	var h3 = [];
+	var r3 = api(h3).readBuildQueue(buildQueueEl([romlott, orderRow('barracks', '0:20:00')]));
+	eq(r3.list, 'main;barracks;', 'an unreadable clock still leaves the building on the list');
+	eq(h3.length, 1, 'and reports exactly that one row');
+	ok(h3[0].indexOf('1. sor') !== -1, 'naming the row it could not read');
+
+	/* Two names must never run together. Before the fix the name and its
+	   semicolon were appended on either side of the time parse, so a row
+	   that threw in between produced "mainbarracks" -- a building nothing
+	   matches, silently costing both entries. */
+	ok(r3.list.indexOf('mainbarracks') === -1, 'a failed row cannot glue two names together');
+
+	/* The header row is not an order. */
+	eq(api().readBuildQueue(buildQueueEl([])).list, '', 'an empty queue reads as empty');
+
+	/* The order row also carries id="buildorder_1", and the page has a
+	   buildorder_reorder URL in a script -- neither names a building. The
+	   class attribute is the only thing read, so a row carrying the id but
+	   no buildorder_ class must contribute nothing. Written this way round
+	   deliberately: asserting it on a row that HAS the class would pass even
+	   if the id were being read too. */
+	var csakId = queueRow('<td class="lit-item">k</td><td><span>0:05:00</span></td>', 'sortable_row');
+	csakId.id = 'buildorder_1';
+	eq(api().readBuildQueue(buildQueueEl([csakId])).list, '',
+	   'the row id buildorder_1 is not mistaken for a building');
+});

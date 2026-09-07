@@ -4589,24 +4589,49 @@ function canAffordBuildNow(ref, id) {
 	return v.wood >= cost.wood && v.stone >= cost.stone && v.iron >= cost.iron;
 }
 
+/* Az építési sor kiolvasása. A soron belül az épületet maga a sor osztálya
+   nevezi meg (buildorder_<id>); korábban a kép fájlnevéből olvastuk ki, ami
+   két okból is elromlott. A játék azóta .webp formában szolgálja ki az
+   épületgrafikát, a minta viszont .png-t követelt, és a megrendelések közé a
+   sor egy folyamatjelző sort is beszúr, amelyben egyáltalán nincs kép. Az
+   osztálynevet egyik sem érinti. */
+function readBuildQueue(buildQueue) {
+	var eredmeny = { list: '', allBuildTime: 0, firstBuildTime: 0 };
+	var rows = buildQueue.rows;
+	for (var i = 1; i < rows.length; i++) { try {
+		var row = rows[i];
+		var epulet = /\bbuildorder_([a-z]+)\b/.exec(row.className || '');
+		/* A folyamatjelző sor nem megrendelés, tehát nem is hiba: átlépjük
+		   némán, különben minden egyes körben hibát jelentene. */
+		if (!epulet) continue;
+		/* Az épület a hátralévő idő kiolvasása ELŐTT kerül a listára. Egy sor,
+		   amelynek az óráját nem tudjuk elolvasni, attól még ténylegesen a
+		   sorban álló épület; a név és az elválasztó pontosvessző külön
+		   hozzáfűzése pedig korábban összeragasztott két nevet, ha a kettő
+		   között elszállt az időolvasás. */
+		eredmeny.list += epulet[1] + ';';
+		var textTime = row.cells[1].textContent.split(':');
+		var perc = parseInt(textTime[0]) * 60 + parseInt(textTime[1]) + (parseInt(textTime[2]) / 60);
+		if (isNaN(perc)) throw 'a hátralévő idő nem olvasható: "' + row.cells[1].textContent + '"';
+		eredmeny.allBuildTime += perc;
+		if (eredmeny.firstBuildTime == 0) eredmeny.firstBuildTime = eredmeny.allBuildTime;
+	} catch (e) { debug('szem4_EPITO_IntettiBuild', `Az építési sor ${i}. sorát nem sikerült értelmezni, a hátralévő idő emiatt kevesebb lehet: ${e}`); } }
+	return eredmeny;
+}
+
 function szem4_EPITO_IntettiBuild(buildOrder){try{
 	TamadUpdt(EPIT_REF); // reports its own failures
 	var buildList=""; /*Current BuildingList IDs*/
 	var allBuildTime=0; /*Ennyi perc építési idő, csak kiírás végett*/
 	var firstBuildTime=0; /*Az első épület építési ideje*/
-	var textTime;
 
 	try {
 		var buildQueue = EPIT_REF.document.getElementById("buildqueue");
 		if (!buildQueue) throw 'No queue';
-		var buildQueueRows=buildQueue.rows;
-		for (var i=1;i<buildQueueRows.length;i++) {try{
-			buildList+=buildQueueRows[i].cells[0].getElementsByTagName("img")[0].src.match(/[A-Za-z0-9]+\.(png)/g)[0].replace(/[0-9]+/g,"").replace(".png","");
-			textTime=buildQueueRows[i].cells[1].textContent.split(":");
-			allBuildTime+=parseInt(textTime[0])*60+parseInt(textTime[1])+(parseInt(textTime[2])/60);
-			if (firstBuildTime==0) firstBuildTime=allBuildTime;
-			buildList+=";";
-		}catch(e){ debug('szem4_EPITO_IntettiBuild', `Az építési sor ${i}. sorát nem sikerült értelmezni, a hátralévő idő emiatt kevesebb lehet: ${e}`); }}
+		var sorAdat = readBuildQueue(buildQueue);
+		buildList = sorAdat.list;
+		allBuildTime = sorAdat.allBuildTime;
+		firstBuildTime = sorAdat.firstBuildTime;
 
 		allBuildTime = Math.round(allBuildTime);
 		firstBuildTime = Math.ceil(firstBuildTime);
