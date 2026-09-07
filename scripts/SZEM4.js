@@ -31,7 +31,7 @@ Object.assign(window, {
 	szem4_EPITO_csopDelete, szem4_EPITO_infoCell, szem4_EPITO_most, szem4_EPITO_perccsokkento,
 	szem4_EPITO_ujCsop, szem4_EPITO_ujFalu, szem4_GYUJTO_search, szem4_farmolo_csoport,
 	szem4_farmolo_multiclick, szem4_vije_forgot, szunet, szunetMind,
-	updateDefaultProdHour, validate,
+	updateDefaultProdHour, validate, farmStatNullaz,
 });
 
 function stop(){
@@ -1000,6 +1000,33 @@ function init(){try{
 		}
 		.gyujto_table td:nth-child(2) {
 			text-align: center;
+		}
+		/* The capacity readout sits directly above the heartbeat and is read
+		   at a glance, so the reading itself carries the accent and the
+		   supporting counts step back rather than competing with it. */
+		.szem4_kapacitas {
+			display: flex;
+			flex-wrap: wrap;
+			align-items: baseline;
+			justify-content: center;
+			gap: 4px 10px;
+			padding: 6px 8px;
+			font-size: 12px;
+		}
+		.szem4_kapacitas strong {
+			color: var(--szem-accent);
+		}
+		.szem4_kapacitas_reszlet,
+		.szem4_kapacitas_verdikt {
+			color: var(--szem-text-dim);
+		}
+		.szem4_kapacitas_null {
+			color: var(--szem-text-dim);
+			text-decoration: underline;
+			cursor: pointer;
+		}
+		.szem4_kapacitas_null:hover {
+			color: var(--szem-accent);
 		}
 	`;
 	let szemStyle_el = document.createElement('style');
@@ -2908,6 +2935,7 @@ function rebuildDOM_farm() {try{
 	}
 	refreshFarmDistances();
 	hideFarms();
+	farmStatKiir(); // a mentett szamlalok kulonben csak az elso kuldes utan jelennek meg
 	debug('rebuildDOM_farm', '(2) Loading debug: FROM = ' + JSON.stringify(SZEM4_FARM.DOMINFO_FROM));
 } catch(e) {
 	debug('rebuildDOM_farms', e);
@@ -3179,6 +3207,70 @@ function farmStatElakadt(minSeregMiatt) {
 	if (!s.kezdet) s.kezdet = Date.now();
 	if (minSeregMiatt) s.minsereg++;
 	else s.keves++;
+}
+/* Below this many attacks the ratios swing wildly and would have him moving
+   troops on noise, so the panel says so instead of advising. */
+var STAT_MIN_MINTA = 20;
+/* Under this share of its capacity an army is mostly carrying air. Not a
+   round number by accident: sizing to the expected loot leaves a rounding
+   remainder even when nothing is wrong, so the bar sits below where a
+   correctly sized army lands. */
+var STAT_GYENGE = 0.55;
+/* A share of attempts, above which one cause is worth naming out loud. */
+var STAT_ARANY = 0.15;
+/* The four readings and what each one asks him to do. Kept beside the rule
+   that produces them so a new verdict cannot be added without its sentence. */
+var STAT_SZOVEG = {
+	nincs:     'Még nem indult támadás, nincs mit mérni.',
+	keves_adat:'Még kevés a minta, várj még egy kicsit.',
+	nagy:      'A seregek nagyrészt üresen járnak: a Min sereg/falu több egységet küld, mint amennyit ezek a faluk megtöltenek. Érdemes csökkenteni.',
+	kicsi:     'Gyakran marad ott nyers, amit nem bírt el a sereg. Több egységgel többet hoznál.',
+	rendben:   'A sereg mérete illik a farmokhoz.'
+};
+/* Reads the counters as one verdict. Pure, so the thresholds can be tested
+   without a page: everything it needs is in the object handed to it. */
+function farmStatErtekeles(s) {
+	var ures = { minta: 0, toltes: null, padloArany: 0, hianyArany: 0, alulArany: 0, szint: 'nincs' };
+	if (!s || !s.kuldes || !(s.teher > 0)) return ures;
+	var probak = s.kuldes + s.minsereg + s.keves;
+	var e = {
+		minta: s.kuldes,
+		toltes: s.vart / s.teher,
+		padloArany: probak ? s.minsereg / probak : 0,
+		hianyArany: probak ? s.keves / probak : 0,
+		alulArany: s.alul / s.kuldes,
+		szint: 'rendben'
+	};
+	if (s.kuldes < STAT_MIN_MINTA) e.szint = 'keves_adat';
+	/* Both readings here mean the same remedy -- fewer units per send -- and
+	   the floor is checked first because it names the setting to change. */
+	else if (e.padloArany > STAT_ARANY || e.toltes < STAT_GYENGE) e.szint = 'nagy';
+	else if (e.alulArany > STAT_ARANY || e.hianyArany > STAT_ARANY) e.szint = 'kicsi';
+	return e;
+}
+/* Deliberately total, and guarded on the element: it is called from the send
+   path, where a throw would take the farm engine's step counter down with it. */
+function farmStatKiir() {
+	var el = document.getElementById('farm_kapacitas');
+	if (!el) return;
+	var s = SZEM4_FARM && SZEM4_FARM.STAT;
+	var e = farmStatErtekeles(s);
+	var fej = e.toltes === null ? '&ndash;' : Math.round(e.toltes * 100) + '%';
+	var reszek = [];
+	if (s && s.kuldes) reszek.push(s.kuldes + ' támadás');
+	if (s && s.alul) reszek.push(s.alul + '&times; maradt ott nyers');
+	if (s && s.minsereg) reszek.push(s.minsereg + '&times; a minimum sereg miatt maradt el');
+	if (s && s.keves) reszek.push(s.keves + '&times; nem volt elég egység');
+	el.innerHTML = '<strong>Kihasználtság: ' + fej + '</strong>' +
+		(reszek.length ? '<span class="szem4_kapacitas_reszlet">' + reszek.join(' &middot; ') + '</span>' : '') +
+		'<span class="szem4_kapacitas_verdikt">' + (STAT_SZOVEG[e.szint] || '') + '</span>' +
+		'<span class="szem4_kapacitas_null" onclick="farmStatNullaz()">Nullázás</span>';
+}
+/* The counters describe the settings that were in force while they were
+   collected, so changing a setting is exactly when they want clearing. */
+function farmStatNullaz() {
+	if (SZEM4_FARM) SZEM4_FARM.STAT = defaultFarmState().STAT;
+	farmStatKiir();
 }
 function addCurrentMovementToList(formEl, farmCoord, farmHelyRow, plannedUnits) {try{
 	var patternOfIdo = /<td>[0-9]+:[0-9]+:[0-9]+<\/td>/g;
@@ -3694,6 +3786,7 @@ function szem4_farmolo_3egyeztet(adatok){try{
 	farmStatKuldes(kuldottTeher, adatok.plannedArmy.vartNyers);
 	gameEl(FARM_REF, '#troop_confirm_submit', 'tamadas megerosito gomb').click();
 	document.getElementById('cnc_farm_heartbeat').innerHTML = new Date().toLocaleString();
+	farmStatKiir();
 	const megbizhatosag = parseInt(document.getElementById('farmolo_options').megbizhatosag.value, 10);
 	const prodHour = SZEM4_FARM.DOMINFO_FARMS[adatok.plannedArmy.farmVill].prodHour;
 	if (adatok.plannedArmy.nyersToFarm > (prodHour * (megbizhatosag / 60) * 3)) {
@@ -3856,6 +3949,10 @@ ujkieg("farm","Farmoló",`<tr><td>
 				Mivel? ${rovidit("egysegek")}
 			</td>
 			<td>
+			</td>
+		</tr><tr>
+			<td colspan="2" class="nopadding_td" onmouseover="sugo(this, 'Mennyire telnek meg a farmolásra küldött seregek. Alacsony érték: több egységet küldesz, mint amennyi nyers van a faluban. Beállítás módosítása után nullázd, mert a számok a korábbi beállításokról szólnak.')">
+				<div class="szem4_kapacitas" id="farm_kapacitas"></div>
 			</td>
 		</tr><tr>
 			<td colspan="2" class="nopadding_td" onmouseover="sugo(this, 'Farmoló által küldött utolsó támadás idejét látod itt. Ha a szívre kattintasz, újraéleszted/feléleszted a farmolót a pihenésből.')">

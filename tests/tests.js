@@ -23,7 +23,7 @@ var EXPECTED_EXPORTS = [
 	'szem4_EPITO_csopDelete', 'szem4_EPITO_infoCell', 'szem4_EPITO_most', 'szem4_EPITO_perccsokkento',
 	'szem4_EPITO_ujCsop', 'szem4_EPITO_ujFalu', 'szem4_GYUJTO_search', 'szem4_farmolo_csoport',
 	'szem4_farmolo_multiclick', 'szem4_vije_forgot', 'szunet', 'szunetMind',
-	'updateDefaultProdHour', 'validate'
+	'updateDefaultProdHour', 'validate', 'farmStatNullaz'
 ];
 
 function exportedNames() {
@@ -3147,4 +3147,78 @@ suite('farmolo -- a sereg meretenek merese', function () {
 	var illeszto = sliceFn(SZEM4_SRC, 'szem4_farmolo_2illeszto');
 	ok(illeszto.indexOf('farmStatElakadt(') !== -1,
 	   'a plan abandoned in step 2 is counted, with the reason it died');
+});
+
+/* ------------------------------------------------------------------------ */
+/* The counters only help if they resolve into one of two opposite answers:
+   send fewer units per attack, or field more of them. The thresholds live in
+   the source rather than here, so this pins the readings that separate those
+   answers -- particularly the case where the army fills nicely but the floor
+   is quietly refusing sends, which no fill percentage on its own can show. */
+suite('farmolo -- mit mondanak a szamlalok', function () {
+	var api = sandbox({}, [sliceFrom(SZEM4_SRC, 'var STAT_MIN_MINTA', 'farmStatErtekeles')],
+	                  { szoveg: 'STAT_SZOVEG', minMinta: 'STAT_MIN_MINTA' });
+	function stat(o) {
+		var s = { kezdet: 1, kuldes: 0, teher: 0, vart: 0, alul: 0, minsereg: 0, keves: 0 };
+		for (var k in o) s[k] = o[k];
+		return s;
+	}
+
+	var semmi = api.farmStatErtekeles(stat({}));
+	eq(semmi.szint, 'nincs', 'with nothing sent yet the panel does not pretend to advise');
+	/* ok(=== null), not eq: JSON.stringify(NaN) is "null", so eq would pass on
+	   a division that produced NaN -- the very thing this guards. */
+	ok(semmi.toltes === null, 'and reports no percentage rather than a NaN');
+
+	var keves = api.farmStatErtekeles(stat({ kuldes: 5, teher: 2000, vart: 200 }));
+	eq(keves.szint, 'keves_adat', 'a handful of attacks is not enough to move troops on');
+
+	var hatar = api.farmStatErtekeles(stat({ kuldes: api.minMinta(), teher: 1000, vart: 800 }));
+	ok(hatar.szint !== 'keves_adat', 'the sample threshold is a floor to reach, not to pass');
+
+	var laza = api.farmStatErtekeles(stat({ kuldes: 100, teher: 40000, vart: 12000 }));
+	eq(laza.szint, 'nagy', 'armies coming home a third full means too many units per send');
+	eq(Math.round(laza.toltes * 100), 30, 'and the percentage is the plain ratio of the two totals');
+
+	/* The case the fill percentage cannot see on its own: every army that got
+	   sent was a good size, but a large share of attempts never became attacks
+	   because the floor refused them. Same remedy, different evidence. */
+	var padlo = api.farmStatErtekeles(stat({ kuldes: 100, teher: 40000, vart: 32000, minsereg: 40 }));
+	eq(padlo.szint, 'nagy', 'a floor refusing many sends is caught even when the armies that go are full');
+
+	var alul = api.farmStatErtekeles(stat({ kuldes: 100, teher: 40000, vart: 32000, alul: 30 }));
+	eq(alul.szint, 'kicsi', 'loot repeatedly left standing means more units would earn more');
+
+	var hiany = api.farmStatErtekeles(stat({ kuldes: 100, teher: 40000, vart: 32000, keves: 40 }));
+	eq(hiany.szint, 'kicsi', 'so does running out of units mid-plan');
+
+	var rendben = api.farmStatErtekeles(stat({ kuldes: 100, teher: 40000, vart: 32000,
+	                                           alul: 5, minsereg: 5, keves: 5 }));
+	eq(rendben.szint, 'rendben', 'a well-fitted army is left alone rather than nagged at');
+
+	/* A verdict with no sentence would render as an empty panel. */
+	var szoveg = api.szoveg();
+	['nincs', 'keves_adat', 'nagy', 'kicsi', 'rendben'].forEach(function (k) {
+		ok(!!szoveg[k] && szoveg[k].length > 10, 'the "' + k + '" reading says what to do about it');
+	});
+
+	/* Clearing has to be real: the counters describe the settings that were in
+	   force while they ran, so they are cleared exactly when one changes. */
+	var nw = { SZEM4_FARM: { STAT: stat({ kuldes: 9, teher: 100, vart: 50, alul: 1, minsereg: 2, keves: 3 }) },
+	           document: { getElementById: function () { return null; } } };
+	var n = sandbox(nw, [sliceFn(SZEM4_SRC, 'defaultFarmState'),
+	                     sliceFrom(SZEM4_SRC, 'var STAT_MIN_MINTA', 'farmStatNullaz')]);
+	n.farmStatNullaz();
+	eq(nw.SZEM4_FARM.STAT.kuldes, 0, 'clearing puts every counter back to nothing');
+	eq(nw.SZEM4_FARM.STAT.minsereg, 0, 'including the reasons plans were abandoned');
+
+	/* Wiring: the reading is worthless if nothing ever paints it. */
+	ok(SZEM4_SRC.indexOf('id="farm_kapacitas"') !== -1,
+	   'the Farmolo panel has somewhere to show the reading');
+	ok(SZEM4_SRC.indexOf('onclick="farmStatNullaz()"') !== -1,
+	   'and a control to clear it when a setting changes');
+	ok(sliceFn(SZEM4_SRC, 'szem4_farmolo_3egyeztet').indexOf('farmStatKiir()') !== -1,
+	   'the reading is repainted as each attack goes out');
+	ok(sliceFn(SZEM4_SRC, 'rebuildDOM_farm').indexOf('farmStatKiir()') !== -1,
+	   'and on load, so saved counters are not invisible until the next send');
 });
