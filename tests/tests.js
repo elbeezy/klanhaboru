@@ -3563,6 +3563,18 @@ suite('farmolo -- a valos zsakmany a jelentesbol', function () {
 	   'and records it against the village it came from');
 	ok(codeOnly(elemzo).indexOf('jelentesNepesseg(VIJE_REF2.document)') !== -1,
 	   'and reads the size of the army that fetched it, from the same report');
+
+	/* The bug this suite could not see, and it made the whole reading useless
+	   on his account: with Kem/falu set, SZEM sends a scout along with the
+	   farm attack, so the farm reports ARE scouted reports. The measurement
+	   used to live inside the branch for reports with no scouting data, which
+	   meant it never ran once. Asserted by position: the call has to sit
+	   ABOVE the branch, because sitting inside either side of it is exactly
+	   the mistake -- and a call inside one arm still 'contains' the text. */
+	var kemAg = codeOnly(elemzo).indexOf('vanKemAdat(VIJE_REF2.document)');
+	var meres = codeOnly(elemzo).indexOf('farmStatJelentes(adatok[1]');
+	ok(meres !== -1 && kemAg !== -1 && meres < kemAg,
+	   'the haul is measured before the report is sorted into scouted or not');
 	ok(codeOnly(sliceFn(SZEM4_SRC, 'szem4_ADAT_loadNow')).indexOf('upgradeFarmStat(') !== -1,
 	   'a loaded farm state is brought up to the current counter shape');
 });

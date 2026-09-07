@@ -4417,6 +4417,18 @@ function szem4_VIJE_2elemzes(adatok){try{
 	hungarianDate = hungarianDate.getTime();
 	if (SZEM4_VIJE.ALL_VIJE_SAVED[adatok[1]] >= hungarianDate) isOld = true;
 	var spyResourcesCell = getSpyResourceCell(VIJE_REF2.document);
+	/* Measured before the branch below, and deliberately outside it. Whether a
+	   report carries scouting data says nothing about whether an army carried
+	   loot home: with Kem/falu set, a scout rides along with the farm attack,
+	   so the farm reports are SCOUTED reports and every one of them goes down
+	   the other side of that branch. Measuring only there measured nothing.
+	   A scouting run that took no loot has no Fosztogatas row at all, so
+	   jelentesZsakmany returns nothing and this stays silent by itself. */
+	var zsak = !isOld ? jelentesZsakmany(VIJE_REF2.document) : null;
+	if (zsak) {
+		farmStatJelentes(adatok[1], zsak.zsakmany, zsak.teherbiras,
+		                 jelentesNepesseg(VIJE_REF2.document));
+	}
 	if (!isOld && vanKemAdat(VIJE_REF2.document)) {
 		var x = spyResourcesCell;
 
@@ -4450,17 +4462,12 @@ function szem4_VIJE_2elemzes(adatok){try{
 			var fal = '';
 		}
 		VIJE_adatbeir(adatok[1],nyersossz,banyak,fal,adatok[2], hungarianDate);
-	} else if (!isOld) {
-		var zsak = jelentesZsakmany(VIJE_REF2.document);
-		if (zsak) {
-			farmStatJelentes(adatok[1], zsak.zsakmany, zsak.teherbiras,
-			                 jelentesNepesseg(VIJE_REF2.document));
-			/* Short of what it could carry means the village was emptied, so
-			   record it as bare. A full army proves only that it ran out of
-			   room, and must leave the previous estimate standing. */
-			if (zsak.zsakmany + 5 < zsak.teherbiras) {
-				VIJE_adatbeir(adatok[1],0,'','',adatok[2], hungarianDate);
-			}
+	} else if (!isOld && zsak) {
+		/* Short of what it could carry means the village was emptied, so
+		   record it as bare. A full army proves only that it ran out of
+		   room, and must leave the previous estimate standing. */
+		if (zsak.zsakmany + 5 < zsak.teherbiras) {
+			VIJE_adatbeir(adatok[1],0,'','',adatok[2], hungarianDate);
 		}
 	}
 	
