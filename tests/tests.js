@@ -2961,3 +2961,76 @@ suite('Which gathering the gatherer waits for', function () {
 	ok(lassuCimke.indexOf('csapatai') !== -1,
 	   'the waiting strategy says outright that troops will be left waiting');
 });
+
+/* ------------------------------------------------------------------------ */
+/* The gatherer used to work out its next visit by reading the painted
+   countdown text and adding it to getServerTime() -- a display clock, shifted
+   by TIME_ZONE and rounded to 15 minutes, so an instant built from it can be a
+   quarter of an hour out. The game states each squad's homecoming as a plain
+   unix timestamp, so that is what gets read now.
+
+   sliceFrom() takes everything from the constants down to the END of the named
+   function, so scavengeNextVisitMs has to stay the last of the three in the
+   source or the others drop out of the sandbox. */
+suite('When the gatherer books its next visit', function () {
+	var api = sandbox({}, [sliceFrom(SZEM4_SRC, 'var GYUJTO_URES_MS', 'scavengeNextVisitMs')]);
+
+	function doc(texts, kivul) {
+		return { querySelectorAll: function (q) {
+			var sajat = q === '#scavenge_screen .return-countdown';
+			return (sajat ? texts : (kivul || [])).map(function (s) { return { textContent: s }; });
+		}};
+	}
+
+	/* --- reading a countdown, whichever fields the game bothered to paint --- */
+	eq(api.countdownSeconds('1:30:47'), 5447, 'hours, minutes and seconds');
+	eq(api.countdownSeconds('30:47'), 1847, 'the hour is dropped once there is none left');
+	eq(api.countdownSeconds('47'), 47, 'and the minute too, in the last stretch');
+	/* Identity, not eq(): the harness compares by JSON and JSON.stringify(NaN) is
+	   "null", so eq(..., null) passes for NaN too -- which is precisely the
+	   distinction these three exist to defend. Caught by mutation. */
+	ok(api.countdownSeconds('') === null, 'a countdown the game has not painted yet is not a time');
+	ok(api.countdownSeconds('hamarosan') === null, 'nor is a word');
+	ok(api.countdownSeconds('1:2:3:4') === null, 'nor four fields');
+
+	/* --- his own saved page: options 1 idle, 2 and 3 out, 4 locked --- */
+	var most = 1788786000000, korai = 1788787220000, kesoi = 1788792807000;
+	var jatek = { ScavengeScreen: { village: { options: {
+		'1': { is_locked: false, scavenging_squad: null },
+		'2': { is_locked: false, scavenging_squad: { return_time: 1788787220 } },
+		'3': { is_locked: false, scavenging_squad: { return_time: 1788792807 } },
+		'4': { is_locked: true, scavenging_squad: null }
+	} } } };
+
+	eq(api.scavengeReturnsMs(jatek, doc(['0:00:09']), most), [korai, kesoi],
+	   'the two running squads are read from the game, not from the painted text');
+
+	eq(api.scavengeReturnsMs({}, doc(['0:10:00']), most), [most + 600000],
+	   'with no game object it falls back to the countdown, as a duration from now');
+
+	eq(api.scavengeReturnsMs({}, doc(['', '0:10:00']), most), [most + 600000],
+	   'an unpainted countdown is skipped rather than poisoning the whole list');
+
+	eq(api.scavengeReturnsMs({}, doc([], ['5:00:00']), most), [],
+	   'a countdown outside the scavenge screen belongs to something else, not to us');
+
+	/* Caught here on purpose: if the fallback stops catching, this has to read as
+	   one named failure rather than an exception that abandons the rest of the
+	   suite and hides every assertion below it. */
+	var tuno = { get ScavengeScreen() { throw new Error('window is being replaced'); } };
+	var tunoEredmeny;
+	try { tunoEredmeny = api.scavengeReturnsMs(tuno, doc(['0:05:00']), most); }
+	catch (e) { tunoEredmeny = 'threw: ' + e.message; }
+	eq(tunoEredmeny, [most + 300000],
+	   'a window mid-navigation falls back instead of throwing');
+
+	/* --- and which of them the next visit is booked for --- */
+	eq(api.scavengeNextVisitMs([korai, kesoi], 'min', most), korai + 60000,
+	   'min comes back for the first squad home, so its troops go straight out again');
+	eq(api.scavengeNextVisitMs([korai, kesoi], 'max', most), kesoi + 60000,
+	   'max waits for the last -- the 1h33m of idle troops he reported');
+	eq(api.scavengeNextVisitMs([], 'min', most), most + 1200000,
+	   'nothing gathering here: twenty minutes before looking again');
+	eq(api.scavengeNextVisitMs([most - 500000], 'min', most), most + 10000,
+	   'an overdue squad cannot book a visit in the past and reopen the page every tick');
+});

@@ -4978,8 +4978,87 @@ function szem4_GYUJTO_search(ev) {
 		}
 	}
 }
+/* Waits, in milliseconds. */
+var GYUJTO_URES_MS = 1200000,     // nothing gathering here at all: look again in 20 minutes
+    GYUJTO_RATARTAS_MS = 60000,   // slack after a squad lands, so the page has settled
+    GYUJTO_PADLO_MS = 10000;      // never book a visit sooner than this
+
+/* A painted countdown says how much is LEFT, so it is a duration rather than a
+   moment. The game drops the fields it does not need, so the same squad reads
+   "1:30:47" now, "30:47" inside the last hour and "47" inside the last minute.
+   Folding the parts with *60 handles all three without having to know which
+   shape arrived.
+
+   Anything that is not a run of numbers gives null, never NaN. NaN travels
+   silently through Math.min into a stored appointment, and !NaN is true, so a
+   poisoned appointment reads as "never visited" and the village gets reopened
+   on every single tick. */
+function countdownSeconds(szoveg) {
+	var reszek = String(szoveg == null ? '' : szoveg).trim().split(':');
+	if (reszek.length > 3) return null;
+	var osszes = 0;
+	for (var i = 0; i < reszek.length; i++) {
+		if (!/^[0-9]+$/.test(reszek[i].trim())) return null;
+		osszes = osszes * 60 + Number(reszek[i]);
+	}
+	return osszes;
+}
+
+/* Every running squad's homecoming, in real epoch milliseconds.
+
+   The game states each one outright as a unix timestamp at
+   ScavengeScreen.village.options[n].scavenging_squad.return_time, so read that
+   in preference to anything on screen: there is no text shape to guess at,
+   nothing to wait for the game to paint, and a timestamp is an instant rather
+   than a reading taken off a display clock. Options with no squad out -- idle
+   or still locked -- hold no return_time and so cannot drag the answer around.
+
+   The painted countdowns stay as a fallback for the day that global is renamed.
+   They are durations, so they are added to the real clock. getServerTime()
+   would be wrong here and was the old bug: it is a DISPLAY clock, new Date()
+   shifted by TIME_ZONE and rounded to 15-minute steps, so pairing it with an
+   instant can inject a quarter of an hour of error. Same trap as the build
+   queue's data-endtime. */
+function scavengeReturnsMs(win, doc, mostMs) {
+	var vissza = [];
+	try {
+		var opciok = win && win.ScavengeScreen && win.ScavengeScreen.village
+		          && win.ScavengeScreen.village.options;
+		if (opciok) {
+			for (var kulcs in opciok) {
+				var csapat = opciok[kulcs] && opciok[kulcs].scavenging_squad;
+				if (csapat && isFinite(csapat.return_time)) {
+					vissza.push(Number(csapat.return_time) * 1000);
+				}
+			}
+			return vissza;
+		}
+	} catch (e) { /* the window may be mid-navigation; read the screen instead */ }
+	doc.querySelectorAll('#scavenge_screen .return-countdown').forEach(function (el) {
+		var mp = countdownSeconds(el.textContent);
+		if (mp !== null) vissza.push(mostMs + mp * 1000);
+	});
+	return vissza;
+}
+
+/* When to open this village again. 'min' returns for the first squad home, so
+   its troops go straight back out; 'max' waits for the last, which buys a
+   better troop split at the price of the quick options standing idle until
+   then. */
+function scavengeNextVisitMs(hazaerkezesek, strategia, mostMs) {
+	if (!hazaerkezesek.length) return mostMs + GYUJTO_URES_MS;
+	var valasztott = strategia === 'max'
+		? Math.max.apply(null, hazaerkezesek)
+		: Math.min.apply(null, hazaerkezesek);
+	/* A squad already overdue would otherwise book a visit in the past, and the
+	   village would be reopened on every tick -- a page-load storm on a script
+	   the game is watching. */
+	return Math.max(valasztott + GYUJTO_RATARTAS_MS, mostMs + GYUJTO_PADLO_MS);
+}
 function szem4_GYUJTO_1keres() {try{
-	let d = getServerTime();
+	/* Appointments are booked on the real clock now (see scavengeReturnsMs),
+	   so they have to be read against the real clock too. */
+	let d = Date.now();
 	for (const coord in KTID) {
 		const villId = KTID[coord];
 		if (!GYUJTO_VILLINFO[villId]) GYUJTO_VILLINFO[villId] = { retry: false };
@@ -5022,20 +5101,19 @@ function szem4_GYUJTO_3elindit() { try{
 		}
 		GYUJTO_VILLINFO[GYUJTO_DATA].retry = false;
 		GYUJTO_STATE = 0;
-		const allReturnTimer = GYUJTO_REF.document.querySelectorAll('.return-countdown');
-		let d = getServerTime(GYUJTO_REF);
-		if (allReturnTimer.length == 0) {
+		/* Kept for its side effect only: this is a freshly loaded game page, so
+		   it is a good moment to re-check the clock offset the other modules
+		   still read. The gatherer itself no longer uses TIME_ZONE at all. */
+		getServerTime(GYUJTO_REF);
+
+		const most = Date.now();
+		const hazaerkezes = scavengeReturnsMs(GYUJTO_REF, GYUJTO_REF.document, most);
+		if (hazaerkezes.length === 0) {
 			// Nem lehet gyűjtögetni itt. 20p múlva újra nézi
-			GYUJTO_VILLINFO[GYUJTO_DATA].returned = d.setSeconds(d.getSeconds() + 1200);
+			GYUJTO_VILLINFO[GYUJTO_DATA].returned = most + GYUJTO_URES_MS;
 		} else {
-			const timesInSec = [];
-			allReturnTimer.forEach(el => {
-				let [hours, minutes, seconds] = el.textContent.split(":").map(Number);
-				timesInSec.push(hours * 3600 + minutes * 60 + seconds);
-			});
-	
-			const nextTime = SZEM4_GYUJTO.settings.strategy === 'max' ? Math.max(...timesInSec) : Math.min(...timesInSec);
-			GYUJTO_VILLINFO[GYUJTO_DATA].returned = d.setSeconds(d.getSeconds() + nextTime + 60);
+			GYUJTO_VILLINFO[GYUJTO_DATA].returned =
+				scavengeNextVisitMs(hazaerkezes, SZEM4_GYUJTO.settings.strategy, most);
 		}
 
 		document.querySelector(`#gy_${GYUJTO_DATA}`).cells[4].innerHTML = new Date(GYUJTO_VILLINFO[GYUJTO_DATA].returned).toLocaleString();
