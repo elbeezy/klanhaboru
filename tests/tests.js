@@ -82,6 +82,23 @@ suite('The file itself', function () {
 });
 
 /* ------------------------------------------------------------------------ */
+/* ------------------------------------------------------------------------ */
+/* codeOnly is what several wiring checks below stand on: they search a
+   function's text for a call it must contain, and without this they cannot
+   tell that call from a commented-out copy. So the stripper itself has to be
+   held to it -- one that quietly returned its input would leave every one of
+   those checks passing on nothing. */
+suite('The comment stripper the wiring checks rest on', function () {
+	eq(codeOnly('a();\n/* b(); */\nc();').indexOf('b()'), -1,
+	   'a call inside a block comment is not code');
+	eq(codeOnly('a(); // b();').indexOf('b()'), -1,
+	   'nor is one after a line comment');
+	ok(codeOnly('a();\n/* b(); */\nc();').indexOf('c()') !== -1,
+	   'and the real calls around it survive');
+	ok(codeOnly("open('http://x/y'); a();").indexOf('a()') !== -1,
+	   'a URL in a string is not mistaken for a comment');
+});
+
 suite('Reading numbers off the game page', function () {
 	var api = sandbox({}, [sliceFn(SZEM4_SRC, 'buildingCost')]);
 
@@ -3102,11 +3119,11 @@ suite('farmolo -- a sereg meretenek merese', function () {
 
 	/* The counters are worthless unless they are actually called. */
 	var kuldo = sliceFn(SZEM4_SRC, 'szem4_farmolo_3egyeztet');
-	ok(kuldo.indexOf('farmStatKuldes()') !== -1,
+	ok(codeOnly(kuldo).indexOf('farmStatKuldes()') !== -1,
 	   'every attack sent is counted, on the line that sends it');
 
 	var illeszto = sliceFn(SZEM4_SRC, 'szem4_farmolo_2illeszto');
-	ok(illeszto.indexOf('farmStatElakadt(') !== -1,
+	ok(codeOnly(illeszto).indexOf('farmStatElakadt(') !== -1,
 	   'a plan abandoned in step 2 is counted, with the reason it died');
 });
 
@@ -3197,9 +3214,9 @@ suite('farmolo -- mit mondanak a szamlalok', function () {
 	   'the Farmolo panel has somewhere to show the reading');
 	ok(SZEM4_SRC.indexOf('onclick="farmStatNullaz()"') !== -1,
 	   'and a control to clear it when a setting changes');
-	ok(sliceFn(SZEM4_SRC, 'szem4_farmolo_3egyeztet').indexOf('farmStatKiir()') !== -1,
+	ok(codeOnly(sliceFn(SZEM4_SRC, 'szem4_farmolo_3egyeztet')).indexOf('farmStatKiir()') !== -1,
 	   'the reading is repainted as each attack goes out');
-	ok(sliceFn(SZEM4_SRC, 'rebuildDOM_farm').indexOf('farmStatKiir()') !== -1,
+	ok(codeOnly(sliceFn(SZEM4_SRC, 'rebuildDOM_farm')).indexOf('farmStatKiir()') !== -1,
 	   'and on load, so saved counters are not invisible until the next send');
 });
 
@@ -3406,6 +3423,6 @@ suite('farmolo -- a valos zsakmany a jelentesbol', function () {
 	   'the analyser reads the haul off every report it can');
 	ok(elemzo.indexOf('farmStatJelentes(adatok[1]') !== -1,
 	   'and records it against the village it came from');
-	ok(sliceFn(SZEM4_SRC, 'szem4_ADAT_loadNow').indexOf('upgradeFarmStat(') !== -1,
+	ok(codeOnly(sliceFn(SZEM4_SRC, 'szem4_ADAT_loadNow')).indexOf('upgradeFarmStat(') !== -1,
 	   'a loaded farm state is brought up to the current counter shape');
 });

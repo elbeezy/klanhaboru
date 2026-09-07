@@ -115,6 +115,24 @@ function szemCssRules() {
 	return szemCss().replace(/\/\*[\s\S]*?\*\//g, '');
 }
 
+/* A slice of source with its comments taken out.
+ *
+ * The same trap as szemCssRules, one level up: a wiring check that searches a
+ * function's text for a call it must contain cannot tell that call from a
+ * commented-out copy of it, so commenting the line out passes the check while
+ * the wiring is gone. This was found by mutation, not reasoned about: the
+ * farm send counter's wiring check survived having its call commented out.
+ * Anything asserting a call is *present* should scan this, not the raw slice.
+ *
+ * A line comment is only recognised where "//" does not follow a colon, so a
+ * URL inside a string survives. A "//" inside some other string would cut the
+ * rest of that line -- which can only lose a call and fail loudly, never
+ * invent one and pass. */
+function codeOnly(text) {
+	return text.replace(/\/\*[\s\S]*?\*\//g, '')
+	           .replace(/(^|[^:])\/\/.*$/gm, '$1');
+}
+
 function sliceFn(src, name) {
 	var start = src.indexOf('function ' + name + '(');
 	if (start === -1) start = src.indexOf('function ' + name + ' (');
