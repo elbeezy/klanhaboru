@@ -3178,6 +3178,16 @@ suite('farmolo -- mekkora sereg hozta haza', function () {
 	eq(api.jelentesNepesseg(doc(ikonSor + sor({ spear: 10, light: 5, heavy: 2 }))), 42,
 	   'a mixed army is priced unit by unit');
 
+	/* The scout rides along with the farm attack when Kem/falu is set, so it
+	   is on nearly every one of his reports -- but it carries nothing and it
+	   is attached after the army is planned, so it was never part of the
+	   Min sereg/falu floor either. Counting its 2 population would state the
+	   recommendation in different units from the setting it recommends. */
+	eq(api.jelentesNepesseg(doc(ikonSor + sor({ spy: 1, light: 5 }))), 20,
+	   'the scout riding along is not counted as part of the army');
+	ok(api.jelentesNepesseg(doc(ikonSor + sor({ spy: 3 }))) === null,
+	   'and a pure scouting run is not an army at all');
+
 	/* Rams and catapults have no population figure here, and an army carrying
 	   them was not sent to farm. Pricing what is left would understate it --
 	   and an understated army recommends sending fewer troops, the one

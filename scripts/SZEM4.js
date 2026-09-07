@@ -4351,6 +4351,12 @@ function jelentesNepesseg(doc) {
 			if (!(db > 0)) continue;
 			var tipus = (String(cellak[j].className).match(/unit-item-([a-z]+)/) || [])[1];
 			if (!tipus || !(tipus in TANYA)) return null;
+			/* The scout is not part of the army being measured. It carries
+			   nothing, and it is attached to the send AFTER the army is
+			   planned -- so it never counted toward the Min sereg/falu floor
+			   the recommendation is expressed in. Counting it here would put
+			   the two in different units. */
+			if (tipus === 'spy') continue;
 			pop += db * TANYA[tipus];
 		}
 		return pop > 0 ? pop : null;
