@@ -3413,8 +3413,27 @@ suite('farmolo -- mit mondanak a szamlalok', function () {
 	/* A verdict with no sentence would render as an empty panel. */
 	var szoveg = api.szoveg();
 	['nincs', 'keves_adat', 'nagy', 'tele', 'keves_egy', 'rendben'].forEach(function (k) {
-		ok(!!szoveg[k] && szoveg[k].length > 10, 'the "' + k + '" reading says what to do about it');
+		ok(!!szoveg[k] && szoveg[k].length > 10, 'the "' + k + '" reading has a sentence at all');
 	});
+
+	/* A reading he cannot act on is one he has to decode first, so each of
+	   these is pinned to the action it exists to give him. The old wording
+	   described every situation correctly and told him what to do about none
+	   of them, which is the complaint these sentences were rewritten for. */
+	['keves_adat', 'nagy', 'tele'].forEach(function (k) {
+		ok(szoveg[k].indexOf('Min sereg/falu') !== -1,
+		   'the "' + k + '" reading names the setting it is asking him to leave or change');
+	});
+	ok(szoveg.keves_egy.indexOf('Toborozz') === 0,
+	   'the troop-shortage reading opens with recruiting, which is the answer to it');
+	ok(szoveg.keves_egy.indexOf('Min sereg/falu') !== -1,
+	   'and still says raising the floor is not');
+	/* The reading that cost two rounds of "nothing is being measured": the
+	   counters only move while the report analyser is running. */
+	ok(szoveg.nincs.indexOf('Jelentés elemző') !== -1,
+	   'the empty reading names the module that has to run to fill it');
+	ok(szoveg.rendben.indexOf('nincs teendő') !== -1,
+	   'and the healthy reading says outright that there is nothing to do');
 
 	/* Clearing has to be real: the counters describe the settings that were in
 	   force while they ran, so they are cleared exactly when one changes. */
@@ -3465,6 +3484,25 @@ suite('farmolo -- mit mondanak a szamlalok', function () {
 	   'but recommends no value when the shortage is of troops, not of army size');
 	ok(/Min sereg\/falu/.test(panelHiany.textContent),
 	   'while still explaining why raising it is the wrong answer there');
+
+	/* This counter used to read "a minimum sereg miatt maradt el", which named
+	   no control: he could not tell it was counting attacks his own floor
+	   setting had cancelled. It spells the settings box now. */
+	var panelPadlo = kiir(stat({ kuldes: 100, jelentes: 100, jelTeher: 40000, zsakmany: 24000,
+	                             minsereg: 3, pop: 2000, popMinta: 100, u_light: 500 }));
+	var reszlet = panelPadlo.querySelector('.szem4_kapacitas_reszlet');
+	ok(reszlet && /3\D+nem indult el a Min sereg\/falu miatt/.test(reszlet.textContent),
+	   'the blocked-send counter names the setting that blocked them',
+	   reszlet && reszlet.textContent);
+
+	/* The threshold is written into the sentence from the constant rather than
+	   typed beside it, so the two cannot come to say different numbers. */
+	var panelKeves = kiir(stat({ kuldes: 5, jelentes: 5, jelTeher: 2000, zsakmany: 1200,
+	                             pop: 100, popMinta: 5, u_light: 25 }));
+	var verdikt = panelKeves.querySelector('.szem4_kapacitas_verdikt');
+	eq(verdikt.textContent.indexOf('{MINTA}'), -1, 'no placeholder survives into the panel');
+	ok(verdikt.textContent.indexOf(String(api.minMinta())) !== -1,
+	   'and the thin-sample reading states the real threshold', verdikt.textContent);
 
 	/* Wiring: the reading is worthless if nothing ever paints it. */
 	ok(SZEM4_SRC.indexOf('id="farm_kapacitas"') !== -1,

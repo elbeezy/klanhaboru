@@ -3287,15 +3287,22 @@ var STAT_TELE = 0.25;
    step to try and then re-measure, not an answer. Kept small on purpose: an
    overshoot spends the next day walking half-empty wagons. */
 var STAT_LEPES = 1.25;
-/* The five readings and what each one asks him to do. Kept beside the rule
-   that produces them so a new verdict cannot be added without its sentence. */
+/* The six readings and what each one asks him to do. Kept beside the rule that
+   produces them so a new verdict cannot be added without its sentence.
+
+   Each one leads with the action, because a reading he cannot act on is one he
+   has to decode first: the earlier wording explained the situation accurately
+   and left him to work out the answer, which is not what a readout is for.
+   Where the answer is a setting, it is named exactly as the settings box spells
+   it, so the reading points at the control that changes it. {MINTA} is filled
+   in from the threshold below rather than typed, so the two cannot drift. */
 var STAT_SZOVEG = {
-	nincs:     'Még nincs elemzett farm-jelentés, nincs mit mérni.',
-	keves_adat:'Még kevés a minta, várj még egy kicsit.',
-	nagy:      'A seregek nagyrészt üresen jönnek haza: a Min sereg/falu több egységet küld, mint amennyit ezek a faluk megtöltenek.',
-	tele:      'A seregek gyakran tele jönnek haza, tehát marad ott nyers. Emeld meg a Min sereg/falu értéket, majd nullázd és mérj újra.',
-	keves_egy: 'Gyakran fogy ki az egység tervezés közben: nem a sereg mérete a szűk keresztmetszet, hanem hogy összesen kevés a farmoló egységed. A Min sereg/falu emelése itt csak kevesebb falut támadna.',
-	rendben:   'A sereg mérete illik a farmokhoz.'
+	nincs:     'Indítsd el a Jelentés elemzőt — enélkül nem gyűlik jelentés, és nincs mit mérni.',
+	keves_adat:'Várj még, ne állíts a Min sereg/falu értéken — legalább {MINTA} jelentés kell a méréshez.',
+	nagy:      'Csökkentsd a Min sereg/falu értéket a lent javasolt számra — a seregek nagyrészt üresen jönnek haza.',
+	tele:      'Emeld a Min sereg/falu értéket a lent javasolt számra, aztán nullázd és mérj újra — most tele jönnek haza a seregek, marad ott nyers.',
+	keves_egy: 'Toborozz több farmoló egységet. Nem a sereg mérete a szűk keresztmetszet, hanem hogy összesen kevés az egységed — a Min sereg/falu emelése itt csak kevesebb falut támadna.',
+	rendben:   'A sereg mérete illik a farmokhoz, nincs teendő.'
 };
 /* Reads the counters as one verdict. Pure, so the thresholds can be tested
    without a page: everything it needs is in the object handed to it.
@@ -3382,11 +3389,12 @@ function farmStatKiir() {
 	var reszek = [];
 	if (s && s.jelentes) reszek.push(s.jelentes + ' jelentés');
 	if (s && s.tele) reszek.push(s.tele + '&times; tele jött haza');
-	if (s && s.minsereg) reszek.push(s.minsereg + '&times; a minimum sereg miatt maradt el');
+	if (s && s.minsereg) reszek.push(s.minsereg + '&times; nem indult el a Min sereg/falu miatt');
 	if (s && s.keves) reszek.push(s.keves + '&times; nem volt elég egység');
 	el.innerHTML = '<strong>Kihasználtság: ' + fej + '</strong>' +
 		(reszek.length ? '<span class="szem4_kapacitas_reszlet">' + reszek.join(' &middot; ') + '</span>' : '') +
-		'<span class="szem4_kapacitas_verdikt">' + (STAT_SZOVEG[e.szint] || '') + '</span>' +
+		'<span class="szem4_kapacitas_verdikt">' +
+			(STAT_SZOVEG[e.szint] || '').replace('{MINTA}', STAT_MIN_MINTA) + '</span>' +
 		(e.ajanlott === null ? '' :
 			'<span class="szem4_kapacitas_ajanlas">Javasolt Min sereg/falu: <b>' +
 			e.ajanlott + '</b>' + farmStatEgysegKiir(e.ajanlottEgysegek) + '</span>') +
