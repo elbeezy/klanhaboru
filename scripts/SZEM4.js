@@ -2542,13 +2542,9 @@ function defaultFarmState() {
 		STAT: {
 			kezdet: 0,    // mikor kezdodott a szamolas
 			kuldes: 0,    // hany tamadas indult
-			teher: 0,     // az elkuldott seregek teherbirasa osszesen
-			vart: 0,      // amennyi nyersert mentek (a teherbirasig szamolva)
-			alul: 0,      // ennyiszer maradt ott nyers, mert nem birta el
 			minsereg: 0,  // ennyiszer hiusult meg terv a minimum sereg miatt
 			keves: 0,     // ennyiszer nem volt eleg egyseg a hatarszamhoz
-			/* A jelentesekbol visszaolvasott VALOS eredmeny. A fentiek azt
-			   merik, amire szamitottunk; ezek azt, ami tortent. */
+			/* A jelentesekbol visszaolvasott valos eredmeny. */
 			jelentes: 0,  // hany farm-jelentest olvastunk vissza
 			zsakmany: 0,  // amennyi nyerset tenylegesen hazahoztak
 			jelTeher: 0,  // az ezt cipelo seregek teherbirasa osszesen
@@ -3187,22 +3183,15 @@ function readCarryCapacity(formEl, plannedUnits, farmCoord) {
 
 /* Both recorders are deliberately total: they sit on the path of a live
    attack, and a throw here would skip the send that follows. Same reasoning as
-   resetAvailableUnits. A capacity that could not be read comes through as
-   undefined and is dropped rather than counted as zero, which would otherwise
-   quietly report every army as carrying air. */
-function farmStatKuldes(teherbiras, vartNyers) {
+   resetAvailableUnits.
+   How full the armies come home is measured from the reports instead, so all
+   that is wanted here is how many attempts turned into an actual attack --
+   the denominator the abandoned plans below are a share of. */
+function farmStatKuldes() {
 	var s = SZEM4_FARM && SZEM4_FARM.STAT;
 	if (!s) return;
-	if (!(teherbiras > 0)) return;
-	if (!(vartNyers >= 0)) return;
 	if (!s.kezdet) s.kezdet = Date.now();
 	s.kuldes++;
-	s.teher += teherbiras;
-	/* Counted only up to what the army can hold: loot it could not have
-	   carried is not evidence that the army was full. That the expectation
-	   overran the capacity is the separate, opposite signal. */
-	s.vart += Math.min(vartNyers, teherbiras);
-	if (vartNyers > teherbiras) s.alul++;
 }
 /* A plan that dies in step 2 died for one of two reasons, and they call for
    opposite answers: the minimum-army floor refusing a send that was otherwise
@@ -3250,44 +3239,48 @@ function upgradeFarmStat(stat) {
 	}
 	return stat;
 }
-/* Below this many attacks the ratios swing wildly and would have him moving
+/* Below this many reports the ratios swing wildly and would have him moving
    troops on noise, so the panel says so instead of advising. */
 var STAT_MIN_MINTA = 20;
-/* Under this share of its capacity an army is mostly carrying air. Not a
-   round number by accident: sizing to the expected loot leaves a rounding
-   remainder even when nothing is wrong, so the bar sits below where a
-   correctly sized army lands. */
+/* Under this share of its capacity an army is mostly carrying air. */
 var STAT_GYENGE = 0.55;
 /* A share of attempts, above which one cause is worth naming out loud. */
 var STAT_ARANY = 0.15;
-/* The four readings and what each one asks him to do. Kept beside the rule
+/* Above this share of trips coming home full, the villages hold more than the
+   armies can lift and loot is being left standing. Set well above nothing on
+   purpose: the occasional full army is a rich village, not a wrong setting. */
+var STAT_TELE = 0.25;
+/* The five readings and what each one asks him to do. Kept beside the rule
    that produces them so a new verdict cannot be added without its sentence. */
 var STAT_SZOVEG = {
-	nincs:     'Még nem indult támadás, nincs mit mérni.',
+	nincs:     'Még nincs elemzett farm-jelentés, nincs mit mérni.',
 	keves_adat:'Még kevés a minta, várj még egy kicsit.',
-	nagy:      'A seregek nagyrészt üresen járnak: a Min sereg/falu több egységet küld, mint amennyit ezek a faluk megtöltenek. Érdemes csökkenteni.',
-	kicsi:     'Gyakran marad ott nyers, amit nem bírt el a sereg. Több egységgel többet hoznál.',
+	nagy:      'A seregek nagyrészt üresen jönnek haza: a Min sereg/falu több egységet küld, mint amennyit ezek a faluk megtöltenek.',
+	kicsi:     'A seregek gyakran tele jönnek haza, tehát marad ott nyers. Több egységgel többet hoznál.',
 	rendben:   'A sereg mérete illik a farmokhoz.'
 };
 /* Reads the counters as one verdict. Pure, so the thresholds can be tested
-   without a page: everything it needs is in the object handed to it. */
+   without a page: everything it needs is in the object handed to it.
+   The fill rate is measured, not estimated: it is what the reports said the
+   armies brought home, over what those same armies could have carried. */
 function farmStatErtekeles(s) {
-	var ures = { minta: 0, toltes: null, padloArany: 0, hianyArany: 0, alulArany: 0, szint: 'nincs' };
-	if (!s || !s.kuldes || !(s.teher > 0)) return ures;
+	var ures = { minta: 0, toltes: null, teleArany: 0, padloArany: 0, hianyArany: 0, szint: 'nincs' };
+	if (!s || !s.jelentes || !(s.jelTeher > 0)) return ures;
 	var probak = s.kuldes + s.minsereg + s.keves;
 	var e = {
-		minta: s.kuldes,
-		toltes: s.vart / s.teher,
+		minta: s.jelentes,
+		toltes: s.zsakmany / s.jelTeher,
+		teleArany: s.tele / s.jelentes,
 		padloArany: probak ? s.minsereg / probak : 0,
 		hianyArany: probak ? s.keves / probak : 0,
-		alulArany: s.alul / s.kuldes,
 		szint: 'rendben'
 	};
-	if (s.kuldes < STAT_MIN_MINTA) e.szint = 'keves_adat';
-	/* Both readings here mean the same remedy -- fewer units per send -- and
-	   the floor is checked first because it names the setting to change. */
+	if (s.jelentes < STAT_MIN_MINTA) e.szint = 'keves_adat';
+	/* Armies coming home full is checked first because it is the one reading
+	   that must not be answered by sending less: they are demonstrably filling
+	   up, and the loot they could not lift is invisible in the fill rate. */
+	else if (e.teleArany > STAT_TELE || e.hianyArany > STAT_ARANY) e.szint = 'kicsi';
 	else if (e.padloArany > STAT_ARANY || e.toltes < STAT_GYENGE) e.szint = 'nagy';
-	else if (e.alulArany > STAT_ARANY || e.hianyArany > STAT_ARANY) e.szint = 'kicsi';
 	return e;
 }
 /* Deliberately total, and guarded on the element: it is called from the send
@@ -3299,8 +3292,8 @@ function farmStatKiir() {
 	var e = farmStatErtekeles(s);
 	var fej = e.toltes === null ? '&ndash;' : Math.round(e.toltes * 100) + '%';
 	var reszek = [];
-	if (s && s.kuldes) reszek.push(s.kuldes + ' támadás');
-	if (s && s.alul) reszek.push(s.alul + '&times; maradt ott nyers');
+	if (s && s.jelentes) reszek.push(s.jelentes + ' jelentés');
+	if (s && s.tele) reszek.push(s.tele + '&times; tele jött haza');
 	if (s && s.minsereg) reszek.push(s.minsereg + '&times; a minimum sereg miatt maradt el');
 	if (s && s.keves) reszek.push(s.keves + '&times; nem volt elég egység');
 	el.innerHTML = '<strong>Kihasználtság: ' + fej + '</strong>' +
@@ -3323,7 +3316,6 @@ function addCurrentMovementToList(formEl, farmCoord, farmHelyRow, plannedUnits) 
 	arriveTime = arriveTime.getTime();
 
 	var teherbiras = readCarryCapacity(formEl, plannedUnits, farmCoord);
-	var teljesTeher = teherbiras; // a VIJE-re szant resz levonasa elott
 	var VIJE_teher = 0;
 	var VIJE_nyers = SZEM4_FARM.DOMINFO_FARMS[farmCoord].nyers;
 	if (VIJE_nyers > 0) {
@@ -3350,7 +3342,6 @@ function addCurrentMovementToList(formEl, farmCoord, farmHelyRow, plannedUnits) 
 	if (spyIcon && !spyIcon.classList.contains('faded')) {
 		if (!SZEM4_FARM.ALL_SPY_MOVEMENTS[farmCoord] || SZEM4_FARM.ALL_SPY_MOVEMENTS[farmCoord] < arriveTime) SZEM4_FARM.ALL_SPY_MOVEMENTS[farmCoord] = arriveTime;
 	}
-	return teljesTeher;
 }catch(e) {debug('addCurrentMovementToList', e); console.error(e);}}
 
 function planAttack(farmRow, nyers_VIJE, bestSpeed, hatarszam) {try{
@@ -3413,11 +3404,6 @@ function planAttack(farmRow, nyers_VIJE, bestSpeed, hatarszam) {try{
 				travelTime: myTime,
 				slowestUnit: priority,
 				nyersToFarm: teher,
-				/* Step 2 overwrites nyersToFarm with the built army's actual
-				   capacity, so the figure the engine set out to collect would
-				   otherwise be gone by the time the attack is sent -- and it is
-				   half of the only ratio that says whether the army fits. */
-				vartNyers: teher,
 				debug_teher: plannedArmy.teher,
 				debug_hatar: hatarszam,
 				isMax: isMax
@@ -3824,8 +3810,8 @@ function szem4_farmolo_3egyeztet(adatok){try{
 		SZEM4_FARM.DOMINFO_FARMS[adatok.plannedArmy.farmVill].szin.banya = scoutColor;
 	}
 
-	var kuldottTeher = addCurrentMovementToList(gameEl(FARM_REF, '#command-data-form', 'parancs urlap'), adatok.plannedArmy.farmVill, farm_helye, adatok.plannedArmy.units);
-	farmStatKuldes(kuldottTeher, adatok.plannedArmy.vartNyers);
+	addCurrentMovementToList(gameEl(FARM_REF, '#command-data-form', 'parancs urlap'), adatok.plannedArmy.farmVill, farm_helye, adatok.plannedArmy.units);
+	farmStatKuldes();
 	gameEl(FARM_REF, '#troop_confirm_submit', 'tamadas megerosito gomb').click();
 	document.getElementById('cnc_farm_heartbeat').innerHTML = new Date().toLocaleString();
 	farmStatKiir();

@@ -3036,17 +3036,18 @@ suite('When the gatherer books its next visit', function () {
 });
 
 /* ------------------------------------------------------------------------ */
-/* Whether a farming army is the right size cannot be seen by looking at it.
-   Two numbers already exist on the way to every attack -- what the engine
-   expected to find, and what the army it built can carry -- and their ratio
-   over many sends is the only evidence that says whether troops are walking
-   there and back carrying air.
+/* How full the armies come home is measured from the reports, not guessed at
+   on the way out. What is still worth counting here is how many attempts
+   became attacks, and why the rest did not -- a plan the minimum-army floor
+   refused never produces a report, so it is invisible in the fill rate and
+   has to be counted where it dies.
 
    Both recorders sit on the live attack path, so both are total: a throw here
    would skip the send that follows it. */
 suite('farmolo -- a sereg meretenek merese', function () {
 	function ures() {
-		return { kezdet: 0, kuldes: 0, teher: 0, vart: 0, alul: 0, minsereg: 0, keves: 0 };
+		return { kezdet: 0, kuldes: 0, minsereg: 0, keves: 0,
+		         jelentes: 0, zsakmany: 0, jelTeher: 0, tele: 0 };
 	}
 	function api(stat) {
 		var w = { SZEM4_FARM: arguments.length ? { STAT: stat } : { STAT: ures() } };
@@ -3060,38 +3061,14 @@ suite('farmolo -- a sereg meretenek merese', function () {
 	   undefined on a fresh install and the panel reports nonsense. */
 	var alap = sandbox({}, [sliceFn(SZEM4_SRC, 'defaultFarmState')]).defaultFarmState();
 	eq(Object.keys(alap.STAT).sort(),
-	   ['alul', 'jelTeher', 'jelentes', 'keves', 'kezdet', 'kuldes', 'minsereg',
-	    'teher', 'tele', 'vart', 'zsakmany'],
+	   ['jelTeher', 'jelentes', 'keves', 'kezdet', 'kuldes', 'minsereg',
+	    'tele', 'zsakmany'],
 	   'a fresh farm state carries every counter the panel reads');
 
 	var a = api();
-	a.farmStatKuldes(400, 150);
-	eq(a.stat.kuldes, 1, 'a send is counted');
-	eq(a.stat.teher, 400, 'the capacity that actually left is recorded');
-	eq(a.stat.vart, 150, 'so is the loot it was sent to collect');
-
-	a.farmStatKuldes(400, 250);
-	eq(a.stat.teher, 800, 'capacity accumulates across sends');
-	eq(a.stat.vart, 400, 'and so does the expectation');
-	eq(a.stat.alul, 0, 'neither send left loot standing');
-
-	/* An army sent for more than it can hold is the opposite signal: the loot
-	   it could not carry is not evidence that it travelled full, so it must not
-	   be added, and the fact that it happened is worth its own counter. */
-	var b = api();
-	b.farmStatKuldes(400, 900);
-	eq(b.stat.vart, 400, 'loot beyond the capacity is not counted as carried');
-	eq(b.stat.alul, 1, 'but leaving loot behind is counted, it means too few troops');
-
-	/* readCarryCapacity returns 0 when the markup moved, and the whole
-	   recorder is skipped if addCurrentMovementToList threw before returning.
-	   Counting either as a zero-capacity send would report every army as
-	   carrying air -- the exact conclusion the panel exists to draw. */
-	var c = api();
-	c.farmStatKuldes(undefined, 150);
-	c.farmStatKuldes(0, 150);
-	eq(c.stat.kuldes, 0, 'a capacity that could not be read is dropped, not counted as empty');
-	eq(c.stat.teher, 0, 'and contributes nothing to the totals');
+	a.farmStatKuldes();
+	a.farmStatKuldes();
+	eq(a.stat.kuldes, 2, 'every attack that actually goes out is counted');
 
 	/* The clock is handed in rather than read off the machine: two real
 	   Date.now() calls can land in the same millisecond, and a mutation that
@@ -3100,10 +3077,10 @@ suite('farmolo -- a sereg meretenek merese', function () {
 	var dw = { SZEM4_FARM: { STAT: ures() }, Date: { now: function () { return ora; } } };
 	var d = sandbox(dw, [sliceFn(SZEM4_SRC, 'farmStatKuldes'),
 	                     sliceFn(SZEM4_SRC, 'farmStatElakadt')]);
-	d.farmStatKuldes(400, 150);
+	d.farmStatKuldes();
 	eq(dw.SZEM4_FARM.STAT.kezdet, 1000, 'counting records when it started');
 	ora = 99000;
-	d.farmStatKuldes(400, 150);
+	d.farmStatKuldes();
 	eq(dw.SZEM4_FARM.STAT.kezdet, 1000, 'and the start is not moved by later sends');
 
 	/* The two ways a plan dies in step 2 call for opposite answers -- lower the
@@ -3120,30 +3097,13 @@ suite('farmolo -- a sereg meretenek merese', function () {
 	var f = sandbox({ SZEM4_FARM: {} }, [sliceFn(SZEM4_SRC, 'farmStatKuldes'),
 	                                     sliceFn(SZEM4_SRC, 'farmStatElakadt')]);
 	var dobott = false;
-	try { f.farmStatKuldes(400, 150); f.farmStatElakadt(true); } catch (err) { dobott = true; }
+	try { f.farmStatKuldes(); f.farmStatElakadt(true); } catch (err) { dobott = true; }
 	ok(!dobott, 'an install with no counters yet records nothing rather than throwing mid-attack');
 
-	/* The counters are worthless unless they are actually called, and every one
-	   of these three wirings can be reverted without breaking a single
-	   assertion above. The capacity in particular travels back out of
-	   addCurrentMovementToList, which returned nothing before this. */
-	var terv = sliceFn(SZEM4_SRC, 'planAttack');
-	ok(terv.indexOf('vartNyers: teher') !== -1,
-	   'the plan carries what the engine set out to collect, before step 2 overwrites it');
-
-	var mozgas = sliceFn(SZEM4_SRC, 'addCurrentMovementToList');
-	ok(/return teljesTeher;/.test(mozgas),
-	   'the capacity that actually left is handed back to the caller');
-	/* Asserted by position, not presence: the capacity has to be taken while
-	   teherbiras still holds the whole army's, and the line surviving a move
-	   below the subtraction is exactly the mistake a text search cannot see. */
-	ok(mozgas.indexOf('var teljesTeher = teherbiras;') !== -1 &&
-	   mozgas.indexOf('var teljesTeher = teherbiras;') < mozgas.indexOf('teherbiras-=VIJE_teher;'),
-	   'and it is the full capacity, read before the VIJE share is subtracted');
-
+	/* The counters are worthless unless they are actually called. */
 	var kuldo = sliceFn(SZEM4_SRC, 'szem4_farmolo_3egyeztet');
-	ok(/farmStatKuldes\(kuldottTeher, adatok\.plannedArmy\.vartNyers\)/.test(kuldo),
-	   'every attack sent records its capacity against what it went to collect');
+	ok(kuldo.indexOf('farmStatKuldes()') !== -1,
+	   'every attack sent is counted, on the line that sends it');
 
 	var illeszto = sliceFn(SZEM4_SRC, 'szem4_farmolo_2illeszto');
 	ok(illeszto.indexOf('farmStatElakadt(') !== -1,
@@ -3154,47 +3114,65 @@ suite('farmolo -- a sereg meretenek merese', function () {
 /* The counters only help if they resolve into one of two opposite answers:
    send fewer units per attack, or field more of them. The thresholds live in
    the source rather than here, so this pins the readings that separate those
-   answers -- particularly the case where the army fills nicely but the floor
-   is quietly refusing sends, which no fill percentage on its own can show. */
+   answers -- particularly the two the fill rate cannot show on its own: a
+   floor quietly refusing sends, and armies filling to the brim. */
 suite('farmolo -- mit mondanak a szamlalok', function () {
 	var api = sandbox({}, [sliceFrom(SZEM4_SRC, 'var STAT_MIN_MINTA', 'farmStatErtekeles')],
 	                  { szoveg: 'STAT_SZOVEG', minMinta: 'STAT_MIN_MINTA' });
 	function stat(o) {
-		var s = { kezdet: 1, kuldes: 0, teher: 0, vart: 0, alul: 0, minsereg: 0, keves: 0 };
+		var s = { kezdet: 1, kuldes: 0, minsereg: 0, keves: 0,
+		          jelentes: 0, zsakmany: 0, jelTeher: 0, tele: 0 };
 		for (var k in o) s[k] = o[k];
 		return s;
 	}
 
 	var semmi = api.farmStatErtekeles(stat({}));
-	eq(semmi.szint, 'nincs', 'with nothing sent yet the panel does not pretend to advise');
+	eq(semmi.szint, 'nincs', 'with no report read yet the panel does not pretend to advise');
 	/* ok(=== null), not eq: JSON.stringify(NaN) is "null", so eq would pass on
 	   a division that produced NaN -- the very thing this guards. */
 	ok(semmi.toltes === null, 'and reports no percentage rather than a NaN');
 
-	var keves = api.farmStatErtekeles(stat({ kuldes: 5, teher: 2000, vart: 200 }));
-	eq(keves.szint, 'keves_adat', 'a handful of attacks is not enough to move troops on');
+	/* Attacks going out is not the same evidence as reports coming back: the
+	   fill rate is measured from the latter, so that is what has to be
+	   sampled before advising. */
+	var csakKuldes = api.farmStatErtekeles(stat({ kuldes: 200 }));
+	eq(csakKuldes.szint, 'nincs', 'attacks sent but no reports read yet is still nothing to measure');
 
-	var hatar = api.farmStatErtekeles(stat({ kuldes: api.minMinta(), teher: 1000, vart: 800 }));
+	var keves = api.farmStatErtekeles(stat({ jelentes: 5, jelTeher: 2000, zsakmany: 200 }));
+	eq(keves.szint, 'keves_adat', 'a handful of reports is not enough to move troops on');
+
+	var hatar = api.farmStatErtekeles(stat({ jelentes: api.minMinta(), jelTeher: 1000, zsakmany: 800 }));
 	ok(hatar.szint !== 'keves_adat', 'the sample threshold is a floor to reach, not to pass');
 
-	var laza = api.farmStatErtekeles(stat({ kuldes: 100, teher: 40000, vart: 12000 }));
+	var laza = api.farmStatErtekeles(stat({ jelentes: 100, jelTeher: 40000, zsakmany: 12000 }));
 	eq(laza.szint, 'nagy', 'armies coming home a third full means too many units per send');
 	eq(Math.round(laza.toltes * 100), 30, 'and the percentage is the plain ratio of the two totals');
 
-	/* The case the fill percentage cannot see on its own: every army that got
-	   sent was a good size, but a large share of attempts never became attacks
-	   because the floor refused them. Same remedy, different evidence. */
-	var padlo = api.farmStatErtekeles(stat({ kuldes: 100, teher: 40000, vart: 32000, minsereg: 40 }));
+	/* The case the fill rate cannot see on its own: every army that got sent
+	   was a good size, but a large share of attempts never became attacks
+	   because the floor refused them -- and a refused plan files no report. */
+	var padlo = api.farmStatErtekeles(stat({ kuldes: 100, jelentes: 100, jelTeher: 40000,
+	                                         zsakmany: 32000, minsereg: 40 }));
 	eq(padlo.szint, 'nagy', 'a floor refusing many sends is caught even when the armies that go are full');
 
-	var alul = api.farmStatErtekeles(stat({ kuldes: 100, teher: 40000, vart: 32000, alul: 30 }));
-	eq(alul.szint, 'kicsi', 'loot repeatedly left standing means more units would earn more');
+	/* The opposite reading, and the one that must win: armies that come home
+	   full were demonstrably too small, and answering that by sending fewer
+	   units would be the costliest possible mistake. */
+	var tele = api.farmStatErtekeles(stat({ jelentes: 100, jelTeher: 40000,
+	                                        zsakmany: 32000, tele: 40 }));
+	eq(tele.szint, 'kicsi', 'armies repeatedly coming home full means more units would earn more');
+	eq(Math.round(tele.teleArany * 100), 40, 'and the share that filled up is reported as it is');
 
-	var hiany = api.farmStatErtekeles(stat({ kuldes: 100, teher: 40000, vart: 32000, keves: 40 }));
+	var telePadlo = api.farmStatErtekeles(stat({ kuldes: 100, jelentes: 100, jelTeher: 40000,
+	                                             zsakmany: 32000, tele: 40, minsereg: 40 }));
+	eq(telePadlo.szint, 'kicsi', 'and it outranks the floor reading, which would say the opposite');
+
+	var hiany = api.farmStatErtekeles(stat({ kuldes: 100, jelentes: 100, jelTeher: 40000,
+	                                         zsakmany: 32000, keves: 40 }));
 	eq(hiany.szint, 'kicsi', 'so does running out of units mid-plan');
 
-	var rendben = api.farmStatErtekeles(stat({ kuldes: 100, teher: 40000, vart: 32000,
-	                                           alul: 5, minsereg: 5, keves: 5 }));
+	var rendben = api.farmStatErtekeles(stat({ kuldes: 100, jelentes: 100, jelTeher: 40000,
+	                                           zsakmany: 32000, tele: 5, minsereg: 5, keves: 5 }));
 	eq(rendben.szint, 'rendben', 'a well-fitted army is left alone rather than nagged at');
 
 	/* A verdict with no sentence would render as an empty panel. */
@@ -3205,7 +3183,8 @@ suite('farmolo -- mit mondanak a szamlalok', function () {
 
 	/* Clearing has to be real: the counters describe the settings that were in
 	   force while they ran, so they are cleared exactly when one changes. */
-	var nw = { SZEM4_FARM: { STAT: stat({ kuldes: 9, teher: 100, vart: 50, alul: 1, minsereg: 2, keves: 3 }) },
+	var nw = { SZEM4_FARM: { STAT: stat({ kuldes: 9, jelentes: 4, jelTeher: 100, zsakmany: 50,
+	                                      tele: 1, minsereg: 2, keves: 3 }) },
 	           document: { getElementById: function () { return null; } } };
 	var n = sandbox(nw, [sliceFn(SZEM4_SRC, 'defaultFarmState'),
 	                     sliceFrom(SZEM4_SRC, 'var STAT_MIN_MINTA', 'farmStatNullaz')]);
