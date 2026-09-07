@@ -2235,3 +2235,87 @@ suite('epito -- a hatralevo ido forrasa', function () {
 	   parameter is a test seam and not a new thing the caller must supply. */
 	ok(api().readBuildQueue(sor).allBuildTime > 0, 'the clock defaults to the real one');
 });
+
+
+/* ------------------------------------------------------------------------ */
+suite('epito -- az Info oszlop allapotszinei', function () {
+	/* He reported the yellow "Nyersanyaghiány" cell as unreadable: the cell
+	   painted its background and left the text at the table's pale grey.
+
+	   Asserting which tokens were named would not catch that -- the old code
+	   named a perfectly good yellow. What matters is whether the pair can be
+	   read, so the browser is asked what it computed and the ratio worked out
+	   from it, the same way the header colours are checked. */
+	var keret = document.createElement('iframe');
+	keret.style.cssText = 'position:absolute; left:-9999px; top:0; width:800px; height:400px;';
+	document.body.appendChild(keret);
+	var d = keret.contentDocument;
+	d.open();
+	d.write('<!doctype html><html><head><style>' + szemCss() + '</style></head><body>' +
+	        '<div id="content"><table class="vis"><tbody><tr>' +
+	        '<td id="c0">Capital | 001 (524|463)</td><td id="c1">l</td><td id="c2">t</td>' +
+	        '<td id="c3">info</td></tr></tbody></table></div></body></html>');
+	d.close();
+
+	function fenyero(s) {
+		var c = s.match(/[0-9.]+/g).slice(0, 3).map(function (v) {
+			v = Number(v) / 255;
+			return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+		});
+		return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+	}
+	function kontraszt(a, b) {
+		var la = fenyero(a), lb = fenyero(b);
+		return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+	}
+
+	var sor = d.getElementById('c3').parentNode;
+	var api = sandbox({ JELZO_NINCS: '', debug: function () {},
+	                    KTID: { '524|463': 1 }, setTimeout: function () {},
+	                    playSound: function () {},
+	                    gameUrl: function () { return '#'; },
+	                    szemIkon: function () { return 'i.svg'; },
+	                    JELZO_SZINEK: { alap: '', yellow: 'var(--szem-warn)',
+	                                    blue: 'var(--szem-stalled)', red: 'var(--szem-danger)' } },
+	                  [sliceFn(SZEM4_SRC, 'szem4_EPITO_infoCell')]);
+
+	function fest(szin) {
+		api.szem4_EPITO_infoCell(sor, szin, 'Nyersanyaghiány lépett fel.');
+		var cs = keret.contentWindow.getComputedStyle(d.getElementById('c3'));
+		return { hatter: cs.backgroundColor, szoveg: cs.color };
+	}
+
+	['yellow', 'blue', 'red'].forEach(function (szin) {
+		var v = fest(szin);
+		ok(v.hatter !== 'rgba(0, 0, 0, 0)', szin + ': the cell actually paints a background', v.hatter);
+		ok(kontraszt(v.hatter, v.szoveg) >= 4.5,
+		   szin + ': and its message can be read on it',
+		   kontraszt(v.hatter, v.szoveg).toFixed(2) + ':1');
+	});
+
+	/* The three states must stay apart from each other, or the colour stops
+	   carrying the meaning the header tooltip promises. */
+	var sarga = fest('yellow').hatter, kek = fest('blue').hatter, piros = fest('red').hatter;
+	ok(sarga !== kek && kek !== piros && sarga !== piros,
+	   'the three states are three different colours');
+
+	/* And apart from the header amber, so a warning never reads as a heading.
+	   The accent is read off the sheet rather than repeated as a hex here. */
+	var proba = d.createElement('div');
+	proba.style.color = 'var(--szem-accent)';
+	d.body.appendChild(proba);
+	var accent = keret.contentWindow.getComputedStyle(proba).color;
+	ok(sarga !== accent, 'the warning yellow is not the header amber');
+	proba.remove();
+
+	/* "alap" means nothing is wrong: the inline colours come off entirely and
+	   the cell goes back to whatever the stylesheet says. Leaving a near-black
+	   text colour behind here would make a normal row unreadable, which is the
+	   reported bug with the colours the other way round. */
+	var alap = fest('alap');
+	eq(alap.hatter, 'rgba(0, 0, 0, 0)', 'a normal row paints no background of its own');
+	eq(alap.szoveg, keret.contentWindow.getComputedStyle(d.getElementById('c2')).color,
+	   'and its text is the same as any other cell in the table');
+
+	keret.remove();
+});

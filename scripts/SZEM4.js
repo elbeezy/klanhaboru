@@ -297,6 +297,13 @@ function init(){try{
 			--szem-accent-deep: #c08f33;
 			--szem-hover: rgba(255,255,255,0.06);
 			--szem-danger: #e05252;
+			/* Az Építő Infó oszlopának két további állapotszíne. Mind a
+			   három -- ez a kettő és a --szem-danger -- elég világos ahhoz,
+			   hogy a --szem-on-accent közelfekete szöveg olvasható legyen
+			   rajtuk; a sárga szándékosan zöldebb az --szem-accent borostyánnál,
+			   nehogy egy figyelmeztetés fejlécnek nézzen ki. */
+			--szem-warn: #e9d84a;
+			--szem-stalled: #7fb3e8;
 			--szem-shadow: 0 2px 24px rgba(0,0,0,0.65);
 
 			/* One column, as wide as the window allows up to a comfortable
@@ -1964,6 +1971,17 @@ function maplink(koord){
    ever reads this value back -- the states that ARE read back are red,
    yellow and green -- so it can be empty safely. */
 var JELZO_NINCS = '';
+
+/* Az Építő Infó oszlopának négy állapota, egy helyen. A fejléc súgója
+   ugyanezt sorolja fel: sárga = orvosolható, kék = nem tud haladni, piros =
+   kritikus hiba, szín nélküli = megy minden. A színek innen jönnek, hogy a
+   súgó és a cella ne tudjon elcsúszni egymástól. */
+var JELZO_SZINEK = {
+	alap:   JELZO_NINCS,
+	yellow: 'var(--szem-warn)',
+	blue:   'var(--szem-stalled)',
+	red:    'var(--szem-danger)'
+};
 
 /*dupla klikk események*/
 function multipricer(ez,tip,s1){try{
@@ -4464,10 +4482,14 @@ function szem4_EPITO_addIdo(sor, perc){try{
 }catch(e){debug("epito_addIdo",e); return false;}}
 
 function szem4_EPITO_infoCell(sor,szin,info){try{
-	if (szin=="alap") szin=JELZO_NINCS;
-	if (szin=="blue") szin="#44F";
 	if (szin=="red") setTimeout('playSound("kritikus_hiba")',2000);
-	sor.cells[3].style.backgroundColor=szin;
+	var hatter = szin in JELZO_SZINEK ? JELZO_SZINEK[szin] : szin;
+	/* A háttér és a rajta ülő szöveg egyszerre áll be. Eddig csak a háttér
+	   volt megadva, a szöveg pedig maradt a táblázat halvány szürkéje --
+	   sárgán vagy világoskéken az gyakorlatilag olvashatatlan. Üres háttérnél
+	   a szövegszín is lekerül, hogy a cella visszakapja a stíluslapét. */
+	sor.cells[3].style.backgroundColor = hatter;
+	sor.cells[3].style.color = hatter ? 'var(--szem-on-accent)' : '';
 	let coord = sor.cells[0].textContent.split(' ');
 	coord = coord[coord.length-1].replace('(', '').replace(')','');
 	sor.cells[3].innerHTML=info+' <a href="'+gameUrl({ village: KTID[coord], screen: 'main', mode: null, group: null, page: null })+'" target="_BLANK"><img alt="Nyit" title="Falu megnyitása" src="'+szemIkon('link')+'"></a>';
