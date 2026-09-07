@@ -2503,7 +2503,24 @@ function defaultFarmState() {
 		ALL_SPY_MOVEMENTS: {}, // hova(koord): mikor ment utoljára kém
 		DOMINFO_FARMS: {},     // village: {prodHour, buildings, nyers, szin, isJatekos}
 		DOMINFO_FROM: {},      // village: {isUnits, noOfUnits}
-		OPTIONS: {}
+		OPTIONS: {},
+		/* Whether the farming army is the right size is not answerable by
+		   looking at it -- only by comparing, over many attacks, what the
+		   engine expected to find with what the army it built could carry.
+		   Both numbers are already computed on the way to every send, so
+		   counting them costs nothing and is the only evidence there is.
+		   Saved with the rest of SZEM4_FARM, and absent on an install that
+		   predates this, where the merge in szem4_ADAT_loadNow leaves the
+		   default in place. */
+		STAT: {
+			kezdet: 0,    // mikor kezdodott a szamolas
+			kuldes: 0,    // hany tamadas indult
+			teher: 0,     // az elkuldott seregek teherbirasa osszesen
+			vart: 0,      // amennyi nyersert mentek (a teherbirasig szamolva)
+			alul: 0,      // ennyiszer maradt ott nyers, mert nem birta el
+			minsereg: 0,  // ennyiszer hiusult meg terv a minimum sereg miatt
+			keves: 0      // ennyiszer nem volt eleg egyseg a hatarszamhoz
+		}
 	};
 }
 function defaultVijeState() {
@@ -3134,6 +3151,35 @@ function readCarryCapacity(formEl, plannedUnits, farmCoord) {
 	return 0;
 }
 
+/* Both recorders are deliberately total: they sit on the path of a live
+   attack, and a throw here would skip the send that follows. Same reasoning as
+   resetAvailableUnits. A capacity that could not be read comes through as
+   undefined and is dropped rather than counted as zero, which would otherwise
+   quietly report every army as carrying air. */
+function farmStatKuldes(teherbiras, vartNyers) {
+	var s = SZEM4_FARM && SZEM4_FARM.STAT;
+	if (!s) return;
+	if (!(teherbiras > 0)) return;
+	if (!(vartNyers >= 0)) return;
+	if (!s.kezdet) s.kezdet = Date.now();
+	s.kuldes++;
+	s.teher += teherbiras;
+	/* Counted only up to what the army can hold: loot it could not have
+	   carried is not evidence that the army was full. That the expectation
+	   overran the capacity is the separate, opposite signal. */
+	s.vart += Math.min(vartNyers, teherbiras);
+	if (vartNyers > teherbiras) s.alul++;
+}
+/* A plan that dies in step 2 died for one of two reasons, and they call for
+   opposite answers: the minimum-army floor refusing a send that was otherwise
+   fine, or genuinely too few units left to carry a worthwhile load. */
+function farmStatElakadt(minSeregMiatt) {
+	var s = SZEM4_FARM && SZEM4_FARM.STAT;
+	if (!s) return;
+	if (!s.kezdet) s.kezdet = Date.now();
+	if (minSeregMiatt) s.minsereg++;
+	else s.keves++;
+}
 function addCurrentMovementToList(formEl, farmCoord, farmHelyRow, plannedUnits) {try{
 	var patternOfIdo = /<td>[0-9]+:[0-9]+:[0-9]+<\/td>/g;
 	var travelTime = formEl.innerHTML.match(patternOfIdo)[0].match(/[0-9]+/g);
@@ -3143,6 +3189,7 @@ function addCurrentMovementToList(formEl, farmCoord, farmHelyRow, plannedUnits) 
 	arriveTime = arriveTime.getTime();
 
 	var teherbiras = readCarryCapacity(formEl, plannedUnits, farmCoord);
+	var teljesTeher = teherbiras; // a VIJE-re szant resz levonasa elott
 	var VIJE_teher = 0;
 	var VIJE_nyers = SZEM4_FARM.DOMINFO_FARMS[farmCoord].nyers;
 	if (VIJE_nyers > 0) {
@@ -3169,6 +3216,7 @@ function addCurrentMovementToList(formEl, farmCoord, farmHelyRow, plannedUnits) 
 	if (spyIcon && !spyIcon.classList.contains('faded')) {
 		if (!SZEM4_FARM.ALL_SPY_MOVEMENTS[farmCoord] || SZEM4_FARM.ALL_SPY_MOVEMENTS[farmCoord] < arriveTime) SZEM4_FARM.ALL_SPY_MOVEMENTS[farmCoord] = arriveTime;
 	}
+	return teljesTeher;
 }catch(e) {debug('addCurrentMovementToList', e); console.error(e);}}
 
 function planAttack(farmRow, nyers_VIJE, bestSpeed, hatarszam) {try{
@@ -3231,6 +3279,11 @@ function planAttack(farmRow, nyers_VIJE, bestSpeed, hatarszam) {try{
 				travelTime: myTime,
 				slowestUnit: priority,
 				nyersToFarm: teher,
+				/* Step 2 overwrites nyersToFarm with the built army's actual
+				   capacity, so the figure the engine set out to collect would
+				   otherwise be gone by the time the attack is sent -- and it is
+				   half of the only ratio that says whether the army fits. */
+				vartNyers: teher,
 				debug_teher: plannedArmy.teher,
 				debug_hatar: hatarszam,
 				isMax: isMax
@@ -3521,6 +3574,7 @@ function szem4_farmolo_2illeszto(bestPlan){try{/*FIXME: határszám alapján sz�
 		extendArmy(plannedArmy, bestPlan.fromVill, bestPlan.slowestUnit);
 	}
 	if (!plannedArmy.units || plannedArmy.units.pop < minSereg || (plannedArmy.teher + 50) < hatarszam) {
+		farmStatElakadt(!!(plannedArmy.units && plannedArmy.units.pop < minSereg));
 		if (bestPlan.isMax && plannedArmy.teher < hatarszam) {
 			// Ha olyan messzi van a falu, amire a megbízhatóságnyi szintet is el tudná hozni, de olyan kevés ott a sereg, hogy az még a határszámnyi elhozásra se elég.
 			for (let unitType in plannedArmy.units) {
@@ -3636,7 +3690,8 @@ function szem4_farmolo_3egyeztet(adatok){try{
 		SZEM4_FARM.DOMINFO_FARMS[adatok.plannedArmy.farmVill].szin.banya = scoutColor;
 	}
 
-	addCurrentMovementToList(gameEl(FARM_REF, '#command-data-form', 'parancs urlap'), adatok.plannedArmy.farmVill, farm_helye, adatok.plannedArmy.units);
+	var kuldottTeher = addCurrentMovementToList(gameEl(FARM_REF, '#command-data-form', 'parancs urlap'), adatok.plannedArmy.farmVill, farm_helye, adatok.plannedArmy.units);
+	farmStatKuldes(kuldottTeher, adatok.plannedArmy.vartNyers);
 	gameEl(FARM_REF, '#troop_confirm_submit', 'tamadas megerosito gomb').click();
 	document.getElementById('cnc_farm_heartbeat').innerHTML = new Date().toLocaleString();
 	const megbizhatosag = parseInt(document.getElementById('farmolo_options').megbizhatosag.value, 10);

@@ -3034,3 +3034,117 @@ suite('When the gatherer books its next visit', function () {
 	eq(api.scavengeNextVisitMs([most - 500000], 'min', most), most + 10000,
 	   'an overdue squad cannot book a visit in the past and reopen the page every tick');
 });
+
+/* ------------------------------------------------------------------------ */
+/* Whether a farming army is the right size cannot be seen by looking at it.
+   Two numbers already exist on the way to every attack -- what the engine
+   expected to find, and what the army it built can carry -- and their ratio
+   over many sends is the only evidence that says whether troops are walking
+   there and back carrying air.
+
+   Both recorders sit on the live attack path, so both are total: a throw here
+   would skip the send that follows it. */
+suite('farmolo -- a sereg meretenek merese', function () {
+	function ures() {
+		return { kezdet: 0, kuldes: 0, teher: 0, vart: 0, alul: 0, minsereg: 0, keves: 0 };
+	}
+	function api(stat) {
+		var w = { SZEM4_FARM: arguments.length ? { STAT: stat } : { STAT: ures() } };
+		var a = sandbox(w, [sliceFn(SZEM4_SRC, 'farmStatKuldes'),
+		                    sliceFn(SZEM4_SRC, 'farmStatElakadt')]);
+		a.stat = w.SZEM4_FARM.STAT;
+		return a;
+	}
+
+	/* The shape has to survive the default state, or every counter reads
+	   undefined on a fresh install and the panel reports nonsense. */
+	var alap = sandbox({}, [sliceFn(SZEM4_SRC, 'defaultFarmState')]).defaultFarmState();
+	eq(Object.keys(alap.STAT).sort(),
+	   ['alul', 'keves', 'kezdet', 'kuldes', 'minsereg', 'teher', 'vart'],
+	   'a fresh farm state carries every counter the panel reads');
+
+	var a = api();
+	a.farmStatKuldes(400, 150);
+	eq(a.stat.kuldes, 1, 'a send is counted');
+	eq(a.stat.teher, 400, 'the capacity that actually left is recorded');
+	eq(a.stat.vart, 150, 'so is the loot it was sent to collect');
+
+	a.farmStatKuldes(400, 250);
+	eq(a.stat.teher, 800, 'capacity accumulates across sends');
+	eq(a.stat.vart, 400, 'and so does the expectation');
+	eq(a.stat.alul, 0, 'neither send left loot standing');
+
+	/* An army sent for more than it can hold is the opposite signal: the loot
+	   it could not carry is not evidence that it travelled full, so it must not
+	   be added, and the fact that it happened is worth its own counter. */
+	var b = api();
+	b.farmStatKuldes(400, 900);
+	eq(b.stat.vart, 400, 'loot beyond the capacity is not counted as carried');
+	eq(b.stat.alul, 1, 'but leaving loot behind is counted, it means too few troops');
+
+	/* readCarryCapacity returns 0 when the markup moved, and the whole
+	   recorder is skipped if addCurrentMovementToList threw before returning.
+	   Counting either as a zero-capacity send would report every army as
+	   carrying air -- the exact conclusion the panel exists to draw. */
+	var c = api();
+	c.farmStatKuldes(undefined, 150);
+	c.farmStatKuldes(0, 150);
+	eq(c.stat.kuldes, 0, 'a capacity that could not be read is dropped, not counted as empty');
+	eq(c.stat.teher, 0, 'and contributes nothing to the totals');
+
+	/* The clock is handed in rather than read off the machine: two real
+	   Date.now() calls can land in the same millisecond, and a mutation that
+	   reset the start on every send would then pass unnoticed. */
+	var ora = 1000;
+	var dw = { SZEM4_FARM: { STAT: ures() }, Date: { now: function () { return ora; } } };
+	var d = sandbox(dw, [sliceFn(SZEM4_SRC, 'farmStatKuldes'),
+	                     sliceFn(SZEM4_SRC, 'farmStatElakadt')]);
+	d.farmStatKuldes(400, 150);
+	eq(dw.SZEM4_FARM.STAT.kezdet, 1000, 'counting records when it started');
+	ora = 99000;
+	d.farmStatKuldes(400, 150);
+	eq(dw.SZEM4_FARM.STAT.kezdet, 1000, 'and the start is not moved by later sends');
+
+	/* The two ways a plan dies in step 2 call for opposite answers -- lower the
+	   floor, or field more troops -- so they cannot share a counter. */
+	var e = api();
+	e.farmStatElakadt(true);
+	eq(e.stat.minsereg, 1, 'a plan refused by the minimum-army floor is counted as that');
+	eq(e.stat.keves, 0, 'and not as a shortage of troops');
+	e.farmStatElakadt(false);
+	eq(e.stat.keves, 1, 'a plan with too few units to carry a load is counted separately');
+	eq(e.stat.minsereg, 1, 'without disturbing the other reason');
+
+	/* An install that predates this has no STAT in its saved farm data. */
+	var f = sandbox({ SZEM4_FARM: {} }, [sliceFn(SZEM4_SRC, 'farmStatKuldes'),
+	                                     sliceFn(SZEM4_SRC, 'farmStatElakadt')]);
+	var dobott = false;
+	try { f.farmStatKuldes(400, 150); f.farmStatElakadt(true); } catch (err) { dobott = true; }
+	ok(!dobott, 'an install with no counters yet records nothing rather than throwing mid-attack');
+
+	/* The counters are worthless unless they are actually called, and every one
+	   of these three wirings can be reverted without breaking a single
+	   assertion above. The capacity in particular travels back out of
+	   addCurrentMovementToList, which returned nothing before this. */
+	var terv = sliceFn(SZEM4_SRC, 'planAttack');
+	ok(terv.indexOf('vartNyers: teher') !== -1,
+	   'the plan carries what the engine set out to collect, before step 2 overwrites it');
+
+	var mozgas = sliceFn(SZEM4_SRC, 'addCurrentMovementToList');
+	ok(/return teljesTeher;/.test(mozgas),
+	   'the capacity that actually left is handed back to the caller');
+	/* Asserted by position, not presence: the capacity has to be taken while
+	   teherbiras still holds the whole army's, and the line surviving a move
+	   below the subtraction is exactly the mistake a text search cannot see. */
+	ok(mozgas.indexOf('var teljesTeher = teherbiras;') !== -1 &&
+	   mozgas.indexOf('var teljesTeher = teherbiras;') < mozgas.indexOf('teherbiras-=VIJE_teher;'),
+	   'and it is the full capacity, read before the VIJE share is subtracted');
+
+	var kuldo = sliceFn(SZEM4_SRC, 'szem4_farmolo_3egyeztet');
+	ok(/farmStatKuldes\(kuldottTeher, adatok\.plannedArmy\.vartNyers\)/.test(kuldo),
+	   'every attack sent records its capacity against what it went to collect');
+
+	var illeszto = sliceFn(SZEM4_SRC, 'szem4_farmolo_2illeszto');
+	ok(illeszto.indexOf('farmStatElakadt(') !== -1,
+	   'a plan abandoned in step 2 is counted, with the reason it died');
+});
