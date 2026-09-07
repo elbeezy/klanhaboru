@@ -18,7 +18,8 @@ var EXPECTED_EXPORTS = [
 	'saveLocalDataToCloud', 'saveSettings', 'selectTheme', 'setTooltip',
 	'sortorol', 'stopEvent', 'sugo', 'switchMobileMode',
 	'szem4_ADAT_LoadAll', 'szem4_ADAT_betolt', 'szem4_ADAT_del', 'szem4_ADAT_kiir',
-	'szem4_ADAT_loadNow', 'szem4_ADAT_restart', 'szem4_ADAT_saveNow', 'szem4_EPITO_cscheck',
+	'szem4_ADAT_loadNow', 'szem4_ADAT_restart', 'szem4_ADAT_saveNow', 'szem4_BEF_mind',
+	'szem4_BEF_setVill', 'szem4_EPITO_cscheck',
 	'szem4_EPITO_csopDelete', 'szem4_EPITO_infoCell', 'szem4_EPITO_most', 'szem4_EPITO_perccsokkento',
 	'szem4_EPITO_ujCsop', 'szem4_EPITO_ujFalu', 'szem4_GYUJTO_search', 'szem4_farmolo_csoport',
 	'szem4_farmolo_multiclick', 'szem4_vije_forgot', 'szunet', 'szunetMind',
@@ -490,8 +491,9 @@ suite('Not overwriting good data with bad', function () {
 function pauseWorld() {
 	var w = {
 		FARM_PAUSE: true, VIJE_PAUSE: true, EPIT_PAUSE: true, ADAT_PAUSE: false, GYUJTO_PAUSE: true,
+		BEF_PAUSE: true,
 		VIJE_SYNC_REST_UNTIL: 0,
-		ALL_EXTENSION: ['farm', 'vije', 'idtamad', 'epit', 'gyujto', 'adatok'],
+		ALL_EXTENSION: ['farm', 'vije', 'idtamad', 'epit', 'gyujto', 'adatok', 'bef'],
 		clock: 1000000000000,
 		calls: [], alerts: [], logged: [], prompts: [], confirms: [],
 		answers: [], confirmAnswer: true, ticker: null, tickMs: 0,
@@ -536,7 +538,7 @@ function pauseApi(w) {
 
 /* Which modules are actually running, by their own flags. */
 function running(w) {
-	var flags = { farm: w.FARM_PAUSE, vije: w.VIJE_PAUSE, epit: w.EPIT_PAUSE, gyujto: w.GYUJTO_PAUSE, adatok: w.ADAT_PAUSE };
+	var flags = { farm: w.FARM_PAUSE, vije: w.VIJE_PAUSE, epit: w.EPIT_PAUSE, gyujto: w.GYUJTO_PAUSE, adatok: w.ADAT_PAUSE, bef: w.BEF_PAUSE };
 	return Object.keys(flags).filter(function (k) { return flags[k] === false; }).sort();
 }
 
@@ -737,6 +739,7 @@ suite('The bot-protection alarm', function () {
 		w.EPIT_REF = fakeAblak('https://game/game.php?screen=main');
 		w.EPIT_REF.closed = true;
 		w.GYUJTO_REF = { get closed() { throw new Error('elt\u00fbnt'); } };
+		w.BEF_REF = null;
 		w.window = { open: function () { w.botAblak.closed = false; return w.botAblak; } };
 		/* One element, not a fresh stub per call: the question is whether
 		   anything ever actually paused the clip. */
@@ -2739,4 +2742,181 @@ suite('auto befejezo -- az ingyenes ajanlat felismerese', function () {
 	eq(api().befejezesEpulet(sor.querySelector('.btn-instant-free')), 'Vasbánya 20. szint',
 	   'the finished building is named the way the game names it');
 	eq(api().befejezesEpulet(null), 'egy épület', 'and an unknown one still reads as a sentence');
+});
+
+
+/* --------------------------------------------- auto befejezo, az utemezes
+   The module drives itself off one number per village: when to look at it
+   next. Getting that wrong is not cosmetic -- too eager and it reloads the
+   same page in a tight loop, too lazy and it sleeps through the three-minute
+   window the whole feature exists for. */
+function befWorld() {
+	var w = {
+		KTID: { '500|500': 11, '501|501': 22, '502|502': 33 },
+		ID_TO_INFO: { 11: { name: 'Egy' }, 22: { name: 'Ketto' }, 33: { name: 'Harom' } },
+		SZEM4_BEF: {},
+		BEF_VILLINFO: {},
+		BEF_LEPES: 0,
+		BEF_FALU: 0,
+		BEF_HIBA: 0,
+		BEF_REF: null,
+		AZON: 'X',
+		clock: 1788770000000,
+		opened: [], logged: [], allapotok: {},
+		gameUrl: function (o) { return 'URL:' + o.village; },
+		naplo: function (k, s) { w.logged.push(k + ': ' + s); },
+		debug: function (k, s) { w.logged.push('DEBUG ' + k + ': ' + s); }
+	};
+	w.Date = function (ms) { return { toLocaleTimeString: function () { return 'T' + ms; } }; };
+	w.Date.now = function () { return w.clock; };
+	w.windowOpener = function (id, url, nev) { w.opened.push(url); return { document: w.doc }; };
+	w.document = { getElementById: function () { return null; } };
+	return w;
+}
+
+function befApi(w) {
+	return sandbox(w, [
+		sliceFrom(SZEM4_SRC, 'var BEF_RATARTAS_MP', 'befejezesKattint'),
+		sliceFn(SZEM4_SRC, 'szem4_BEF_allapot'),
+		sliceFn(SZEM4_SRC, 'szem4_BEF_setVill'),
+		sliceFn(SZEM4_SRC, 'szem4_BEF_keres'),
+		sliceFn(SZEM4_SRC, 'szem4_BEF_ellenoriz'),
+		'var BEF_UJRA_MS = ' + befConst('BEF_UJRA_MS') + ';',
+		'var BEF_URES_MS = ' + befConst('BEF_URES_MS') + ';',
+		'var BEF_GYANUS_MS = ' + befConst('BEF_GYANUS_MS') + ';'
+	]);
+}
+/* The three waits are read out of the source rather than copied, so changing
+   one in the module changes it here too. */
+function befConst(nev) {
+	var m = new RegExp('var ' + nev + ' = ([0-9]+)').exec(SZEM4_SRC);
+	if (!m) throw new Error('no such constant: ' + nev);
+	return m[1];
+}
+
+suite('auto befejezo -- melyik falut nezzuk meg', function () {
+	var w = befWorld(), api = befApi(w);
+
+	/* Nothing is ticked, so there is nothing to do and no page to fetch. */
+	eq(api.szem4_BEF_keres(), 60000, 'with no village chosen it waits a minute');
+	eq(w.opened, [], 'and opens nothing');
+
+	w.SZEM4_BEF = { 22: true };
+	eq(api.szem4_BEF_keres(), 0, 'a chosen village is picked up straight away');
+	eq(w.opened, ['URL:22'], 'and only that one is opened');
+	eq(w.BEF_FALU, 22, 'the module remembers which village it is looking at');
+	eq(w.BEF_LEPES, 1, 'and moves on to waiting for the page');
+
+	/* A village with a future appointment is left alone, and the sleep runs
+	   to that appointment rather than to a fixed poll. */
+	w = befWorld(); api = befApi(w);
+	w.SZEM4_BEF = { 22: true };
+	w.BEF_VILLINFO = { 22: { ujraMs: w.clock + 20000 } };
+	eq(api.szem4_BEF_keres(), 20000, 'it sleeps exactly until the village is due');
+	eq(w.opened, [], 'and does not fetch the page early');
+
+	/* Two bounds on that sleep: never longer than a minute, so a village
+	   ticked in the meantime is not left waiting, and never shorter than a
+	   second, so a due-any-moment village cannot spin the loop. */
+	w.BEF_VILLINFO = { 22: { ujraMs: w.clock + 3600000 } };
+	eq(api.szem4_BEF_keres(), 60000, 'an appointment an hour out still wakes it within the minute');
+	w.BEF_VILLINFO = { 22: { ujraMs: w.clock + 5 } };
+	eq(api.szem4_BEF_keres(), 1000, 'and one five milliseconds out does not spin the loop');
+
+	/* With several villages waiting it is the soonest that sets the alarm. */
+	w.SZEM4_BEF = { 11: true, 22: true, 33: true };
+	w.BEF_VILLINFO = { 11: { ujraMs: w.clock + 50000 }, 22: { ujraMs: w.clock + 9000 },
+	                   33: { ujraMs: w.clock + 30000 } };
+	eq(api.szem4_BEF_keres(), 9000, 'the soonest village sets the alarm');
+
+	/* An unticked village is skipped even when it has an appointment left
+	   over from before it was switched off. */
+	w.SZEM4_BEF = { 33: true };
+	w.BEF_VILLINFO = { 11: { ujraMs: 0 }, 33: { ujraMs: w.clock + 30000 } };
+	eq(api.szem4_BEF_keres(), 30000, 'a village that is no longer ticked is not visited');
+	eq(w.opened, [], 'even though its time had passed');
+});
+
+suite('auto befejezo -- mi tortenik egy falunal', function () {
+	function nezes(w, sor) {
+		w.BEF_FALU = 22;
+		w.BEF_REF = { document: { getElementById: function (id) { return id === 'buildqueue' ? sor : null; } } };
+		befApi(w).szem4_BEF_ellenoriz();
+		return w.BEF_VILLINFO[22];
+	}
+
+	/* Far from the window: the return time is the plan's, to the millisecond,
+	   not a rounded-off poll. */
+	var w = befWorld();
+	var tavol = nezes(w, buildQueueEl([elonyRow()]));
+	eq(tavol.ujraMs, (BEF_TOL + 2) * 1000, 'a village mid-build is booked for exactly 2:58 remaining');
+	eq(w.logged, [], 'and nothing is written to the log for it');
+
+	/* In the window: the button is clicked, the finish is reported by name,
+	   and the village is booked back shortly to catch the next order. */
+	w = befWorld();
+	var sor = buildQueueEl([elonyRow()]);
+	var kattintva = 0;
+	sor.querySelector('.btn-instant-free').click = function () { kattintva++; };
+	w.clock = (BEF_TOL + 2) * 1000;
+	var kesz = nezes(w, sor);
+	eq(kattintva, 1, 'the free finish is taken');
+	eq(w.logged.length, 1, 'and reported once');
+	ok(w.logged[0].indexOf('Vasbánya') !== -1, 'naming the building that was finished');
+	eq(kesz.ujraMs, w.clock + Number(befConst('BEF_UJRA_MS')),
+	   'and the village is looked at again soon, for the next order in the queue');
+
+	/* A button that cannot be proved free: nothing is clicked, it is said out
+	   loud, and the village is left alone for a good while rather than
+	   retried every few seconds. */
+	w = befWorld();
+	var hamis = buildQueueEl([elonyRow({ freeOnclick: "return BuildingMain.change_order(1, 'BuildInstant', 10)" })]);
+	var rosszKattintva = 0;
+	hamis.querySelector('.btn-instant-free').click = function () { rosszKattintva++; };
+	w.clock = (BEF_TOL + 2) * 1000;
+	var gyanus = nezes(w, hamis);
+	eq(rosszKattintva, 0, 'a suspect button is never clicked');
+	eq(w.logged.length, 1, 'and it is reported');
+	ok(w.logged[0].indexOf('prémium pont nem fogyott') !== -1, 'saying that nothing was spent');
+	eq(gyanus.ujraMs, w.clock + Number(befConst('BEF_GYANUS_MS')),
+	   'and the village is left alone for half an hour rather than retried');
+
+	/* Nothing building at all is not a fault, just a slower poll. */
+	w = befWorld();
+	var ures = nezes(w, buildQueueEl([orderRow('farm', '1:05:03')]));
+	eq(ures.ujraMs, w.clock + Number(befConst('BEF_URES_MS')),
+	   'a village with nothing building is looked at again in five minutes');
+	eq(w.logged, [], 'quietly');
+
+	/* The one that matters most. If reading the page throws, the village must
+	   STILL come away with a wait on it -- otherwise it is due again on the
+	   very next tick, and a village whose page is broken would be reloaded
+	   several times a second for as long as SZEM runs. */
+	w = befWorld();
+	w.BEF_FALU = 22;
+	w.BEF_REF = { get document() { throw new Error('az ablak elszállt'); } };
+	befApi(w).szem4_BEF_ellenoriz();
+	ok(w.BEF_VILLINFO[22] && w.BEF_VILLINFO[22].ujraMs === w.clock + Number(befConst('BEF_URES_MS')),
+	   'a village whose page could not be read is still given a wait');
+	eq(w.BEF_HIBA, 1, 'the failure is counted');
+	eq(w.logged.length, 1, 'and reported');
+});
+
+suite('auto befejezo -- a falu ki- es bekapcsolasa', function () {
+	var w = befWorld();
+	var doboz = { checked: false, type: 'checkbox' };
+	var cella = { querySelector: function () { return doboz; } };
+	var api = befApi(w);
+
+	/* Switching a village on clears whatever appointment it had, so it is
+	   looked at at once instead of honouring a time set before it was off. */
+	w.BEF_VILLINFO = { 22: { ujraMs: w.clock + 3600000 } };
+	api.szem4_BEF_setVill(22, cella);
+	eq(w.SZEM4_BEF[22], true, 'ticking a village records it');
+	eq(doboz.checked, true, 'and the box shows it');
+	eq(w.BEF_VILLINFO[22], undefined, 'its old appointment is forgotten');
+
+	api.szem4_BEF_setVill(22, cella);
+	eq(w.SZEM4_BEF[22], undefined, 'unticking removes it rather than storing a false');
+	eq(doboz.checked, false, 'and the box shows that too');
 });

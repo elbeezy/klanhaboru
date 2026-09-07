@@ -26,7 +26,8 @@ Object.assign(window, {
 	saveLocalDataToCloud, saveSettings, selectTheme, setTooltip,
 	sortorol, stopEvent, sugo, switchMobileMode,
 	szem4_ADAT_LoadAll, szem4_ADAT_betolt, szem4_ADAT_del, szem4_ADAT_kiir,
-	szem4_ADAT_loadNow, szem4_ADAT_restart, szem4_ADAT_saveNow, szem4_EPITO_cscheck,
+	szem4_ADAT_loadNow, szem4_ADAT_restart, szem4_ADAT_saveNow, szem4_BEF_mind,
+	szem4_BEF_setVill, szem4_EPITO_cscheck,
 	szem4_EPITO_csopDelete, szem4_EPITO_infoCell, szem4_EPITO_most, szem4_EPITO_perccsokkento,
 	szem4_EPITO_ujCsop, szem4_EPITO_ujFalu, szem4_GYUJTO_search, szem4_farmolo_csoport,
 	szem4_farmolo_multiclick, szem4_vije_forgot, szunet, szunetMind,
@@ -162,6 +163,7 @@ try{ /*Rendszeradatok*/
 			case 'epit': szem4_EPITO_motor(); break;
 			case 'adatok': szem4_ADAT_motor(); break;
 			case 'gyujto': szem4_GYUJTO_motor(); break;
+			case 'bef': szem4_BEF_motor(); break;
 			default: debug('worker','Ismeretlen ID', JSON.stringify(worker_message))
 		}
 	};
@@ -1669,7 +1671,7 @@ function ujkieg(id,nev,tartalom){
 	/* The icon reflects current state, not the action, so a module that starts
 	   paused shows the pause image. Keep this in step with the *_PAUSE initial
 	   values further down. */
-	const startsPaused = ['farm', 'vije', 'gyujto', 'epit'];
+	const startsPaused = ['farm', 'vije', 'gyujto', 'epit', 'bef'];
 	document.getElementById("kiegs").innerHTML+='<img onclick=\'szunet("'+id+'",this)\' name="'+id+'" onmouseover=\'sugo(this,"Az érintett scriptet tudod megállítani/elindítani.")\' src="'+modulIkon(startsPaused.includes(id))+'" alt="Stop" title="Klikk a szüneteltetéshez"> <a href=\'javascript: nyit("'+id+'");\'>'+nev.toUpperCase()+'</a> ';
 	document.getElementById("content").innerHTML+='<table class="menuitem" width="1024px" align="center" id="'+id+'" style="display: none">'+tartalom+'</table>';
 	return true;
@@ -1699,6 +1701,7 @@ function moduleIsPaused(script) {
 		case "epit":   return EPIT_PAUSE;
 		case "adatok": return ADAT_PAUSE;
 		case "gyujto": return GYUJTO_PAUSE;
+		case "bef":    return BEF_PAUSE;
 		default:       return null;
 	}
 }
@@ -1710,6 +1713,7 @@ function setModulePause(script, paused, kep) {
 		case "epit":   EPIT_PAUSE   = paused; break;
 		case "adatok": ADAT_PAUSE   = paused; break;
 		case "gyujto": GYUJTO_PAUSE = paused; break;
+		case "bef":    BEF_PAUSE    = paused; break;
 		default: return false;
 	}
 
@@ -2125,7 +2129,8 @@ var BOT_REF;
    them is duller and cannot silently become a no-op again. */
 function nyitottAblakok() {
 	var lista = [['FARM_REF', FARM_REF], ['VIJE_REF1', VIJE_REF1], ['VIJE_REF2', VIJE_REF2],
-	             ['EPIT_REF', EPIT_REF], ['GYUJTO_REF', GYUJTO_REF], ['BOT_REF', BOT_REF]];
+	             ['EPIT_REF', EPIT_REF], ['GYUJTO_REF', GYUJTO_REF], ['BOT_REF', BOT_REF],
+	             ['BEF_REF', BEF_REF]];
 	var nyitva = [];
 	for (var i = 0; i < lista.length; i++) {
 		/* Reading .closed throws on a window that has gone away underneath us. */
@@ -5213,6 +5218,214 @@ function befejezesKattint(gomb, hol) {
 	return true;
 }
 
+/*-----------------AUTO BEFEJEZŐ--------------------*/
+/* Végigjárja a bejelölt falvakat, és amelyikben épül valami, ott lekattintja
+   az ingyenes befejezést, amint a játék felajánlja. A felismerés és a
+   kattintás az előző szakaszban van; itt csak az ütemezés meg a felület van.
+
+   Az ütemezés a lényeg: nem percenként nézünk körbe, hanem minden falura
+   kiszámoljuk, mikor nyílik az ingyenes ablaka, és pontosan akkorra térünk
+   vissza. Egy hosszú építési sorban ez faluként nagyjából egy oldalletöltés
+   megrendelésenként, nem több.
+
+   Külön modul, nem az Építő része: az Építő listáján nem szereplő, kézzel
+   épített falura is működnie kell, és külön is megállítható. */
+var BEF_UJRA_MS = 10000;     /* kattintás után ennyivel nézünk vissza a következő megrendelésért */
+var BEF_URES_MS = 300000;    /* nem épül semmi: 5 percenként nézünk vissza */
+var BEF_GYANUS_MS = 1800000; /* felismerhetetlen gomb: fél óráig nem bolygatjuk */
+
+function defaultBefState() {
+	return {};
+}
+
+function bef_listAllVillages() {
+	let rows = '';
+	for (const key in KTID) {
+		const faluId = KTID[key];
+		rows += `<tr id="bef_${faluId}">
+			<td>${ID_TO_INFO[faluId].name} (${key})</td>
+			<td>${ID_TO_INFO[faluId].point}</td>
+			<td onclick="szem4_BEF_setVill(${faluId}, this)"><input name="f${faluId}" type="checkbox"></td>
+			<td>&mdash;</td>
+		</tr>`;
+	}
+	return rows;
+}
+
+/* A státusz oszlop mindig azt mondja, mi lesz a következő lépés ezzel a
+   faluval -- enélkül a modul kívülről nézve nem csinál semmit két
+   befejezés között. */
+function szem4_BEF_allapot(villId, szoveg) {
+	const sor = document.getElementById('bef_' + villId);
+	if (sor) sor.cells[3].innerHTML = szoveg;
+}
+
+function szem4_BEF_setVill(villId, el) {
+	const doboz = el.querySelector('input[type="checkbox"]');
+	const bekapcsol = !SZEM4_BEF[villId];
+	if (bekapcsol) SZEM4_BEF[villId] = true; else delete SZEM4_BEF[villId];
+	if (doboz) doboz.checked = bekapcsol;
+	/* A bejelöléssel az ütemezés elölről kezdődik: egy most bekapcsolt falut
+	   azonnal megnézünk, egy kikapcsoltról pedig elfelejtjük, mikorra volt
+	   időzítve, hogy visszakapcsolva ne egy régi időpontra várjon. */
+	delete BEF_VILLINFO[villId];
+	szem4_BEF_allapot(villId, bekapcsol ? 'sorra kerül' : '&mdash;');
+}
+
+function szem4_BEF_mind(el) {
+	const bekapcsol = el.checked;
+	document.querySelectorAll('#bef_tabla tbody tr').forEach(sor => {
+		const doboz = sor.querySelector('input[type="checkbox"]');
+		if (!doboz || doboz.checked === bekapcsol) return;
+		szem4_BEF_setVill(sor.id.replace('bef_', ''), doboz.parentElement);
+	});
+}
+
+function rebuildDOM_bef() {
+	for (const villId in SZEM4_BEF) {
+		if (SZEM4_BEF[villId] !== true) continue;
+		const doboz = document.querySelector(`#bef_tabla input[name="f${villId}"]`);
+		if (!doboz) continue;
+		doboz.checked = true;
+		szem4_BEF_allapot(villId, 'sorra kerül');
+	}
+}
+
+/* Melyik falu van soron? Ha egyik sem, azt adja vissza, mennyit érdemes
+   aludni: a legközelebbi időpontig, de legfeljebb egy percet, hogy egy
+   közben bejelölt falu ne várjon sokáig. Nulla = van dolgunk. */
+function szem4_BEF_keres() {
+	const most = Date.now();
+	let legkozelebb = 0;
+	for (const coord in KTID) {
+		const villId = KTID[coord];
+		if (SZEM4_BEF[villId] !== true) continue;
+		const mikor = BEF_VILLINFO[villId] ? BEF_VILLINFO[villId].ujraMs : 0;
+		if (mikor > most) {
+			if (!legkozelebb || mikor < legkozelebb) legkozelebb = mikor;
+			continue;
+		}
+		BEF_FALU = villId;
+		BEF_REF = windowOpener('bef', gameUrl({ village: villId, screen: 'main', mode: null, group: null, page: null }), AZON + '_SZEM4BEF');
+		BEF_LEPES = 1;
+		return 0;
+	}
+	if (!legkozelebb) return 60000;
+	return Math.min(60000, Math.max(1000, legkozelebb - most));
+}
+
+function szem4_BEF_ellenoriz() {
+	const villId = BEF_FALU;
+	/* A visszatérés ideje ELŐBB kerül be, mint bármi más. Ha ez alatt bármi
+	   elszáll, a falu akkor is kap egy várakozást; enélkül egy hibás oldal
+	   újra meg újra azonnal sorra kerülne, és a modul percenként több száz
+	   oldalt töltene le. */
+	BEF_VILLINFO[villId] = { ujraMs: Date.now() + BEF_URES_MS };
+	try {
+		const nev = ID_TO_INFO[villId] ? ID_TO_INFO[villId].name : villId;
+		const terv = befejezesTerv(BEF_REF.document.getElementById('buildqueue'));
+		switch (terv.tipus) {
+			case 'most': {
+				const epulet = befejezesEpulet(terv.gomb);
+				if (befejezesKattint(terv.gomb, nev)) {
+					naplo('Auto befejező', `${nev}: ${epulet} ingyen befejezve.`);
+					szem4_BEF_allapot(villId, `${epulet} ingyen befejezve`);
+					/* A sor átrendeződik a kattintás után, a következő
+					   megrendelést egy friss betöltésen nézzük meg. */
+					BEF_VILLINFO[villId].ujraMs = Date.now() + BEF_UJRA_MS;
+				} else {
+					szem4_BEF_allapot(villId, 'a gomb nem bizonyult ingyenesnek');
+					BEF_VILLINFO[villId].ujraMs = Date.now() + BEF_GYANUS_MS;
+				}
+				break;
+			}
+			case 'kesobb':
+				BEF_VILLINFO[villId].ujraMs = terv.mikorMs;
+				szem4_BEF_allapot(villId, new Date(terv.mikorMs).toLocaleTimeString() + '-kor');
+				break;
+			case 'gyanus':
+				naplo('Auto befejező ⚠', `${nev}: ${terv.ok}. Nem kattintottam semmire, prémium pont nem fogyott. Nézd meg a falut kézzel.`);
+				szem4_BEF_allapot(villId, terv.ok);
+				BEF_VILLINFO[villId].ujraMs = Date.now() + BEF_GYANUS_MS;
+				break;
+			default:
+				szem4_BEF_allapot(villId, terv.ok);
+		}
+	} catch (e) { BEF_HIBA++; debug('szem4_BEF_ellenoriz', e); }
+}
+
+function szem4_BEF_motor() {
+	let nexttime = 750;
+	try {
+		if (BOT || BEF_PAUSE || USER_ACTIVITY) {
+			nexttime = 5000;
+		} else {
+			if (BEF_HIBA > 30) {
+				naplo('Auto befejező', `Elakadtam a ${BEF_LEPES}. lépésben, újraindítom magam. Oldal: ${pageUrl(BEF_REF)}`);
+				if (BEF_REF) BEF_REF.close();
+				BEF_LEPES = 0;
+				BEF_HIBA = 0;
+			}
+			switch (BEF_LEPES) {
+				case 0: {
+					const varakozas = szem4_BEF_keres();
+					if (varakozas) {
+						nexttime = varakozas;
+						if (MOBILE_MODE && BEF_REF) BEF_REF.close();
+					}
+					if (BEF_REF && BEF_REF.document) BEF_REF.document.title = 'szem4/auto befejező';
+					break;
+				}
+				case 1:
+					if (isPageLoaded(BEF_REF, BEF_FALU, 'screen=main', ['#buildings'])) {
+						BEF_HIBA = 0;
+						szem4_BEF_ellenoriz();
+						BEF_LEPES = 0;
+					} else BEF_HIBA++;
+					break;
+				default: BEF_LEPES = 0;
+			}
+		}
+	} catch (e) { console.error(e); debug('bef_motor', e); BEF_LEPES = 0; }
+	const inga = 100 / ((Math.random() * 40) + 80);
+	nexttime = Math.round(nexttime * inga);
+	try {
+		worker.postMessage({ 'id': 'bef', 'time': nexttime });
+	} catch (e) { debug('bef_motor', 'Worker engine error: ' + e); setTimeout(function () { szem4_BEF_motor(); }, 3000); }
+}
+
+var SZEM4_BEF = defaultBefState(), // villId: true
+BEF_VILLINFO = {},                 // villId: { ujraMs: mikor nézzük meg legközelebb }
+BEF_LEPES = 0,
+BEF_REF,
+BEF_FALU,
+BEF_HIBA = 0,
+BEF_PAUSE = true;
+ujkieg('bef', 'Auto befejező', `<tr><td>
+	<h2 align="center">Auto befejező</h2>
+	<p align="center" style="max-width:880px; margin:8px auto 16px; line-height:1.5">
+		Ha egy épületből kevesebb mint 3 perc van hátra, a játék felajánlja, hogy ingyen befejezi.
+		SZEM ezt kattintja le magától, 2 perc 58 másodpercnél, az alább bejelölt faluidban.
+		Egy hosszú építési soron ez sok órát hoz vissza.
+		<br><br>
+		<b>Prémium pontot soha nem költ.</b> A fizetős befejezés gombja közvetlenül az ingyenes
+		mellett ül, ugyanazzal a felirattal és majdnem ugyanazzal a nevével, ezért SZEM csak akkor
+		kattint, ha két, egymástól független jelből is bizonyítja, hogy az ingyenes gombot fogta
+		meg. Ha nem tudja bizonyítani, nem kattint, hanem beír a Naplóba.
+	</p>
+	<table class="vis" id="bef_tabla" align="center" style="width:950px">
+		<thead><tr>
+			<th style="width: 300px;" onclick="rendez('szoveg', false, this, 'bef_tabla', 0)" onmouseover="sugo(this,'Rendezhető.')">Falu</th>
+			<th style="width: 100px;" onclick="rendez('szam', false, this, 'bef_tabla', 1)" onmouseover="sugo(this,'Rendezhető.')">Pont</th>
+			<th style="width: 150px;" onclick="rendez('checkbox', false, this, 'bef_tabla', 2)" onmouseover="sugo(this,'Rendezhető. A jelölőnégyzettel egyszerre kapcsolod be vagy ki az összes falut.')">Befejezés?
+				<input type="checkbox" onclick="stopEvent(event); szem4_BEF_mind(this)" title="Mind"></th>
+			<th onmouseover="sugo(this,'Mit csinálok legközelebb ezzel a faluval.')">Állapot</th>
+		</tr></thead>
+		<tbody>${bef_listAllVillages()}</tbody>
+	</table>
+</td></tr>`);
+szem4_BEF_motor();
+
 /*-----------------Adatmentő kezelő--------------------*/
 /* Refuses to replace substantial saved data with something drastically
    smaller. The autosave writes whatever is in memory every 60 seconds, so a
@@ -5241,6 +5454,7 @@ function szem4_ADAT_saveNow(tipus) {
 		case "vije":   storeGuarded(AZON+"_vije", JSON.stringify(SZEM4_VIJE), 'Jelentés Elemző'); break;
 		case "sys":    storeGuarded(AZON+"_sys", JSON.stringify(SZEM4_SETTINGS), 'Beállítások'); break;
 		case "gyujto": storeGuarded(AZON + '_gyujto', JSON.stringify(SZEM4_GYUJTO), 'Gyűjtögető'); break;
+		case "bef":    storeGuarded(AZON + '_bef', JSON.stringify(SZEM4_BEF), 'Auto befejező'); break;
 		case 'cloud':  saveLocalDataToCloud(false, false);
 	}
 	if (dateEl) dateEl.innerHTML = new Date().toLocaleString();
@@ -5274,6 +5488,10 @@ function szem4_ADAT_loadNow(tipus) {try{
 			SZEM4_GYUJTO = Object.assign({}, SZEM4_GYUJTO, dataObj);
 			rebuildDOM_gyujto();
 			break;
+		case "bef":
+			SZEM4_BEF = Object.assign({}, SZEM4_BEF, dataObj);
+			rebuildDOM_bef();
+			break;
 		default: debug('szem4_ADAT_loadNow', `Nincs ilyen típus: ${tipus}`);
 	}
 }catch(e) {debug('szem4_ADAT_loadNow', `Hiba ${tipus} adatbetöltésénél: ${e}`);}}
@@ -5288,7 +5506,7 @@ function szem4_ADAT_loadNow(tipus) {try{
 function szem4_ADAT_restart(tipus) {try{
 	const labels = {
 		farm: 'Farmol\u00f3', vije: 'Jelent\u00e9s Elemz\u0151', epit: '\u00c9p\u00edt\u0151',
-		gyujto: 'Gy\u0171jt\u00f6get\u0151', sys: 'Hangok \u00e9s t\u00e9m\u00e1k'
+		gyujto: 'Gy\u0171jt\u00f6get\u0151', sys: 'Hangok \u00e9s t\u00e9m\u00e1k', bef: 'Auto befejez\u0151'
 	};
 	const label = labels[tipus];
 	if (!label) { alert2(`Nincs ilyen t\u00edpus: ${tipus}`); return; }
@@ -5320,6 +5538,13 @@ function szem4_ADAT_restart(tipus) {try{
 		case 'epit':
 			// the builder keeps its state in the table rather than an object
 			$('#epit_lista tr:gt(0)').remove();
+			break;
+		case 'bef':
+			SZEM4_BEF = defaultBefState();
+			BEF_VILLINFO = {};
+			// rebuildDOM_bef only ever ticks boxes, so clear them first
+			document.querySelectorAll('#bef_tabla input[type="checkbox"]').forEach(el => { el.checked = false; });
+			document.querySelectorAll('#bef_tabla tbody tr').forEach(sor => { sor.cells[3].innerHTML = '&mdash;'; });
 			break;
 	}
 	localStorage.removeItem(`${AZON}_${tipus}`);
@@ -5622,6 +5847,7 @@ ujkieg("adatok","Adatmentő",'<tr><td>\
 <tr><td><input type="checkbox" name="vije" checked></td><td>Jelentés elemző</td><td></td><td>'+szem4_ADAT_AddImageRow("vije")+'</td></tr>\
 <tr><td><input type="checkbox" name="sys" checked></td><td>Hangok, témák</td><td></td><td>'+szem4_ADAT_AddImageRow("sys")+'</td></tr>\
 <tr><td><input type="checkbox" name="gyujto" checked></td><td>Gyűjtögető</td><td></td><td>'+szem4_ADAT_AddImageRow("gyujto")+'</td></tr>\
+<tr><td><input type="checkbox" name="bef" checked></td><td>Auto befejező</td><td></td><td>'+szem4_ADAT_AddImageRow("bef")+'</td></tr>\
 <tr><td><input type="checkbox" name="cloud" unchecked></td><td><img height="17px" src="'+szemIkon('cloud')+'"> Cloud sync</td><td></td><td>\
 			<img title="Cloud adat betöltése a jelenlegi rendszerbe" alt="Import" onclick="loadCloudDataIntoLocal()" width="17px" src="'+szemIkon('import')+'"> \
 			<img title="Local adat lementése a Cloud rendszerbe" alt="Save" onclick="saveLocalDataToCloud(true, true)" width="17px" src="'+szemIkon('mentes')+'">\
