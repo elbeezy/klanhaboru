@@ -235,6 +235,92 @@ suite('Farm distance', function () {
 });
 
 /* ------------------------------------------------------------------------ */
+suite('Giving the troops back when an attack is called off', function () {
+	function village(counts) {
+		return { isUnits: {}, noOfUnits: JSON.parse(JSON.stringify(counts)) };
+	}
+	function count(text, needle) { return text.split(needle).length - 1; }
+	var forras = stripComments(SZEM4_SRC);
+
+	var api = sandbox({}, [sliceFrom(SZEM4_SRC, 'var UNITS_UNKNOWN', 'resetAvailableUnits')],
+	                  { UNITS_UNKNOWN: 'UNITS_UNKNOWN' });
+
+	var v = village({ spear: 40, sword: 0, axe: 7 });
+	api.resetAvailableUnits(v);
+	eq(v.noOfUnits, { spear: 999, sword: 999, axe: 999 },
+	   'every count goes back to not-counted-yet');
+	eq(api.UNITS_UNKNOWN(), 999, 'which is the value a village starts life with');
+
+	/* Both callers return "ERROR" on the very next line, and both sit inside a
+	   catch that swallows quietly. A throw here would skip that return and let
+	   step 3 carry on against a page that is already being replaced. */
+	api.resetAvailableUnits(undefined);
+	api.resetAvailableUnits({});
+	ok(true, 'a village that is not there is ignored rather than thrown at');
+
+	/* The old behaviour on this path, reproduced. It asked updateAvailableUnits
+	   to re-read the counts treating nothing as sent -- but that reads the
+	   rally point's unit picker, and the page SZEM stands on when an attack is
+	   refused is the confirmation screen, which has no unit picker. It threw on
+	   the first unit and gave nothing back. This is his 2026-09-07 11:00:48
+	   log line, written as a test. */
+	var logged = [];
+	var oldal = {
+		location: { href: 'https://hu103.klanhaboru.hu/game.php?village=1115&screen=place&try=confirm' },
+		querySelector: function () { return null; }
+	};
+	var ablak = { document: oldal };
+	var upd = sandbox({
+		UNITS: ['spear', 'sword'],
+		FARM_REF: ablak,
+		FARM_LEPES: 2,
+		console: { error: function () {} },
+		debug: function (a, b) { logged.push(a + ': ' + b); }
+	}, [sliceFn(SZEM4_SRC, 'pageUrl'), sliceFn(SZEM4_SRC, 'numFrom'),
+	    sliceFn(SZEM4_SRC, 'gameEl'), sliceFn(SZEM4_SRC, 'gameNum'),
+	    sliceFn(SZEM4_SRC, 'updateAvailableUnits')]);
+
+	var stale = village({ spear: 40, sword: 0 });
+	upd.updateAvailableUnits(stale);
+	eq(stale.noOfUnits, { spear: 40, sword: 0 },
+	   'reading the confirmation screen gives nothing back at all');
+	eq(logged.length, 1, 'it logs the failure instead, once per attempt');
+	ok((logged[0] || '').indexOf('#units_entry_all_spear') > -1,
+	   'naming the element the confirmation screen does not have', logged[0]);
+	ok((logged[0] || '').indexOf('try=confirm') > -1,
+	   'and naming the page it was looking at', logged[0]);
+
+	/* So the called-off paths must not reach for that page at all. */
+	var step3 = sliceFn(forras, 'szem4_farmolo_3egyeztet');
+	eq(count(step3, 'resetAvailableUnits('), 2, 'both called-off paths give the troops back');
+	eq(count(step3, 'updateAvailableUnits('), 0, 'and neither one reads the confirmation screen');
+
+	/* updateAvailableUnits still does its own job on the page that does have a
+	   picker: record what is left once the attack goes out. */
+	ablak.document = {
+		location: { href: 'https://hu103.klanhaboru.hu/game.php?village=1115&screen=place' },
+		querySelector: function (sel) {
+			if (sel === '#units_entry_all_spear') return { textContent: '(1.234)' };
+			if (sel === '#units_entry_all_sword') return { textContent: '(50)' };
+			if (sel === '#unit_input_spear') return { value: '30' };
+			if (sel === '#unit_input_sword') return { value: '' };
+			return null;
+		}
+	};
+	var live = village({ spear: 0, sword: 0 });
+	upd.updateAvailableUnits(live);
+	eq(live.noOfUnits, { spear: 1204, sword: 50 },
+	   'what is left after the attack goes out, thousands separator and all');
+	eq(logged.length, 1, 'and nothing new is logged');
+
+	/* Written once, so the round reset, a village's first moment and the
+	   called-off path cannot drift apart. */
+	eq(count(forras, '= 999'), 1, 'the sentinel has exactly one home');
+	eq(count(forras, 'resetAvailableUnits('), 4,
+	   'its definition, the round reset, and the two called-off paths');
+});
+
+/* ------------------------------------------------------------------------ */
 suite('VIJE resting with the farm', function () {
 	function vijeWorld(optionOn, until, now) {
 		return {

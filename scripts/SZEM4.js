@@ -2736,7 +2736,7 @@ function add_farmolo(){ try{
 			};
 			document.querySelectorAll('#add_farmolo_egysegek input').forEach((el) => {
 				SZEM4_FARM.DOMINFO_FROM[faluk[i]].isUnits[el.name] = el.checked;
-				SZEM4_FARM.DOMINFO_FROM[faluk[i]].noOfUnits[el.name] = 999;
+				SZEM4_FARM.DOMINFO_FROM[faluk[i]].noOfUnits[el.name] = UNITS_UNKNOWN;
 			});
 
 			debug('add_farmolo', `Calling add_attackerRow with ${faluk[i]}`);
@@ -3366,12 +3366,37 @@ function getSlowestUnit(attacker) {try{
 	if (isUnit) return 'spear';
 	return '';
 }catch(e) { debug('getSlowestUnit','Nem megállapítható egységsebesség, kl-t feltételezek ' + e); return 'light';}}
-function updateAvailableUnits(attacker, isError=false) {try{
+/* The count SZEM starts with before it has looked at the rally point.
+   Deliberately high: a village whose troops are unknown must stay a
+   candidate, because updateAvailableUnits reads the real numbers off the
+   page before any army is built from them. */
+var UNITS_UNKNOWN = 999;
+
+/* Forgets what SZEM thought a village had left, so the next visit to the
+   rally point counts again from the page.
+
+   Needed on the paths where a planned attack was called off. Sending an
+   attack reserves its units by subtracting them from noOfUnits, and if
+   the game then refuses the attack those units are still at home -- but
+   the reservation stands, so the village looks emptier than it is. Left
+   alone that compounds: each refused attack takes another army off the
+   count until the village reads as empty and stops being picked, at
+   which point nothing ever re-reads it and it farms nothing for the rest
+   of the round.
+
+   It cannot re-read the page itself, because the page SZEM is standing
+   on when an attack is refused is the confirmation screen, which has no
+   unit picker on it at all. */
+function resetAvailableUnits(attacker) {
+	if (!attacker || !attacker.noOfUnits) return;
+	for (const unit in attacker.noOfUnits) attacker.noOfUnits[unit] = UNITS_UNKNOWN;
+}
+function updateAvailableUnits(attacker) {try{
 	for (let i=0;i<UNITS.length;i++) {
 		let allUnit = gameNum(FARM_REF, `#units_entry_all_${UNITS[i]}`, `${UNITS[i]}: elerheto mennyiseg`);
 		let unitToSendString = gameEl(FARM_REF, `#unit_input_${UNITS[i]}`, `${UNITS[i]}: beviteli mezo`).value;
 		if (unitToSendString == '') unitToSendString = 0;
-		let unitToSend = isError ? 0 : parseInt(unitToSendString,10);
+		let unitToSend = parseInt(unitToSendString,10);
 		attacker.noOfUnits[UNITS[i]] = allUnit - unitToSend;
 	}
 }catch(e) { console.error(e); debug('updateAvailableUnits', `Lépés: ${FARM_LEPES}, hiba: ${e}`);}}
@@ -3545,7 +3570,7 @@ function szem4_farmolo_3egyeztet(adatok){try{
 			if (FARM_REF.document.querySelector('.village-item')) {
 				FARM_REF.document.querySelector('.village-item').click();
 			}
-			updateAvailableUnits(SZEM4_FARM.DOMINFO_FROM[adatok.plannedArmy.fromVill], true);
+			resetAvailableUnits(SZEM4_FARM.DOMINFO_FROM[adatok.plannedArmy.fromVill]);
 			return "ERROR";
 		}
 	}catch(e){ console.error('szem4_farmolo_3egyeztet - piros szöveg', e); }
@@ -3557,7 +3582,7 @@ function szem4_farmolo_3egyeztet(adatok){try{
 				naplo("Farmoló", `Játékos ${maplink(adatok.plannedArmy.farmVill)} helyen: ${FARM_REF.document.getElementById("content_value").getElementsByTagName("table")[0].rows[2].cells[1].innerHTML.replace("href",'target="_BLANK" href')}. Tovább nem támadom`);
 				FARM_REF = windowOpener('farm', gameUrl({ screen: 'place', mode: null, group: null, page: null }), AZON+"_Farmolo"); // Ki kell ütni a nézetből
 				farm_helye.cells[0].style.backgroundColor="red";
-				updateAvailableUnits(SZEM4_FARM.DOMINFO_FROM[adatok.plannedArmy.fromVill], true);
+				resetAvailableUnits(SZEM4_FARM.DOMINFO_FROM[adatok.plannedArmy.fromVill]);
 				return "ERROR";
 			}
 		}
@@ -3629,10 +3654,7 @@ function szem4_farmolo_motor(){
 						isPihen = true;
 						// Reset round
 						for (let aUnit in SZEM4_FARM.DOMINFO_FROM) {
-							Object.keys(SZEM4_FARM.DOMINFO_FROM[aUnit].noOfUnits).reduce((item, key) => {
-								item[key] = 999;
-								return item;
-							}, SZEM4_FARM.DOMINFO_FROM[aUnit].noOfUnits);
+							resetAvailableUnits(SZEM4_FARM.DOMINFO_FROM[aUnit]);
 						}
 
 						try {
