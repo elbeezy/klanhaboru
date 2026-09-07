@@ -3060,7 +3060,8 @@ suite('farmolo -- a sereg meretenek merese', function () {
 	   undefined on a fresh install and the panel reports nonsense. */
 	var alap = sandbox({}, [sliceFn(SZEM4_SRC, 'defaultFarmState')]).defaultFarmState();
 	eq(Object.keys(alap.STAT).sort(),
-	   ['alul', 'keves', 'kezdet', 'kuldes', 'minsereg', 'teher', 'vart'],
+	   ['alul', 'jelTeher', 'jelentes', 'keves', 'kezdet', 'kuldes', 'minsereg',
+	    'teher', 'tele', 'vart', 'zsakmany'],
 	   'a fresh farm state carries every counter the panel reads');
 
 	var a = api();
@@ -3293,4 +3294,139 @@ suite('VIJE -- kemadat van-e egyaltalan a jelentesen', function () {
 	   'the analyser branches on whether spy data is present');
 	ok(elemzes.indexOf("querySelector('#attack_spy_resources')") === -1,
 	   'and no longer on whether the suggestion table exists');
+});
+
+/* ------------------------------------------------------------------------ */
+/* What the engine expected to find is a guess; the report is the fact. Every
+   report of a completed attack states the haul next to the capacity that
+   carried it -- "238/400" on his saved page -- so how full the armies come
+   home can be read rather than inferred, and needs no matching back to the
+   send that produced it. */
+suite('farmolo -- a valos zsakmany a jelentesbol', function () {
+	function doc(html) {
+		var wrap = document.createElement('div');
+		wrap.innerHTML = html;
+		return { getElementById: function (id) { return wrap.querySelector('[id="' + id + '"]'); } };
+	}
+	function eredmeny(sorok) {
+		return doc('<table id="attack_results">' + sorok + '</table>');
+	}
+	/* Mirrors the saved page: a th, the three resource figures, then the cell. */
+	var fosztogatasSor =
+		'<tr><th>Fosztogatas:</th>' +
+		'<td width="250"><span class="nowrap"><span class="icon header wood"> </span>71</span> ' +
+		'<span class="nowrap"><span class="icon header stone"> </span>96</span> ' +
+		'<span class="nowrap"><span class="icon header iron"> </span>71</span> </td>' +
+		'<td>238/400</td></tr>';
+
+	var api = sandbox({}, [sliceFn(SZEM4_SRC, 'jelentesZsakmany')]);
+
+	var valos = api.jelentesZsakmany(eredmeny(fosztogatasSor));
+	eq(valos, { zsakmany: 238, teherbiras: 400 },
+	   'the haul and the capacity that carried it are read off the report');
+
+	/* Same trap as numFrom: the game prints a dot as the thousands separator,
+	   and parseInt("2.400") is 2. A full 2400 army would otherwise read as an
+	   army of 2 that came home overflowing. */
+	var nagy = api.jelentesZsakmany(eredmeny('<tr><th>x</th><td>y</td><td>1.000/2.400</td></tr>'));
+	eq(nagy, { zsakmany: 1000, teherbiras: 2400 },
+	   'a dotted thousand in the haul is read whole');
+
+	/* The table carries damage rows too when a wall or building was hit, and
+	   the loot row is not always first. */
+	var sok = api.jelentesZsakmany(
+		eredmeny('<tr><th>Fal:</th><td>20. szintrol 18. szintre</td><td>rombolas</td></tr>' +
+		         fosztogatasSor));
+	eq(sok, { zsakmany: 238, teherbiras: 400 },
+	   'the loot row is found by shape even when damage rows come first');
+
+	ok(api.jelentesZsakmany(doc('<div></div>')) === null,
+	   'a report with no results table yields nothing');
+	ok(api.jelentesZsakmany(eredmeny('<tr><th>Fal:</th><td>a</td><td>rombolas</td></tr>')) === null,
+	   'and so does one with no cell shaped like a haul');
+	ok(api.jelentesZsakmany(eredmeny('<tr><th>x</th><td>y</td><td>0/0</td></tr>')) === null,
+	   'a capacity of zero is refused rather than divided by later');
+
+	/* ---- the recorder ---- */
+	function rec(farmok) {
+		var w = {
+			SZEM4_FARM: {
+				DOMINFO_FARMS: farmok === undefined ? { '527|466': {} } : farmok,
+				STAT: { kezdet: 0, kuldes: 0, teher: 0, vart: 0, alul: 0, minsereg: 0,
+				        keves: 0, jelentes: 0, zsakmany: 0, jelTeher: 0, tele: 0 }
+			},
+			Date: { now: function () { return 5000; } }
+		};
+		var a = sandbox(w, [sliceFn(SZEM4_SRC, 'farmStatJelentes')]);
+		a.stat = w.SZEM4_FARM.STAT;
+		return a;
+	}
+
+	var r = rec();
+	r.farmStatJelentes('527|466', 238, 400);
+	eq(r.stat.jelentes, 1, 'a report about a farm is counted');
+	eq(r.stat.zsakmany, 238, 'the real haul is recorded');
+	eq(r.stat.jelTeher, 400, 'against the capacity that fetched it');
+	eq(r.stat.tele, 0, 'an army with room to spare did not come home full');
+	eq(r.stat.kezdet, 5000, 'and the measurement records when it began');
+
+	r.farmStatJelentes('527|466', 400, 400);
+	eq(r.stat.tele, 1, 'an army that filled up is counted -- it left loot behind');
+	eq(r.stat.zsakmany, 638, 'hauls accumulate');
+
+	/* A haul larger than the army could carry is impossible; reading one means
+	   the markup moved. Counting it would report a fill above 100%. */
+	var t = rec();
+	t.farmStatJelentes('527|466', 900, 400);
+	eq(t.stat.zsakmany, 400, 'a haul beyond the capacity is capped at it');
+	eq(t.stat.tele, 1, 'and still counts as coming home full');
+
+	/* Reports arrive for hand-sent attacks at players too. Those armies were
+	   not sized to a farm and would move the reading he acts on. */
+	var k = rec({ '999|999': {} });
+	k.farmStatJelentes('527|466', 238, 400);
+	eq(k.stat.jelentes, 0, 'a report about a village not on the farm list is ignored');
+	eq(k.stat.jelTeher, 0, 'and contributes nothing to the totals');
+
+	var z = rec();
+	z.farmStatJelentes('527|466', 238, 0);
+	z.farmStatJelentes('527|466', 238, undefined);
+	z.farmStatJelentes('527|466', undefined, 400);
+	eq(z.stat.jelentes, 0, 'a report that could not be read is dropped, not counted as empty');
+
+	/* Total: it runs inside the analyser, whose catch would turn a throw here
+	   into "unreadable report" and lose the rest of the analysis. */
+	var dobott = false;
+	var u = sandbox({ SZEM4_FARM: {} }, [sliceFn(SZEM4_SRC, 'farmStatJelentes')]);
+	try { u.farmStatJelentes('527|466', 238, 400); } catch (e) { dobott = true; }
+	eq(dobott, false, 'recording never throws, even with no counters to write to');
+
+	/* ---- the migration ---- */
+	/* His install already stores a STAT from before these counters existed,
+	   and the load merges one level deep, so the stored object replaces the
+	   default entire. Without this the first ++ writes NaN, which saves and
+	   reloads perfectly happily and reads back as a broken panel forever. */
+	var mig = sandbox({}, [sliceFn(SZEM4_SRC, 'defaultFarmState'),
+	                       sliceFn(SZEM4_SRC, 'upgradeFarmStat')]);
+	var regi = mig.upgradeFarmStat({ kezdet: 7, kuldes: 40, teher: 16000, vart: 9000,
+	                                 alul: 2, minsereg: 5, keves: 1 });
+	eq(regi.jelentes, 0, 'a STAT saved before the report counters gains them');
+	eq(regi.zsakmany, 0, 'each starting from nothing');
+	eq(regi.kuldes, 40, 'while the counters it already had are left alone');
+	eq(regi.teher, 16000, 'with their totals intact');
+
+	var romlott = mig.upgradeFarmStat({ jelentes: NaN, zsakmany: 12 });
+	eq(romlott.jelentes, 0, 'a counter already spoiled to NaN is repaired');
+	eq(romlott.zsakmany, 12, 'without disturbing the ones that are sound');
+	ok(typeof mig.upgradeFarmStat(undefined).jelentes === 'number',
+	   'and a missing STAT comes back as a whole one');
+
+	/* Wiring: none of this is worth anything if the analyser never calls it. */
+	var elemzo = sliceFn(SZEM4_SRC, 'szem4_VIJE_2elemzes');
+	ok(elemzo.indexOf('jelentesZsakmany(VIJE_REF2.document)') !== -1,
+	   'the analyser reads the haul off every report it can');
+	ok(elemzo.indexOf('farmStatJelentes(adatok[1]') !== -1,
+	   'and records it against the village it came from');
+	ok(sliceFn(SZEM4_SRC, 'szem4_ADAT_loadNow').indexOf('upgradeFarmStat(') !== -1,
+	   'a loaded farm state is brought up to the current counter shape');
 });

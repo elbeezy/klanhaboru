@@ -2546,7 +2546,13 @@ function defaultFarmState() {
 			vart: 0,      // amennyi nyersert mentek (a teherbirasig szamolva)
 			alul: 0,      // ennyiszer maradt ott nyers, mert nem birta el
 			minsereg: 0,  // ennyiszer hiusult meg terv a minimum sereg miatt
-			keves: 0      // ennyiszer nem volt eleg egyseg a hatarszamhoz
+			keves: 0,     // ennyiszer nem volt eleg egyseg a hatarszamhoz
+			/* A jelentesekbol visszaolvasott VALOS eredmeny. A fentiek azt
+			   merik, amire szamitottunk; ezek azt, ami tortent. */
+			jelentes: 0,  // hany farm-jelentest olvastunk vissza
+			zsakmany: 0,  // amennyi nyerset tenylegesen hazahoztak
+			jelTeher: 0,  // az ezt cipelo seregek teherbirasa osszesen
+			tele: 0       // ennyiszer jott haza tele a sereg (maradt ott nyers)
 		}
 	};
 }
@@ -3207,6 +3213,42 @@ function farmStatElakadt(minSeregMiatt) {
 	if (!s.kezdet) s.kezdet = Date.now();
 	if (minSeregMiatt) s.minsereg++;
 	else s.keves++;
+}
+/* Reports arrive for every attack, including ones he sent by hand at a player:
+   those armies were not sized to a farm's contents and would drag the reading
+   somewhere he cannot act on. Only targets on the farm list are measured.
+   Total for the same reason as the send-path recorders -- it runs inside the
+   report analyser, whose catch would report a throw here as an unreadable
+   report and lose the analysis that follows. */
+function farmStatJelentes(koord, zsakmany, teherbiras) {
+	var s = SZEM4_FARM && SZEM4_FARM.STAT;
+	if (!s) return;
+	if (!SZEM4_FARM.DOMINFO_FARMS || !SZEM4_FARM.DOMINFO_FARMS[koord]) return;
+	if (!(teherbiras > 0)) return;
+	if (!(zsakmany >= 0)) return;
+	if (!s.kezdet) s.kezdet = Date.now();
+	s.jelentes++;
+	s.jelTeher += teherbiras;
+	/* Capped at what carried it: a haul larger than the army's capacity is
+	   markup we have misread, not an army that overfilled. */
+	s.zsakmany += Math.min(zsakmany, teherbiras);
+	/* Came home full: the village held at least this much and probably more,
+	   so this trip says nothing about what was left -- except that something
+	   was. That is the opposite signal to an army walking home empty. */
+	if (zsakmany >= teherbiras) s.tele++;
+}
+/* A STAT saved before a counter existed comes back without it, and the load
+   merges one level deep -- it puts the stored object in place of the default
+   rather than filling the gaps. An absent counter reads as undefined and turns
+   its total into NaN on the first ++, which then stores and reloads happily.
+   Fill from the default so every reader can trust the shape. */
+function upgradeFarmStat(stat) {
+	var alap = defaultFarmState().STAT;
+	if (!stat || typeof stat !== 'object') return alap;
+	for (var kulcs in alap) {
+		if (typeof stat[kulcs] !== 'number' || !isFinite(stat[kulcs])) stat[kulcs] = alap[kulcs];
+	}
+	return stat;
 }
 /* Below this many attacks the ratios swing wildly and would have him moving
    troops on noise, so the panel says so instead of advising. */
@@ -4237,6 +4279,27 @@ function vanKemAdat(doc) {
 	if (doc.getElementById('attack_spy_buildings_left')) return true;
 	return false;
 }
+/* The report prints the haul and the capacity that carried it as one cell --
+   "238/400" in the Fosztogatas row of #attack_results. It is the only place
+   the game says outright how full a farming army came home, and it needs no
+   matching back to the send that produced it.
+   Found by shape rather than by position: that table also carries wall and
+   building damage rows on reports where something was hit. Separators are
+   stripped first -- "1.000/2.400" parses as 1 and 2 otherwise. */
+function jelentesZsakmany(doc) {
+	var tabla = doc.getElementById('attack_results');
+	if (!tabla) return null;
+	for (var i = 0; i < tabla.rows.length; i++) {
+		var cellak = tabla.rows[i].cells;
+		if (!cellak || cellak.length < 3) continue;
+		var p = (cellak[2].textContent || '').replace(/\./g, '').match(/^\s*([0-9]+)\s*\/\s*([0-9]+)\s*$/);
+		if (!p) continue;
+		var teherbiras = parseInt(p[2], 10);
+		if (!(teherbiras > 0)) return null;
+		return { zsakmany: parseInt(p[1], 10), teherbiras: teherbiras };
+	}
+	return null;
+}
 function getSpyBuildingLevels(doc) {
 	const spyLevels = {
 		main: 1,
@@ -4331,13 +4394,15 @@ function szem4_VIJE_2elemzes(adatok){try{
 		}
 		VIJE_adatbeir(adatok[1],nyersossz,banyak,fal,adatok[2], hungarianDate);
 	} else if (!isOld) {
-		var atkTable = VIJE_REF2.document.getElementById('attack_results');
-		var fosztogatas = atkTable?atkTable.rows[0].cells[2].innerText.split('/').map(item => parseInt(item,10)):0;
-		var nyers = '';
-		if (fosztogatas[0] + 5 < fosztogatas[1]) {
-			nyers=0;
-			//debug('debug/szem4_VIJE_2elemzes', `VIJE_adatbeir(${adatok[1],nyers},'','',${adatok[2]}, ${hungarianDate}`);
-			VIJE_adatbeir(adatok[1],nyers,'','',adatok[2], hungarianDate);
+		var zsak = jelentesZsakmany(VIJE_REF2.document);
+		if (zsak) {
+			farmStatJelentes(adatok[1], zsak.zsakmany, zsak.teherbiras);
+			/* Short of what it could carry means the village was emptied, so
+			   record it as bare. A full army proves only that it ran out of
+			   room, and must leave the previous estimate standing. */
+			if (zsak.zsakmany + 5 < zsak.teherbiras) {
+				VIJE_adatbeir(adatok[1],0,'','',adatok[2], hungarianDate);
+			}
 		}
 	}
 	
@@ -5717,6 +5782,7 @@ function szem4_ADAT_loadNow(tipus) {try{
 	switch (tipus) {
 		case "farm":
 			SZEM4_FARM = Object.assign({}, SZEM4_FARM, dataObj);
+			SZEM4_FARM.STAT = upgradeFarmStat(SZEM4_FARM.STAT);
 			debug('szem4_ADAT_loadNow', 'Loading debug: FROM = ' + JSON.stringify(SZEM4_FARM.DOMINFO_FROM));
 			debug('szem4_ADAT_loadNow', 'Loading debug: FROM original = ' + JSON.stringify(dataObj));
 			if (Object.keys(SZEM4_FARM.DOMINFO_FROM) == 0) {
