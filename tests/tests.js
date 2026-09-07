@@ -321,6 +321,94 @@ suite('Giving the troops back when an attack is called off', function () {
 });
 
 /* ------------------------------------------------------------------------ */
+suite('Deleting a whole tableful of villages at once', function () {
+	/* Real tables in the real document. The bug was that the bulk pass looked
+	   every row up in the farm-target list, so the attacking-villages table
+	   threw on its very first row -- and threw into a catch that only reaches
+	   the browser console, so the one row you clicked vanished and the rest
+	   silently did not. A fake table could not show that. */
+	function tablak() {
+		var wrap = document.createElement('div');
+		wrap.style.display = 'none';
+		var ures = '<td></td><td></td><td></td><td></td><td></td><td></td>';
+		wrap.innerHTML =
+			'<input type="checkbox" id="farm_multi_hova">' +
+			'<input type="checkbox" id="farm_multi_honnan">' +
+			'<table id="farm_hova"><tr><th>Hova</th></tr>' +
+			'<tr><td>500|500</td>' + ures + '</tr>' +
+			'<tr><td>501|501</td>' + ures + '</tr>' +
+			'<tr><td>502|502</td>' + ures + '</tr></table>' +
+			'<table id="farm_honnan"><tr><th>Honnan</th></tr>' +
+			'<tr><td>600|600</td></tr>' +
+			'<tr><td>601|601</td></tr>' +
+			'<tr><td>602|602</td></tr></table>';
+		document.body.appendChild(wrap);
+		return wrap;
+	}
+	function allapot() {
+		return {
+			SZEM4_FARM: {
+				DOMINFO_FARMS: { '500|500': { szin: {} }, '501|501': { szin: {} }, '502|502': { szin: {} } },
+				DOMINFO_FROM: { '600|600': {}, '601|601': {}, '602|602': {} }
+			},
+			JELZO_NINCS: ''
+		};
+	}
+	function api(world) {
+		return sandbox(world, [sliceFn(SZEM4_SRC, 'distCalc'), sliceFn(SZEM4_SRC, 'farmDistance'),
+		                       sliceFn(SZEM4_SRC, 'refreshFarmDistances'),
+		                       sliceFn(SZEM4_SRC, 'multipricer'), sliceFn(SZEM4_SRC, 'sortorol')]);
+	}
+	function elsoCella(tabla) { return document.querySelectorAll('#' + tabla + ' tr')[1].cells[0]; }
+	function koordok(tabla) {
+		return [].slice.call(document.querySelectorAll('#' + tabla + ' tr')).slice(1)
+			.map(function (r) { return r.cells[0].textContent; }).join(',');
+	}
+
+	/* One row at a time, the box unticked -- this always worked. */
+	var wrap = tablak(), w = allapot();
+	api(w).sortorol(elsoCella('farm_honnan'), 'honnan');
+	eq(koordok('farm_honnan'), '601|601,602|602', 'a single attacking village goes');
+	eq(Object.keys(w.SZEM4_FARM.DOMINFO_FROM).join(','), '601|601,602|602',
+	   'and stops being one SZEM farms from');
+	wrap.remove();
+
+	/* The whole visible table, box ticked. This is the one that threw. */
+	wrap = tablak(); w = allapot();
+	document.getElementById('farm_multi_honnan').checked = true;
+	document.querySelectorAll('#farm_hova tr')[1].cells[6].innerHTML = '9.9';
+	api(w).sortorol(elsoCella('farm_honnan'), 'honnan');
+	eq(koordok('farm_honnan'), '', 'every visible attacking village goes');
+	eq(Object.keys(w.SZEM4_FARM.DOMINFO_FROM).length, 0, 'and none is left behind in the data');
+	/* Tav is measured to the nearest attacking village, so deleting them in
+	   bulk invalidates the whole column. sortorol refreshes it after removing
+	   its own row, which is too early -- the bulk pass has not run yet. */
+	eq(document.querySelectorAll('#farm_hova tr')[1].cells[6].innerHTML, '',
+	   'and the distances measured from them are cleared, not left stale');
+	wrap.remove();
+
+	/* "Visible" is the whole point of filtering first: the search hides rows
+	   rather than removing them, so a hidden one must survive. */
+	wrap = tablak(); w = allapot();
+	document.getElementById('farm_multi_honnan').checked = true;
+	document.querySelectorAll('#farm_honnan tr')[2].style.display = 'none';
+	api(w).sortorol(elsoCella('farm_honnan'), 'honnan');
+	eq(koordok('farm_honnan'), '601|601', 'a filtered-out village is left alone');
+	eq(Object.keys(w.SZEM4_FARM.DOMINFO_FROM).join(','), '601|601', 'in the data as well as on screen');
+	wrap.remove();
+
+	/* The farm-target table has always worked and must keep working. */
+	wrap = tablak(); w = allapot();
+	document.getElementById('farm_multi_hova').checked = true;
+	api(w).sortorol(elsoCella('farm_hova'), 'hova');
+	eq(koordok('farm_hova'), '', 'every visible farm target goes');
+	eq(Object.keys(w.SZEM4_FARM.DOMINFO_FARMS).length, 0, 'and none is left behind in the data');
+	eq(koordok('farm_honnan'), '600|600,601|601,602|602', 'while the other table is untouched');
+	wrap.remove();
+});
+
+
+/* ------------------------------------------------------------------------ */
 suite('VIJE resting with the farm', function () {
 	function vijeWorld(optionOn, until, now) {
 		return {

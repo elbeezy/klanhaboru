@@ -1991,32 +1991,44 @@ function multipricer(ez,tip,s1){try{
 	for (var i=x.length-1;i>0;i--) {
 		if (x[i].style.display!="none") {
 			let koord = x[i].closest('tr').cells[0].textContent;
-			SZEM4_FARM.DOMINFO_FARMS[koord].szin = SZEM4_FARM.DOMINFO_FARMS[koord].szin || {};
+			const farm = SZEM4_FARM.DOMINFO_FARMS[koord];
+			/* The Honnan table lists the villages you attack FROM, and those
+			   live in DOMINFO_FROM with no entry here at all. Deleting is the
+			   only one of these actions that table offers -- the rest edit a
+			   farm target's own columns, which it does not have. Reaching for
+			   the missing entry is what used to throw on its first row. */
+			if (!farm && tip != "del") continue;
+			if (farm) farm.szin = farm.szin || {};
 			switch(tip) {
-				case "del": delete SZEM4_FARM.DOMINFO_FARMS[koord]; x[i].parentNode.removeChild(x[i]); break;
+				case "del":
+					delete SZEM4_FARM.DOMINFO_FARMS[koord];
+					delete SZEM4_FARM.DOMINFO_FROM[koord];
+					x[i].parentNode.removeChild(x[i]);
+					break;
 				case "urit": x[i].cells[2].innerHTML=""; break;
-				case "mod": SZEM4_FARM.DOMINFO_FARMS[koord].nyers = parseInt(s1, 10); x[i].cells[3].innerHTML=s1; break;
+				case "mod": farm.nyers = parseInt(s1, 10); x[i].cells[3].innerHTML=s1; break;
 				case "htor":
-					SZEM4_FARM.DOMINFO_FARMS[koord].szin.falu = '';
+					farm.szin.falu = '';
 					x[i].cells[0].style.backgroundColor=JELZO_NINCS;
 					break;
 				case 'hreset':
-					SZEM4_FARM.DOMINFO_FARMS[koord].szin.fal = '';
-					SZEM4_FARM.DOMINFO_FARMS[koord].szin.marks = '';
+					farm.szin.fal = '';
+					farm.szin.marks = '';
 					x[i].cells[2].style.backgroundColor = s1;
 					x[i].cells[2].style.border = '';
 					break;
 				case "hcser": 
-					SZEM4_FARM.DOMINFO_FARMS[koord].szin.fal = s1;
+					farm.szin.fal = s1;
 					x[i].cells[2].style.backgroundColor=s1;
 					break;
 				case 'addmark':
-					SZEM4_FARM.DOMINFO_FARMS[koord].szin.marks = s1;
+					farm.szin.marks = s1;
 					x[i].cells[2].style.border = `2px solid ${s1}`;
 					break;
 			}
 		}
 	}
+	if (tip == "del") refreshFarmDistances(); // an attacking village may have gone
 }catch(e){ console.error(e); }}
 
 function sortorol(cella,ismulti) {
