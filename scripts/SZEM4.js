@@ -3299,7 +3299,7 @@ var STAT_LEPES = 1.25;
 var STAT_SZOVEG = {
 	nincs:     'Indítsd el a Jelentés elemzőt — enélkül nem gyűlik jelentés, és nincs mit mérni.',
 	keves_adat:'Várj még, ne állíts a Min sereg/falu értéken — legalább {MINTA} jelentés kell a méréshez.',
-	nagy:      'Csökkentsd a Min sereg/falu értéket a lent javasolt számra — a seregek nagyrészt üresen jönnek haza.',
+	nagy:      'Csökkentsd a Min sereg/falu értéket a lent javasolt számra, aztán nullázd és mérj újra — a seregek nagyrészt üresen jönnek haza.',
 	tele:      'Emeld a Min sereg/falu értéket a lent javasolt számra, aztán nullázd és mérj újra — most tele jönnek haza a seregek, marad ott nyers.',
 	keves_egy: 'Toborozz több farmoló egységet. Nem a sereg mérete a szűk keresztmetszet, hanem hogy összesen kevés az egységed — a Min sereg/falu emelése itt csak kevesebb falut támadna.',
 	rendben:   'A sereg mérete illik a farmokhoz, nincs teendő.'

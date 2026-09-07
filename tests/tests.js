@@ -3435,6 +3435,16 @@ suite('farmolo -- mit mondanak a szamlalok', function () {
 	ok(szoveg.rendben.indexOf('nincs teendő') !== -1,
 	   'and the healthy reading says outright that there is nothing to do');
 
+	/* Changing the setting invalidates every counter collected under the old
+	   one, so telling him to change it is not a finished instruction until it
+	   also says to clear. He hit this for real: acted on the recommendation,
+	   left the counters running, and the next reading quietly averaged two
+	   policies -- which reads as a measurement rather than as a mixture. */
+	['nagy', 'tele'].forEach(function (k) {
+		ok(/nullázd/.test(szoveg[k]),
+		   'the "' + k + '" reading also says to clear the counters after changing it');
+	});
+
 	/* Clearing has to be real: the counters describe the settings that were in
 	   force while they ran, so they are cleared exactly when one changes. */
 	var nw = { SZEM4_FARM: { STAT: stat({ kuldes: 9, jelentes: 4, jelTeher: 100, zsakmany: 50,
