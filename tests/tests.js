@@ -2135,3 +2135,49 @@ suite('epito -- az epitesi sor kiolvasasa', function () {
 	eq(api().readBuildQueue(buildQueueEl([csakId])).list, '',
 	   'the row id buildorder_1 is not mistaken for a building');
 });
+
+
+suite('epito -- a kovetkezo ellenorzes ideje', function () {
+	/* A deliberately awkward clock: 7 minutes past the hour and 45 seconds in,
+	   so that using the minute field where the second field was meant lands on
+	   a visibly different time rather than coincidentally the right one. */
+	var most = new Date(2026, 8, 7, 13, 7, 45);
+	function api() {
+		return sandbox({ getServerTime: function () { return new Date(most.getTime()); },
+		                 debug: function () {} },
+		               [sliceFn(SZEM4_SRC, 'szem4_EPITO_addIdo')]);
+	}
+	function sor() { return { cells: [fakeEl(''), fakeEl(''), fakeEl('')] }; }
+	function varas(perc) {
+		var r = sor();
+		api().szem4_EPITO_addIdo(r, perc);
+		return r.cells[2].innerHTML;
+	}
+	function ekkor(perc) { return new Date(most.getTime() + perc * 60000).toLocaleString(); }
+
+	/* The whole point: 30 minutes from 13:07:45 is 13:37:45. Reading the
+	   minute field instead of the second field gave 13:37:07 -- close enough
+	   to look right in the interface and never be noticed. */
+	eq(varas(30), ekkor(30), 'half an hour later is exactly half an hour later');
+	eq(varas(5), ekkor(5), 'and five minutes later is five minutes later');
+	eq(varas(120), ekkor(120), 'two hours later crosses the hour correctly');
+
+	/* The seconds must survive. This is the assertion the old code fails. */
+	ok(varas(30).indexOf('45') !== -1 || ekkor(30).indexOf('45') === -1,
+	   'the seconds of the current time are carried over, not discarded');
+
+	/* Substitutions, kept because the builder hands 0 through whenever it
+	   could not read a remaining time -- which is precisely what happened
+	   while the build queue was unreadable. */
+	eq(varas(0), ekkor(30), 'no known time means look again in half an hour');
+	eq(varas(NaN), ekkor(5), 'an unusable time means look again in five minutes');
+
+	/* "del" removes the village's row instead of scheduling anything. */
+	var torolt = [];
+	var vilag = { getServerTime: function () { return new Date(most.getTime()); },
+	              debug: function () {},
+	              document: { getElementById: function () { return { deleteRow: function (i) { torolt.push(i); } }; } } };
+	sandbox(vilag, [sliceFn(SZEM4_SRC, 'szem4_EPITO_addIdo')])
+		.szem4_EPITO_addIdo({ rowIndex: 4, cells: [fakeEl(''), fakeEl(''), fakeEl('')] }, 'del');
+	eq(torolt, [4], 'a finished village has its row deleted');
+});

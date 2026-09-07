@@ -4455,7 +4455,10 @@ function szem4_EPITO_addIdo(sor, perc){try{
 		if (perc === 0) perc = 30;
 		if (isNaN(perc)) perc = 5;
 		var d=getServerTime();
-		d.setSeconds(d.getMinutes() + (perc * 60));
+		/* getSeconds, nem getMinutes: az eredeti a perc mezot adta a
+		   varakozashoz es kozben eldobta a masodperceket, amitol a
+		   kovetkezo ellenorzes ideje percen belul ide-oda ugralt. */
+		d.setSeconds(d.getSeconds() + (perc * 60));
 		sor.cells[2].innerHTML=d.toLocaleString();
 	}
 }catch(e){debug("epito_addIdo",e); return false;}}
