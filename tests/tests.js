@@ -2951,4 +2951,13 @@ suite('Which gathering the gatherer waits for', function () {
 
 	var shown = opts.filter(function (o) { return o.selected; })[0] || opts[0];
 	eq(shown.value, alap, 'the box shows the strategy the engine actually starts with');
+
+	/* Waiting for every option is a legitimate choice -- it lets the game split
+	   troops across all four at once -- but its cost is invisible in a label that
+	   states only the mechanism, and the cost is the whole reason the default
+	   moved off it. So the label has to say it out loud. */
+	var lassuCimke = sel.slice(sel.indexOf('<option value="max"'));
+	lassuCimke = lassuCimke.slice(lassuCimke.indexOf('>') + 1, lassuCimke.indexOf('</option>'));
+	ok(lassuCimke.indexOf('csapatai') !== -1,
+	   'the waiting strategy says outright that troops will be left waiting');
 });

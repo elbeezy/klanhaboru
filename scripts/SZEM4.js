@@ -5124,7 +5124,7 @@ ujkieg('gyujto','Gyűjtő',`<tr><td>
 		Stratégia:
 		<select name="strategy">
 			<option value="min">Amint kész egy gyűjtés, küldje a következőt</option>
-			<option value="max">Várja meg amíg minden opció kész, és utána küldje újra</option>
+			<option value="max">Várja meg, amíg minden opció kész (jobb csapatelosztás, de a gyors opciók csapatai várnak)</option>
 		</select>
 	</form>
 </td></tr>`);
