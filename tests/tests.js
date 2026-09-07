@@ -2319,3 +2319,41 @@ suite('epito -- az Info oszlop allapotszinei', function () {
 
 	keret.remove();
 });
+
+
+/* ------------------------------------------------------------------------ */
+suite('epito -- a magyar szoveg', function () {
+	/* Copy is not usually worth pinning, but these four were each wrong in a
+	   way that reads as sloppiness in the one panel he looks at most, and a
+	   later edit could reintroduce any of them without anyone noticing.
+
+	   Written as counts and as comparisons between the two messages rather
+	   than as "the good string is present somewhere" -- a presence check
+	   passes while a second copy of the bad one survives, which is the trap
+	   the resource.png count was rewritten to avoid. */
+	var forras = stripComments(SZEM4_SRC);
+
+	/* A compound noun, so it is one word. The spaced form must be gone
+	   entirely, not merely outnumbered. */
+	eq((forras.match(/Nyersanyag hi[áa]ny/g) || []).length, 0,
+	   'the shortage message spells the compound as one word');
+	eq((forras.match(/Nyersanyaghiány/g) || []).length, 1,
+	   'and says so exactly once');
+
+	/* Two routes reach the same condition -- the queue-full check up front,
+	   and the hidden build button further down -- and they used to describe
+	   it in two different words. The game calls it the építési sor. */
+	eq((forras.match(/Építkezési/g) || []).length, 0,
+	   'the queue is not called two different things');
+	eq((forras.match(/Építési sor megtelt/g) || []).length, 2,
+	   'both routes to a full queue say the same thing');
+
+	/* The -e question particle takes a hyphen. */
+	eq((forras.match(/lehet e /g) || []).length, 0, 'lehet-e is hyphenated');
+	ok(forras.indexOf('lehet-e már építeni') !== -1, 'in the Return column tooltip');
+
+	/* And a comma before hogy. */
+	eq((forras.match(/jelentése hogy/g) || []).length, 0,
+	   'the Infó tooltip has its comma before hogy');
+	ok(forras.indexOf('jelentése, hogy nem tud haladni') !== -1, 'in the clause that needed it');
+});
