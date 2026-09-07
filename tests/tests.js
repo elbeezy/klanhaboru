@@ -2554,3 +2554,189 @@ suite('epito -- a magyar szoveg', function () {
 	eq((forras.match(/Felső táblázatban használt lista közül/g) || []).length, 0,
 	   'and the old singular is gone');
 });
+
+
+/* ------------------------------------------------- ingyenes befejezes
+   Read off his saved page (Build que early finish.htm), captured with a
+   build under three minutes so the free control was actually live. The
+   in-progress order's third cell holds THREE anchors; the two on the right
+   share the label "Befejezés", share the classes "order_feature btn btn-btr",
+   and "btn-instant" is a substring of "btn-instant-free". Getting the wrong
+   one costs 10 premium points per build, silently, so the fixture keeps all
+   three exactly as the game writes them and every assertion below is really
+   about telling them apart.
+
+   The real numbers from that page: available-from 1788773320,
+   available-to 1788773500, and the row's own data-endtime 1788773500 --
+   i.e. the free window opens exactly 180 seconds before the build ends. */
+var BEF_TOL = 1788773320, BEF_IG = 1788773500;
+
+function instantCell(opts) {
+	opts = opts || {};
+	var szabad = opts.freeOnclick === undefined
+		? "return BuildingMain.change_order(209230, 'BuildInstantFree', 0)"
+		: opts.freeOnclick;
+	var html =
+		'<a class="order_feature btn btn-btr" onclick="return BuildingMain.change_order(209230, \'BuildTimeReduction\', 10)" href="#" data-available-from="0" data-available-to="1788772900" style="display: none">-50%</a>' +
+		'<a class="order_feature btn btn-btr btn-instant" onclick="return BuildingMain.change_order(209230, \'BuildInstant\', 10)" href="#" data-available-from="1788772900" data-available-to="1788773320" style="display: none">Befejezés</a>';
+	if (!opts.noFree) {
+		html += '<a class="order_feature btn btn-btr btn-instant-free" onclick="' + szabad +
+			'" href="#" data-available-from="' + (opts.tol === undefined ? BEF_TOL : opts.tol) +
+			'" data-available-to="' + (opts.ig === undefined ? BEF_IG : opts.ig) + '">Befejezés</a>';
+	}
+	return html;
+}
+
+/* The order that is actually being built, with its live timer and its three
+   buttons -- as opposed to orderRow() above, which is a plain queued order. */
+function elonyRow(opts) {
+	return queueRow(
+		'<td class="lit-item"><img src="https://dshu.innogamescdn.com/asset/db281c7a/graphic/buildings/mid/iron3.webp" title="Vasbánya" class="bmain_list_img" /> Vasbánya<br /> 20. szint</td>' +
+		'<td class="nowrap lit-item"><span class="timer" data-endtime="' + BEF_IG + '"></span></td>' +
+		'<td class="lit-item">' + instantCell(opts) + '</td>' +
+		'<td class="lit-item">ma ekkor: 11:31:40</td>' +
+		'<td class="lit-item"><a class="btn btn-cancel">Visszavonás</a></td>',
+		'lit nodrag buildorder_iron');
+}
+
+suite('auto befejezo -- az ingyenes ajanlat felismerese', function () {
+	/* The whole block as source text, constants included, so the tests use
+	   the real BEF_RATARTAS_MP rather than a copy of it. befejezesKattint
+	   must stay the LAST function in the block or the others fall outside
+	   the sandbox. */
+	function api(naplo) {
+		return sandbox({ naplo: function (a, b) { if (naplo) naplo.push(String(b)); } },
+		               [sliceFrom(SZEM4_SRC, 'var BEF_RATARTAS_MP', 'befejezesKattint')]);
+	}
+
+	/* --- the hazard, first and at length ---------------------------------- */
+
+	/* The fixture really does contain the paid button, so nothing below can
+	   pass by accident on a page that simply has no trap in it. */
+	var sor = buildQueueEl([elonyRow(), progressRow()]);
+	ok(sor.querySelectorAll('.btn-instant').length === 1, 'the fixture contains the paid button');
+	ok(sor.querySelectorAll('.btn-instant-free').length === 1, 'and the free one beside it');
+	ok(sor.querySelectorAll('.order_feature').length === 3, 'all three order_feature buttons are present');
+
+	var terv = api().befejezesTerv(sor, (BEF_TOL + 2) * 1000);
+	/* Deliberately defensive about terv.gomb: when a mutation makes the plan
+	   pick the wrong button, every assertion below should get its say rather
+	   than the first one throwing and hiding the rest. */
+	var gomb = terv.gomb || { classList: { contains: function () { return false; } },
+	                          getAttribute: function () { return ''; } };
+	eq(terv.tipus, 'most', 'at 2:58 remaining the free finish is offered');
+	ok(gomb.classList.contains('btn-instant-free'), 'and the button handed back is the free one');
+	ok(gomb.getAttribute('onclick').indexOf('BuildInstantFree') !== -1,
+	   'whose onclick calls the free action');
+
+	/* Between ten and three minutes out it is the PAID button that is live and
+	   visible. That is the whole window in which a careless selector quietly
+	   spends premium points, so it gets its own assertions: nothing is
+	   offered, no button is handed back, and the wait runs on to the free
+	   window rather than stopping at the paid one. */
+	var kozben = api().befejezesTerv(sor, (BEF_TOL - 100) * 1000);
+	eq(kozben.tipus, 'kesobb', 'while only the paid button is live, nothing is offered');
+	eq(kozben.gomb, undefined, 'and no button is handed back at all');
+	eq(kozben.mikorMs, (BEF_TOL + 2) * 1000, 'the wait runs to the free window, not the paid one');
+
+	/* Both halves of the guard, one at a time. The paid button passes neither
+	   test; a button carrying the free class but the paid action passes the
+	   first and must still be refused. */
+	var api0 = api();
+	eq(api0.befejezesGombErvenyes(sor.querySelector('.btn-instant')), false,
+	   'the paid button is refused');
+	eq(api0.befejezesGombErvenyes(sor.querySelector('.btn-instant-free')), true,
+	   'the free button is accepted');
+	var hamis = buildQueueEl([elonyRow({ freeOnclick: "return BuildingMain.change_order(209230, 'BuildInstant', 10)" })]);
+	eq(api0.befejezesGombErvenyes(hamis.querySelector('.btn-instant-free')), false,
+	   'the free class alone is not enough -- the onclick must say so too');
+	eq(api0.befejezesGombErvenyes(null), false, 'and nothing at all is refused rather than thrown at');
+
+	/* Each half of the guard has to be able to refuse on its own, or it is
+	   decoration. The case above proves the onclick half; this one proves the
+	   class half, by handing it the paid button with an onclick that would
+	   otherwise pass. Contrived on purpose: the point is that neither piece of
+	   evidence is trusted alone. */
+	var osszekevert = buildQueueEl([elonyRow()]).querySelector('.btn-instant');
+	osszekevert.setAttribute('onclick', "return BuildingMain.change_order(209230, 'BuildInstantFree', 0)");
+	eq(api0.befejezesGombErvenyes(osszekevert), false,
+	   'the paid button is refused even when its onclick would have passed');
+
+	/* A button that cannot be proved free is not clicked and not ignored:
+	   it is reported, because it means the game changed under us. */
+	var h1 = [];
+	eq(api(h1).befejezesTerv(hamis, (BEF_TOL + 2) * 1000).tipus, 'gyanus',
+	   'a free-classed button with a paid action is treated as suspect');
+	eq(h1, [], 'planning alone says nothing');
+
+	/* --- the click itself -------------------------------------------------- */
+
+	var kattintva = 0;
+	var jo = sor.querySelector('.btn-instant-free');
+	jo.click = function () { kattintva++; };
+	var h2 = [];
+	eq(api(h2).befejezesKattint(jo, 'Falu'), true, 'the free button is clicked');
+	eq(kattintva, 1, 'exactly once');
+	eq(h2, [], 'without complaint');
+
+	/* The re-check immediately before clicking is what protects against the
+	   game rewriting the row between planning and acting. */
+	var rossz = hamis.querySelector('.btn-instant-free');
+	var rosszKattintva = 0;
+	rossz.click = function () { rosszKattintva++; };
+	var h3 = [];
+	eq(api(h3).befejezesKattint(rossz, 'Falu'), false, 'a button that cannot be proved free is not clicked');
+	eq(rosszKattintva, 0, 'it is never clicked at all');
+	eq(h3.length, 1, 'and it is reported');
+	ok(String(h3[0]).indexOf('Prémium pont nem fogyott') !== -1, 'saying plainly that nothing was spent');
+
+	var fizetos = sor.querySelector('.btn-instant');
+	var fizetosKattintva = 0;
+	fizetos.click = function () { fizetosKattintva++; };
+	eq(api([]).befejezesKattint(fizetos, 'Falu'), false, 'the paid button is refused outright');
+	eq(fizetosKattintva, 0, 'and stays unclicked');
+
+	/* --- the timing -------------------------------------------------------- */
+
+	/* Two seconds early is still early. This is the boundary the whole
+	   feature is specified on: fire at 2:58 remaining, not at 3:00. */
+	eq(api().befejezesTerv(sor, (BEF_TOL + 1) * 1000).tipus, 'kesobb',
+	   'one second before the hold-off it is still too early');
+	eq(api().befejezesTerv(sor, (BEF_TOL + 1) * 1000).mikorMs, (BEF_TOL + 2) * 1000,
+	   'and it says to come back at exactly 2:58 remaining');
+	eq(api().befejezesTerv(sor, BEF_TOL * 1000).tipus, 'kesobb',
+	   'the moment the window opens is not yet the moment to click');
+
+	/* The spec restated as arithmetic: 2:58 remaining is the free button's
+	   own available-from plus two, which is also the end time minus 178. */
+	eq(api().befejezesTerv(sor, (BEF_TOL - 3600) * 1000).mikorMs, (BEF_IG - 178) * 1000,
+	   'an hour out, the return time is the end time less 178 seconds');
+
+	/* Past the far edge the build has finished by itself. */
+	eq(api().befejezesTerv(sor, BEF_IG * 1000).tipus, 'nincs',
+	   'once the window has closed there is nothing to click');
+
+	/* --- when the buttons are not there ------------------------------------ */
+
+	/* If the game only renders the free button near the end, the live order's
+	   own clock still says when the window opens. */
+	var oraCsak = buildQueueEl([elonyRow({ noFree: true })]);
+	eq(oraCsak.querySelectorAll('.btn-instant-free').length, 0, 'the fixture really has no free button');
+	var t2 = api().befejezesTerv(oraCsak, (BEF_IG - 3600) * 1000);
+	eq(t2.tipus, 'kesobb', 'the live timer alone is enough to schedule a return');
+	eq(t2.mikorMs, (BEF_IG - 178) * 1000, 'at the same moment the button would have given');
+
+	/* A queue of orders that are merely waiting has no live clock and no
+	   instant buttons -- only the -50% one -- so there is nothing to finish. */
+	var varakozo = buildQueueEl([orderRow('farm', '1:05:03')]);
+	eq(api().befejezesTerv(varakozo, Date.now()).tipus, 'nincs',
+	   'a queue with nothing actually building offers nothing');
+	eq(api().befejezesTerv(null, Date.now()).tipus, 'nincs',
+	   'and a village with no queue at all is not an error');
+
+	/* --- the name, for the log --------------------------------------------- */
+
+	eq(api().befejezesEpulet(sor.querySelector('.btn-instant-free')), 'Vasbánya 20. szint',
+	   'the finished building is named the way the game names it');
+	eq(api().befejezesEpulet(null), 'egy épület', 'and an unknown one still reads as a sentence');
+});

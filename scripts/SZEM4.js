@@ -5117,6 +5117,102 @@ ujkieg('gyujto','Gyűjtő',`<tr><td>
 </td></tr>`);
 szem4_GYUJTO_motor();
 
+/*-----------------INGYENES BEFEJEZÉS FELISMERÉSE--------------------*/
+/* A játék ingyen befejezi az épülő megrendelést, amikor kevesebb mint 3 perc
+   van hátra belőle. Ez a rész ismeri fel az ajánlatot; a lekattintását az
+   Auto befejező modul végzi.
+
+   VESZÉLY, és ez az egész funkció kockázata. Az építési sor élő során három
+   gomb ül egymás mellett, ugyanabban a cellában:
+
+     "-50%"        BuildTimeReduction   10 prémium pont
+     "Befejezés"   BuildInstant         10 prémium pont
+     "Befejezés"   BuildInstantFree     ingyen
+
+   A második és a harmadik ugyanazt a feliratot viseli, ugyanazokat az
+   "order_feature btn btn-btr" osztályokat, és a btn-instant RÉSZE a
+   btn-instant-free-nek. Ezért a feliratra, az order_feature-re vagy egy
+   includes("btn-instant")-ra illesztés a FIZETŐS gombot találja el, és
+   némán elkölt 10 prémium pontot minden egyes építkezésnél.
+
+   Ez ellen két, egymástól független bizonyíték véd, és mindkettőnek
+   teljesülnie kell: a pontos btn-instant-free osztálynév (a querySelector
+   egész osztályneveket illeszt, tehát a btn-instant erre soha nem talál rá),
+   ÉS az onclick, amelynek szó szerint BuildInstantFree-t kell hívnia 0
+   költséggel. Ha a kettő nem egyezik, nem kattintunk, hanem szólunk.
+
+   Az időzítéshez nincs szükség óraszámolásra: az ingyenes gomb
+   data-available-from értéke pontosan a befejezés ideje mínusz 180 mp, tehát
+   "2:58 van hátra" nem más, mint ez az időbélyeg plusz 2 másodperc. */
+var BEF_RATARTAS_MP = 2; /* 2:58-nál indul, vagyis az ingyenes ablak nyílása után 2 mp-cel */
+var BEF_INGYEN_ABLAK_MP = 180; /* ennyivel a befejezés előtt nyílik az ingyenes ablak */
+
+/* Egyetlen gomb két, egymástól független próbája. Bármelyik bukása esetén
+   hamis: inkább maradjon el egy ingyenes befejezés, mint hogy egy félreismert
+   gomb prémium pontot költsön. */
+function befejezesGombErvenyes(gomb) {
+	if (!gomb || !gomb.classList || !gomb.classList.contains('btn-instant-free')) return false;
+	var onclick = (gomb.getAttribute && gomb.getAttribute('onclick')) || '';
+	return /change_order\(\s*[0-9]+\s*,\s*'BuildInstantFree'\s*,\s*0\s*\)/.test(onclick);
+}
+
+/* Melyik épület sorában áll a gomb -- csak a naplóba, hogy emberi neve legyen
+   annak, amit befejeztünk. */
+function befejezesEpulet(gomb) {
+	var sor = gomb && gomb.closest && gomb.closest('tr');
+	if (!sor || !sor.cells || !sor.cells.length) return 'egy épület';
+	return sor.cells[0].textContent.replace(/\s+/g, ' ').trim() || 'egy épület';
+}
+
+/* Mit kezdjünk ezzel a faluval? Négy válasz lehet:
+     most    -- itt az ingyenes gomb, kattintható
+     kesobb  -- van épülő megrendelés, ekkor és ekkor nyílik az ablaka
+     gyanus  -- btn-instant-free osztályú gomb, amit nem tudunk ingyenesnek
+                bizonyítani; ilyenkor semmit nem csinálunk, csak szólunk
+     nincs   -- nincs mit befejezni
+
+   A tartalék ág akkor számol az óráról, ha az ingyenes gomb nincs
+   kirenderelve: az élő sor data-endtime-ja mínusz 180 mp ugyanazt az
+   időpontot adja. A data-endtime valódi unix időbélyeg, ezért Date.now() a
+   párja -- a getServerTime() megjelenítési óra, itt hibát vinne be. */
+function befejezesTerv(buildQueue, mostMs) {
+	if (mostMs === undefined) mostMs = Date.now();
+	if (!buildQueue || !buildQueue.querySelector) return { tipus: 'nincs', ok: 'nincs építési sor' };
+
+	var gomb = buildQueue.querySelector('.btn-instant-free');
+	if (gomb) {
+		if (!befejezesGombErvenyes(gomb)) return { tipus: 'gyanus', ok: 'a btn-instant-free gomb onclickje nem az ingyenes befejezést hívja' };
+		var tol = parseInt(gomb.getAttribute('data-available-from'), 10);
+		var ig = parseInt(gomb.getAttribute('data-available-to'), 10);
+		if (!isNaN(tol)) {
+			var mikorMs = (tol + BEF_RATARTAS_MP) * 1000;
+			if (mostMs < mikorMs) return { tipus: 'kesobb', mikorMs: mikorMs };
+			/* Az ablak felső széle a befejezés ideje: ha ezt is elhagytuk, az
+			   építkezés magától elkészült, nincs mit kattintani. */
+			if (!isNaN(ig) && mostMs >= ig * 1000) return { tipus: 'nincs', ok: 'az ingyenes ablak lezárult' };
+			return { tipus: 'most', gomb: gomb };
+		}
+	}
+
+	var ora = buildQueue.querySelector('[data-endtime]');
+	if (!ora) return { tipus: 'nincs', ok: 'nincs épülő megrendelés' };
+	var veg = parseInt(ora.getAttribute('data-endtime'), 10);
+	if (isNaN(veg)) return { tipus: 'nincs', ok: 'olvashatatlan data-endtime' };
+	return { tipus: 'kesobb', mikorMs: (veg - BEF_INGYEN_ABLAK_MP + BEF_RATARTAS_MP) * 1000 };
+}
+
+/* A kattintás egyetlen helye. Az érvényességet közvetlenül a kattintás előtt
+   újra megnézzük: a terv és a kattintás között eltelhet idő, és a játék
+   saját scriptje ez alatt átírhatja a sort. */
+function befejezesKattint(gomb, hol) {
+	if (!befejezesGombErvenyes(gomb)) {
+		naplo('Auto befejező ⚠', `${hol}: a befejezés gombról nem tudtam bizonyítani, hogy ingyenes, ezért nem kattintottam rá. Prémium pont nem fogyott.`);
+		return false;
+	}
+	gomb.click();
+	return true;
+}
+
 /*-----------------Adatmentő kezelő--------------------*/
 /* Refuses to replace substantial saved data with something drastically
    smaller. The autosave writes whatever is in memory every 60 seconds, so a
