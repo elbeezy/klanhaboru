@@ -2067,7 +2067,7 @@ function progressRow() {
 suite('epito -- az epitesi sor kiolvasasa', function () {
 	function api(naplo) {
 		return sandbox({ debug: function (a, b) { if (naplo) naplo.push(String(b)); } },
-		               [sliceFn(SZEM4_SRC, 'readBuildQueue')]);
+		               [sliceFn(SZEM4_SRC, 'queueRowMinutes'), sliceFn(SZEM4_SRC, 'readBuildQueue')]);
 	}
 
 	/* The whole bug, in one assertion. This exact shape -- order, progress,
@@ -2180,4 +2180,58 @@ suite('epito -- a kovetkezo ellenorzes ideje', function () {
 	sandbox(vilag, [sliceFn(SZEM4_SRC, 'szem4_EPITO_addIdo')])
 		.szem4_EPITO_addIdo({ rowIndex: 4, cells: [fakeEl(''), fakeEl(''), fakeEl('')] }, 'del');
 	eq(torolt, [4], 'a finished village has its row deleted');
+});
+
+
+suite('epito -- a hatralevo ido forrasa', function () {
+	function api(naplo) {
+		return sandbox({ debug: function (a, b) { if (naplo) naplo.push(String(b)); } },
+		               [sliceFn(SZEM4_SRC, 'queueRowMinutes'), sliceFn(SZEM4_SRC, 'readBuildQueue')]);
+	}
+	function cella(html) {
+		var td = document.createElement('td');
+		td.innerHTML = html;
+		return td;
+	}
+	var most = 1788690000000;   /* ms; a mentett lap data-endtime-jaihoz igazitva */
+
+	/* The row that is actually building carries data-endtime and an EMPTY
+	   span -- the game's own script paints the countdown in afterwards. This
+	   is the case that used to read as nothing at all if SZEM looked first. */
+	eq(Math.round(api().queueRowMinutes(cella('<span class="timer" data-endtime="1788694401"></span>'), most)),
+	   73, 'an unpainted countdown still yields its remaining time');
+
+	/* And it keeps working once the game has painted it -- the attribute is
+	   still the thing read, so the answer does not change halfway. */
+	eq(Math.round(api().queueRowMinutes(cella('<span class="timer" data-endtime="1788694401">1:13:21</span>'), most)),
+	   73, 'a painted countdown gives the same answer, from the same source');
+
+	/* A queued order that has not started has no data-endtime at all: it
+	   states its own duration as text. That branch must stay. */
+	eq(api().queueRowMinutes(cella('<span>2:04:27</span>'), most), 124.45,
+	   'a queued order still reads its duration from the text');
+
+	/* An order on the point of finishing must not go negative -- a negative
+	   wait would schedule the builder's next look in the past. */
+	eq(api().queueRowMinutes(cella('<span class="timer" data-endtime="1788689000"></span>'), most), 0,
+	   'an order already due reads as no time left, never a negative one');
+
+	/* End to end, on the shape of his real page: countdown row, progress bar,
+	   queued row. 73 minutes remaining plus a 124.45 minute order. */
+	var sor = buildQueueEl([
+		queueRow('<td class="lit-item">v</td><td class="nowrap lit-item"><span class="timer" data-endtime="1788694401"></span></td>',
+		         'lit nodrag buildorder_iron'),
+		progressRow(),
+		queueRow('<td class="lit-item">k</td><td class="lit-item"><span>2:04:27</span></td>',
+		         'sortable_row buildorder_stone')]);
+	var hibak = [];
+	var r = api(hibak).readBuildQueue(sor, most);
+	eq(r.list, 'iron;stone;', 'both orders are read');
+	eq(Math.round(r.allBuildTime), 198, 'the queue frees up in 198 minutes');
+	eq(Math.ceil(r.firstBuildTime), 74, 'and the first order has 74 minutes to run');
+	eq(hibak, [], 'with nothing reported');
+
+	/* Without an injected clock it falls back to the real one, so the
+	   parameter is a test seam and not a new thing the caller must supply. */
+	ok(api().readBuildQueue(sor).allBuildTime > 0, 'the clock defaults to the real one');
 });

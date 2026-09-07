@@ -4592,13 +4592,42 @@ function canAffordBuildNow(ref, id) {
 	return v.wood >= cost.wood && v.stone >= cost.stone && v.iron >= cost.iron;
 }
 
+/* Egy epitesi sor hatralevo ideje percben.
+
+   A folyamatban levo megrendelesnel a jatek sajat scriptje festi bele a
+   visszaszamlalot a <span class="timer">-be; a HTML-ben az a span URES, es
+   csak a data-endtime attributum all benne keszen. Ha SZEM elobb nezi meg a
+   keretet, mint ahogy a jatek kifestette, a szoveg olvasasa semmit nem ad.
+   Az attributumot olvassuk, mert az mindig ott van.
+
+   A sorban allo tobbi megrendeles nem visszaszamlal: azok a sajat
+   idotartamukat irjak ki keszen, szovegkent (2:04:27), data-endtime nelkul --
+   ezert marad meg a szoveges ag is. A ketto egyutt adja ki, hogy mikor
+   szabadul fel a sor: az elso hatralevo ideje, plusz a tobbi hossza.
+
+   A data-endtime valodi unix idobelyeg, ezert Date.now() a parja. A
+   getServerTime() NEM az: az egy megjelenitesi ora, amit TIME_ZONE perccel
+   eltolunk es 15 perces lepcsokre kerekitunk, szoval itt hibat vinne be. */
+function queueRowMinutes(cell, mostMs) {
+	var veg = cell.querySelector && cell.querySelector('[data-endtime]');
+	if (veg) {
+		var perc = (parseInt(veg.getAttribute('data-endtime'), 10) * 1000 - mostMs) / 60000;
+		/* Egy eppen lejaro megrendeles negativba fordulna, az pedig a
+		   kovetkezo ellenorzest a multba idozitene. */
+		return perc > 0 ? perc : 0;
+	}
+	var t = cell.textContent.split(':');
+	return parseInt(t[0]) * 60 + parseInt(t[1]) + (parseInt(t[2]) / 60);
+}
+
 /* Az építési sor kiolvasása. A soron belül az épületet maga a sor osztálya
    nevezi meg (buildorder_<id>); korábban a kép fájlnevéből olvastuk ki, ami
    két okból is elromlott. A játék azóta .webp formában szolgálja ki az
    épületgrafikát, a minta viszont .png-t követelt, és a megrendelések közé a
    sor egy folyamatjelző sort is beszúr, amelyben egyáltalán nincs kép. Az
    osztálynevet egyik sem érinti. */
-function readBuildQueue(buildQueue) {
+function readBuildQueue(buildQueue, mostMs) {
+	if (mostMs === undefined) mostMs = Date.now();
 	var eredmeny = { list: '', allBuildTime: 0, firstBuildTime: 0 };
 	var rows = buildQueue.rows;
 	for (var i = 1; i < rows.length; i++) { try {
@@ -4613,8 +4642,7 @@ function readBuildQueue(buildQueue) {
 		   hozzáfűzése pedig korábban összeragasztott két nevet, ha a kettő
 		   között elszállt az időolvasás. */
 		eredmeny.list += epulet[1] + ';';
-		var textTime = row.cells[1].textContent.split(':');
-		var perc = parseInt(textTime[0]) * 60 + parseInt(textTime[1]) + (parseInt(textTime[2]) / 60);
+		var perc = queueRowMinutes(row.cells[1], mostMs);
 		if (isNaN(perc)) throw 'a hátralévő idő nem olvasható: "' + row.cells[1].textContent + '"';
 		eredmeny.allBuildTime += perc;
 		if (eredmeny.firstBuildTime == 0) eredmeny.firstBuildTime = eredmeny.allBuildTime;
