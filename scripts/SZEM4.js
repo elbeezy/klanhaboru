@@ -2513,8 +2513,16 @@ function defaultVijeState() {
 		ELEMZETT: []
 	};
 }
+/* 'min' comes back when the FIRST squad gets home; 'max' waits for the last.
+   Waiting lets the game split troops across all four options at once, but the
+   quick options' troops then stand idle until the slow one lands -- 1h33m
+   apart on a real page here. Idle troops are what the gatherer exists to
+   prevent, so 'min' is the default; 'max' stays for anyone who wants the
+   better split. The <select> lists 'min' first and nothing writes the stored
+   strategy into it on a fresh install, so the default and that first option
+   must agree or the box misreports what the engine is doing. */
 function defaultGyujtoState() {
-	return { settings: { strategy: 'max' } };
+	return { settings: { strategy: 'min' } };
 }
 /* The four colours the interface shipped with before it had a palette.
 

@@ -2920,3 +2920,35 @@ suite('auto befejezo -- a falu ki- es bekapcsolasa', function () {
 	eq(w.SZEM4_BEF[22], undefined, 'unticking removes it rather than storing a false');
 	eq(doboz.checked, false, 'and the box shows that too');
 });
+
+/* ------------------------------------------------------------------------ */
+/* The gatherer books its next visit for when a squad gets home. Under 'max' it
+   waits for the SLOWEST option, so the quick options' troops stand idle in
+   between -- on a real saved page the two running squads were 1h33m apart.
+
+   The second half matters as much as the first: rebuildDOM_gyujto() runs only
+   from the load and reset paths, so on a fresh install nothing ever writes the
+   stored strategy into the <select>. The box shows whichever option the markup
+   lists first, and if that disagrees with defaultGyujtoState() the interface
+   silently misreports which strategy the engine is running. */
+suite('Which gathering the gatherer waits for', function () {
+	var api = sandbox({}, [sliceFn(SZEM4_SRC, 'defaultGyujtoState')]);
+	var alap = api.defaultGyujtoState().settings.strategy;
+
+	eq(alap, 'min', 'a fresh install comes back for the first squad home, so no troops idle');
+
+	/* The <select> as a browser reads it before any of SZEM's code runs. */
+	var sel = SZEM4_SRC.slice(SZEM4_SRC.indexOf('<select name="strategy">'));
+	sel = sel.slice(0, sel.indexOf('</select>'));
+	var opts = [];
+	sel.replace(/<option value="([^"]*)"([^>]*)>/g, function (_, val, rest) {
+		opts.push({ value: val, selected: rest.indexOf('selected') !== -1 });
+		return '';
+	});
+
+	eq(opts.map(function (o) { return o.value; }), ['min', 'max'],
+	   'the two strategies are still the ones the engine branches on');
+
+	var shown = opts.filter(function (o) { return o.selected; })[0] || opts[0];
+	eq(shown.value, alap, 'the box shows the strategy the engine actually starts with');
+});
