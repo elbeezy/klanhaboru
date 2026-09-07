@@ -4224,6 +4224,19 @@ function getSpyResourceCell(doc) {
 	}
 	return null;
 }
+/* The game puts an #attack_spy_resources table on the report of any farmable
+   target whether a spy went along or not: with no scout it holds only the
+   game's own "send troops again" suggestions, and no resource reading at all.
+   Asking whether that element exists therefore answers a different question
+   than "did a spy see anything", and answers it yes on almost every report --
+   so every no-spy farm attack took the scouting branch, found no reading, and
+   recorded the village as holding nothing. Ask for the data itself. */
+function vanKemAdat(doc) {
+	if (getSpyResourceCell(doc)) return true;
+	if (doc.getElementById('attack_spy_building_data')) return true;
+	if (doc.getElementById('attack_spy_buildings_left')) return true;
+	return false;
+}
 function getSpyBuildingLevels(doc) {
 	const spyLevels = {
 		main: 1,
@@ -4284,7 +4297,7 @@ function szem4_VIJE_2elemzes(adatok){try{
 	hungarianDate = hungarianDate.getTime();
 	if (SZEM4_VIJE.ALL_VIJE_SAVED[adatok[1]] >= hungarianDate) isOld = true;
 	var spyResourcesCell = getSpyResourceCell(VIJE_REF2.document);
-	if (!isOld && VIJE_REF2.document.querySelector('#attack_spy_resources') !== null) {
+	if (!isOld && vanKemAdat(VIJE_REF2.document)) {
 		var x = spyResourcesCell;
 
 		if (adatok[4]) { var nyersossz=''; debug("VIJE2","Nem kell elemezni (régi)"); } else {

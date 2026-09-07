@@ -3222,3 +3222,75 @@ suite('farmolo -- mit mondanak a szamlalok', function () {
 	ok(sliceFn(SZEM4_SRC, 'rebuildDOM_farm').indexOf('farmStatKiir()') !== -1,
 	   'and on load, so saved counters are not invisible until the next send');
 });
+
+/* ------------------------------------------------------------------------ */
+/* Read off his saved report (Desktop\Resource Haul.htm, a light-cavalry farm
+   run with no spy along): the game renders #attack_spy_resources on that
+   report all the same, holding only its own "send troops again" suggestion
+   links. So the element's presence says "this village can be farmed", not
+   "a spy saw something" -- and the analyser used to read it as the latter,
+   sending every no-spy farm report down the scouting branch, where it found
+   no reading and recorded the village as holding nothing. */
+suite('VIJE -- kemadat van-e egyaltalan a jelentesen', function () {
+	function doc(html) {
+		var wrap = document.createElement('div');
+		wrap.innerHTML = html;
+		return {
+			getElementById: function (id) { return wrap.querySelector('[id="' + id + '"]'); },
+			querySelector: function (s) { return wrap.querySelector(s); }
+		};
+	}
+	var api = sandbox({}, [sliceFn(SZEM4_SRC, 'getSpyResourceCell'),
+	                       sliceFn(SZEM4_SRC, 'vanKemAdat')]);
+
+	/* Mirrors the saved page: one row, a th, and farm suggestion links whose
+	   title attribute happens to contain resource markup as text. */
+	var csakAjanlat = doc(
+		'<table id="attack_spy_resources">' +
+		'<tr class="no-preview"><th>Lehetseges nyersanyagok:</th><td>' +
+		'<span class="res-icons-separated"></span><br />' +
+		'<a href="#" class="farm_tooltip farm_village_1748 farm_icon farm_icon_a" ' +
+		'title="&lt;span class=&quot;icon header ressources&quot;&gt; &lt;/span&gt;800"></a>' +
+		'<a href="#" class="farm_tooltip farm_village_1748 farm_icon farm_icon_b" ' +
+		'title="&lt;span class=&quot;icon header ressources&quot;&gt; &lt;/span&gt;2.400"></a>' +
+		'</td></tr></table>');
+	ok(csakAjanlat.querySelector('#attack_spy_resources') !== null,
+	   'the suggestion table is there on a report where no spy went -- this is the trap');
+	ok(api.getSpyResourceCell(csakAjanlat) === null,
+	   'and it holds no resource reading, only send-again links');
+	eq(api.vanKemAdat(csakAjanlat), false,
+	   'so the report counts as carrying no spy data');
+
+	/* A real scouting report: the same table, with the reading added above the
+	   suggestions. The suggestion rows must not hide it. */
+	var kemJelentes = doc(
+		'<table id="attack_spy_resources">' +
+		'<tr><th>Nyersanyagok:</th><td>' +
+		'<span class="nowrap"><span class="icon header wood" title="Fa"> </span>71</span> ' +
+		'<span class="nowrap"><span class="icon header stone" title="Agyag"> </span>96</span> ' +
+		'<span class="nowrap"><span class="icon header iron" title="Vas"> </span>71</span>' +
+		'</td></tr>' +
+		'<tr><th>Lehetseges nyersanyagok:</th><td>' +
+		'<a href="#" class="farm_tooltip farm_icon farm_icon_a"></a>' +
+		'</td></tr></table>');
+	ok(api.getSpyResourceCell(kemJelentes) !== null,
+	   'a real reading is still found when the suggestions sit beside it');
+	eq(api.vanKemAdat(kemJelentes), true, 'and the report counts as scouted');
+
+	/* Buildings are read on the same branch, so a report carrying levels must
+	   stay on it even if the resource row is missing -- otherwise the fix
+	   would trade one kind of lost data for another. */
+	eq(api.vanKemAdat(doc('<input id="attack_spy_building_data" value="[]" />')), true,
+	   'spied building data alone keeps the report on the scouting branch');
+	eq(api.vanKemAdat(doc('<table id="attack_spy_buildings_left"></table>')), true,
+	   'and so does the older two-table building markup');
+	eq(api.vanKemAdat(doc('<table id="attack_results"></table>')), false,
+	   'a report with neither is not treated as scouted');
+
+	/* Wiring: the analyser must ask this question rather than the old one. */
+	var elemzes = sliceFn(SZEM4_SRC, 'szem4_VIJE_2elemzes');
+	ok(elemzes.indexOf('vanKemAdat(VIJE_REF2.document)') !== -1,
+	   'the analyser branches on whether spy data is present');
+	ok(elemzes.indexOf("querySelector('#attack_spy_resources')") === -1,
+	   'and no longer on whether the suggestion table exists');
+});
