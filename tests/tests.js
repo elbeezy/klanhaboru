@@ -2356,4 +2356,27 @@ suite('epito -- a magyar szoveg', function () {
 	eq((forras.match(/jelentése hogy/g) || []).length, 0,
 	   'the Infó tooltip has its comma before hogy');
 	ok(forras.indexOf('jelentése, hogy nem tud haladni') !== -1, 'in the clause that needed it');
+
+	/* Three more he picked out of the panel afterwards. Awkward rather than
+	   misspelt, so they are pinned the same way: by counting the shape that
+	   was wrong, which is the only check that notices a second copy. */
+
+	/* Both error paths used the same strained adjective, and fixing one and
+	   not the other would have recreated the two-names-for-one-thing problem
+	   the queue message just lost. */
+	eq((forras.match(/felvételekori/g) || []).length, 0,
+	   'neither add-error message uses the strained adjective any more');
+	eq((forras.match(/Hiba az új (falu\(k\)|csoport) felvételekor/g) || []).length, 2,
+	   'and both say it the same way round');
+
+	/* Colloquial, in a confirm box that deletes a group. */
+	eq((forras.match(/Biztos kitörlöd/g) || []).length, 0, 'the delete prompt is not colloquial');
+	ok(forras.indexOf('Biztosan törlöd a ') !== -1, 'it asks with Biztosan törlöd');
+
+	/* The tooltip was missing its article, and offers a choice from several
+	   lists, so the noun is plural. */
+	ok(forras.indexOf('A felső táblázatban használt listák közül') !== -1,
+	   'the list-column tooltip has its article and its plural');
+	eq((forras.match(/Felső táblázatban használt lista közül/g) || []).length, 0,
+	   'and the old singular is gone');
 });
