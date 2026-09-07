@@ -1022,6 +1022,11 @@ function init(){try{
 		.szem4_kapacitas_ajanlas b {
 			color: var(--szem-accent);
 		}
+		.szem4_kapacitas_egyseg {
+			width: 13px;
+			height: 13px;
+			vertical-align: -2px;
+		}
 		.szem4_kapacitas_reszlet,
 		.szem4_kapacitas_verdikt {
 			color: var(--szem-text-dim);
@@ -3276,13 +3281,20 @@ var STAT_ARANY = 0.15;
    armies can lift and loot is being left standing. Set well above nothing on
    purpose: the occasional full army is a rich village, not a wrong setting. */
 var STAT_TELE = 0.25;
+/* How much bigger to suggest going when the armies come home full. Going up
+   cannot be measured the way going down can -- a full army proves only that
+   the village held AT LEAST that much, never how much more -- so this is a
+   step to try and then re-measure, not an answer. Kept small on purpose: an
+   overshoot spends the next day walking half-empty wagons. */
+var STAT_LEPES = 1.25;
 /* The five readings and what each one asks him to do. Kept beside the rule
    that produces them so a new verdict cannot be added without its sentence. */
 var STAT_SZOVEG = {
 	nincs:     'Még nincs elemzett farm-jelentés, nincs mit mérni.',
 	keves_adat:'Még kevés a minta, várj még egy kicsit.',
 	nagy:      'A seregek nagyrészt üresen jönnek haza: a Min sereg/falu több egységet küld, mint amennyit ezek a faluk megtöltenek.',
-	kicsi:     'A seregek gyakran tele jönnek haza, tehát marad ott nyers. Több egységgel többet hoznál.',
+	tele:      'A seregek gyakran tele jönnek haza, tehát marad ott nyers. Emeld meg a Min sereg/falu értéket, majd nullázd és mérj újra.',
+	keves_egy: 'Gyakran fogy ki az egység tervezés közben: nem a sereg mérete a szűk keresztmetszet, hanem hogy összesen kevés a farmoló egységed. A Min sereg/falu emelése itt csak kevesebb falut támadna.',
 	rendben:   'A sereg mérete illik a farmokhoz.'
 };
 /* Reads the counters as one verdict. Pure, so the thresholds can be tested
@@ -3291,7 +3303,7 @@ var STAT_SZOVEG = {
    armies brought home, over what those same armies could have carried. */
 function farmStatErtekeles(s) {
 	var ures = { minta: 0, toltes: null, teleArany: 0, padloArany: 0, hianyArany: 0,
-	             ajanlott: null, szint: 'nincs' };
+	             ajanlott: null, ajanlottEgysegek: {}, szint: 'nincs' };
 	if (!s || !s.jelentes || !(s.jelTeher > 0)) return ures;
 	var probak = s.kuldes + s.minsereg + s.keves;
 	var e = {
@@ -3301,30 +3313,63 @@ function farmStatErtekeles(s) {
 		padloArany: probak ? s.minsereg / probak : 0,
 		hianyArany: probak ? s.keves / probak : 0,
 		ajanlott: null,
+		ajanlottEgysegek: {},
 		szint: 'rendben'
 	};
 	if (s.jelentes < STAT_MIN_MINTA) e.szint = 'keves_adat';
 	/* Armies coming home full is checked first because it is the one reading
 	   that must not be answered by sending less: they are demonstrably filling
 	   up, and the loot they could not lift is invisible in the fill rate. */
-	else if (e.teleArany > STAT_TELE || e.hianyArany > STAT_ARANY) e.szint = 'kicsi';
+	else if (e.teleArany > STAT_TELE) e.szint = 'tele';
+	/* Running out of units mid-plan reads like the same complaint and is not.
+	   The armies that did go were the right size; there were simply not enough
+	   troops to build more of them. Raising the floor in answer to this would
+	   attack fewer villages with the same troops, which is backwards. */
+	else if (e.hianyArany > STAT_ARANY) e.szint = 'keves_egy';
 	else if (e.padloArany > STAT_ARANY || e.toltes < STAT_GYENGE) e.szint = 'nagy';
 	/* What the armies actually carried, expressed as the population that would
 	   have carried it: capacity is population times carry-per-population, so
 	   scaling the average army by the measured fill gives the size that would
 	   have come home full. Same units as the setting, whatever the unit mix.
 
-	   Withheld while the sample is thin, and withheld outright on 'kicsi'.
-	   A trip that came home full says only that the village held AT LEAST that
-	   much, so those trips are censored upward and drag the fill rate down
-	   relative to the truth -- exactly when the reading is 'kicsi'. A number
-	   derived from that would advise sending fewer troops at the one moment
-	   the evidence says to send more. */
-	if (e.szint !== 'keves_adat' && e.szint !== 'kicsi' && s.popMinta > 0) {
-		var ajanlott = Math.round((s.pop / s.popMinta) * e.toltes);
-		if (ajanlott >= 1) e.ajanlott = ajanlott;
+	   Withheld while the sample is thin, and withheld on 'keves_egy': the
+	   floor is not what is wrong there, and raising it would attack fewer
+	   villages with the troops he has.
+
+	   On 'tele' the fill rate cannot be scaled by, because those trips are
+	   censored -- the village held at least a full load and possibly far
+	   more -- so the answer is a step up to try and measure again, never a
+	   number claimed to be the right one. */
+	if (s.popMinta > 0 && e.szint !== 'keves_adat' && e.szint !== 'keves_egy') {
+		var atlag = s.pop / s.popMinta;
+		var ajanlott = e.szint === 'tele'
+			? Math.max(Math.round(atlag * STAT_LEPES), Math.floor(atlag) + 1)
+			: Math.round(atlag * e.toltes);
+		if (ajanlott >= 1) {
+			e.ajanlott = ajanlott;
+			/* Stated in the units he actually sends, by scaling the measured
+			   mix. Reading the counters rather than a unit list keeps this
+			   working for whatever he farms with, and in a fixed order. */
+			for (var kulcs in s) {
+				if (kulcs.indexOf('u_') !== 0 || !(s[kulcs] > 0)) continue;
+				var db = Math.round(s[kulcs] * ajanlott / s.pop);
+				if (db > 0) e.ajanlottEgysegek[kulcs.slice(2)] = db;
+			}
+		}
 	}
 	return e;
+}
+/* The recommended army drawn as units rather than named: the script carries
+   no Hungarian unit names, and the game's own icons are already what he reads
+   the Honnan table by. */
+function farmStatEgysegKiir(egysegek) {
+	var ki = '';
+	for (var tipus in egysegek) {
+		ki += ' ' + egysegek[tipus] +
+			'<img class="szem4_kapacitas_egyseg" src="/graphic/unit/unit_' +
+			tipus + '.png" alt="' + tipus + '">';
+	}
+	return ki ? ' (&asymp;' + ki + ')' : '';
 }
 /* Deliberately total, and guarded on the element: it is called from the send
    path, where a throw would take the farm engine's step counter down with it. */
@@ -3344,7 +3389,7 @@ function farmStatKiir() {
 		'<span class="szem4_kapacitas_verdikt">' + (STAT_SZOVEG[e.szint] || '') + '</span>' +
 		(e.ajanlott === null ? '' :
 			'<span class="szem4_kapacitas_ajanlas">Javasolt Min sereg/falu: <b>' +
-			e.ajanlott + '</b></span>') +
+			e.ajanlott + '</b>' + farmStatEgysegKiir(e.ajanlottEgysegek) + '</span>') +
 		'<span class="szem4_kapacitas_null" onclick="farmStatNullaz()">Nullázás</span>';
 }
 /* The counters describe the settings that were in force while they were

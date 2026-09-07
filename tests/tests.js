@@ -3263,16 +3263,23 @@ suite('farmolo -- mit mondanak a szamlalok', function () {
 	   units would be the costliest possible mistake. */
 	var tele = api.farmStatErtekeles(stat({ jelentes: 100, jelTeher: 40000,
 	                                        zsakmany: 32000, tele: 40 }));
-	eq(tele.szint, 'kicsi', 'armies repeatedly coming home full means more units would earn more');
+	eq(tele.szint, 'tele', 'armies repeatedly coming home full means more units would earn more');
 	eq(Math.round(tele.teleArany * 100), 40, 'and the share that filled up is reported as it is');
 
 	var telePadlo = api.farmStatErtekeles(stat({ kuldes: 100, jelentes: 100, jelTeher: 40000,
 	                                             zsakmany: 32000, tele: 40, minsereg: 40 }));
-	eq(telePadlo.szint, 'kicsi', 'and it outranks the floor reading, which would say the opposite');
+	eq(telePadlo.szint, 'tele', 'and it outranks the floor reading, which would say the opposite');
 
 	var hiany = api.farmStatErtekeles(stat({ kuldes: 100, jelentes: 100, jelTeher: 40000,
-	                                         zsakmany: 32000, keves: 40 }));
-	eq(hiany.szint, 'kicsi', 'so does running out of units mid-plan');
+	                                         zsakmany: 32000, keves: 40,
+	                                         pop: 2000, popMinta: 100, u_light: 500 }));
+	/* Running out of units mid-plan used to share a verdict with armies coming
+	   home full, and the two want opposite answers: there the armies that went
+	   were the right size, there were just not enough troops to build more of
+	   them. Raising the floor would attack fewer villages with the same army. */
+	eq(hiany.szint, 'keves_egy', 'running out of units mid-plan is its own reading, not the same one');
+	ok(hiany.ajanlott === null,
+	   'and it is answered with no number, because the floor is not what is wrong');
 
 	var rendben = api.farmStatErtekeles(stat({ kuldes: 100, jelentes: 100, jelTeher: 40000,
 	                                           zsakmany: 32000, tele: 5, minsereg: 5, keves: 5 }));
@@ -3285,8 +3292,23 @@ suite('farmolo -- mit mondanak a szamlalok', function () {
 	   filling 60% of what it could carry says 12 would have done the same
 	   work -- which is his real number, and the reason he asked for this. */
 	var ajanl = api.farmStatErtekeles(stat({ kuldes: 100, jelentes: 100, jelTeher: 40000,
-	                                         zsakmany: 24000, pop: 2000, popMinta: 100 }));
+	                                         zsakmany: 24000, pop: 2000, popMinta: 100,
+	                                         u_light: 500 }));
 	eq(ajanl.ajanlott, 12, 'the recommendation is the average army scaled by how full it came home');
+	/* Stated in the units he sends: 100 reports of 5 light cavalry is 20
+	   population an army, and 12 population is three of them. */
+	eq(ajanl.ajanlottEgysegek, { light: 3 },
+	   'and it is also given as the army itself, in the units he farms with');
+
+	/* 100 reports of 10 spearmen and 5 light cavalry: 30 population an army,
+	   filling half of what it could carry, so 15 population is the size that
+	   would have come home full -- and the same army at half the size. */
+	var vegyesAjanl = api.farmStatErtekeles(stat({ kuldes: 100, jelentes: 100, jelTeher: 40000,
+	                                               zsakmany: 20000, pop: 3000, popMinta: 100,
+	                                               u_spear: 1000, u_light: 500 }));
+	eq(vegyesAjanl.ajanlott, 15, 'a mixed army is scaled by the same measured fill');
+	eq(vegyesAjanl.ajanlottEgysegek, { spear: 5, light: 3 },
+	   'and comes back as an army, keeping the proportions it was sent in');
 
 	/* Nothing to average means nothing to say -- and dividing by it would put
 	   a NaN in the panel rather than an absence. */
@@ -3306,13 +3328,24 @@ suite('farmolo -- mit mondanak a szamlalok', function () {
 	var teleAjanl = api.farmStatErtekeles(stat({ kuldes: 100, jelentes: 100, jelTeher: 40000,
 	                                             zsakmany: 32000, tele: 40,
 	                                             pop: 2000, popMinta: 100 }));
-	eq(teleAjanl.szint, 'kicsi', 'armies coming home full is still read as too small');
-	ok(teleAjanl.ajanlott === null,
-	   'and no number is offered there, because any would be a number to shrink to');
+	eq(teleAjanl.szint, 'tele', 'armies coming home full is still read as too small');
+	/* The step up. It cannot be measured -- a full army proves the village held
+	   at least a load and never how much more -- so what is offered is a size
+	   to try and measure again, and the one thing it must never be is smaller
+	   than what he already sends. 20 average, a quarter more, is 25. */
+	eq(teleAjanl.ajanlott, 25, 'a step up is offered instead, a quarter above the average army');
+	ok(teleAjanl.ajanlott > 20, 'which is never below the army that is already going out');
+
+	/* An army so small that a quarter of it rounds to nothing must still be
+	   told to grow, or the advice on the smallest armies is to stay put. */
+	var pici = api.farmStatErtekeles(stat({ kuldes: 100, jelentes: 100, jelTeher: 400,
+	                                        zsakmany: 320, tele: 40, pop: 100, popMinta: 100 }));
+	eq(pici.szint, 'tele', 'a tiny army coming home full is read the same way');
+	eq(pici.ajanlott, 2, 'and a step that would round to standing still is rounded up instead');
 
 	/* A verdict with no sentence would render as an empty panel. */
 	var szoveg = api.szoveg();
-	['nincs', 'keves_adat', 'nagy', 'kicsi', 'rendben'].forEach(function (k) {
+	['nincs', 'keves_adat', 'nagy', 'tele', 'keves_egy', 'rendben'].forEach(function (k) {
 		ok(!!szoveg[k] && szoveg[k].length > 10, 'the "' + k + '" reading says what to do about it');
 	});
 
@@ -3341,15 +3374,30 @@ suite('farmolo -- mit mondanak a szamlalok', function () {
 	}
 
 	var panel = kiir(stat({ kuldes: 100, jelentes: 100, jelTeher: 40000,
-	                        zsakmany: 24000, pop: 2000, popMinta: 100 }));
+	                        zsakmany: 24000, pop: 2000, popMinta: 100, u_light: 500 }));
 	ok(/60%/.test(panel.textContent), 'the panel shows the measured fill rate');
-	ok(/Min sereg\/falu/.test(panel.textContent) && /12/.test(panel.textContent),
+	var ajanlEl = panel.querySelector('.szem4_kapacitas_ajanlas');
+	ok(ajanlEl && /Min sereg\/falu/.test(ajanlEl.textContent) && /12/.test(ajanlEl.textContent),
 	   'and names the value it recommends for Min sereg/falu');
 
+	ok(panel.querySelector('img[alt="light"]'),
+	   'and draws the recommended army as the units themselves');
+
 	var panelTele = kiir(stat({ kuldes: 100, jelentes: 100, jelTeher: 40000, zsakmany: 32000,
-	                            tele: 40, pop: 2000, popMinta: 100 }));
-	ok(!/Min sereg\/falu/.test(panelTele.textContent),
-	   'and says nothing about the setting when the armies are coming home full');
+	                            tele: 40, pop: 2000, popMinta: 100, u_light: 500 }));
+	var teleEl = panelTele.querySelector('.szem4_kapacitas_ajanlas');
+	ok(teleEl && /25/.test(teleEl.textContent),
+	   'and when the armies come home full it names the step up rather than going quiet');
+
+	var panelHiany = kiir(stat({ kuldes: 100, jelentes: 100, jelTeher: 40000, zsakmany: 32000,
+	                             keves: 40, pop: 2000, popMinta: 100, u_light: 500 }));
+	/* Asked of the element, not the panel text: this verdict's own sentence
+	   mentions the setting in order to say NOT to raise it, so a search of the
+	   whole panel would find it and pass either way. */
+	ok(!panelHiany.querySelector('.szem4_kapacitas_ajanlas'),
+	   'but recommends no value when the shortage is of troops, not of army size');
+	ok(/Min sereg\/falu/.test(panelHiany.textContent),
+	   'while still explaining why raising it is the wrong answer there');
 
 	/* Wiring: the reading is worthless if nothing ever paints it. */
 	ok(SZEM4_SRC.indexOf('id="farm_kapacitas"') !== -1,
