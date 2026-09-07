@@ -3065,7 +3065,8 @@ suite('farmolo -- a sereg meretenek merese', function () {
 	function ures() {
 		return { kezdet: 0, kuldes: 0, minsereg: 0, keves: 0,
 		         jelentes: 0, zsakmany: 0, jelTeher: 0, tele: 0,
-		         pop: 0, popMinta: 0 };
+		         pop: 0, popMinta: 0, u_spear: 0, u_sword: 0, u_axe: 0,
+		         u_archer: 0, u_light: 0, u_marcher: 0, u_heavy: 0 };
 	}
 	function api(stat) {
 		var w = { SZEM4_FARM: arguments.length ? { STAT: stat } : { STAT: ures() } };
@@ -3080,7 +3081,8 @@ suite('farmolo -- a sereg meretenek merese', function () {
 	var alap = sandbox({}, [sliceFn(SZEM4_SRC, 'defaultFarmState')]).defaultFarmState();
 	eq(Object.keys(alap.STAT).sort(),
 	   ['jelTeher', 'jelentes', 'keves', 'kezdet', 'kuldes', 'minsereg',
-	    'pop', 'popMinta', 'tele', 'zsakmany'],
+	    'pop', 'popMinta', 'tele', 'u_archer', 'u_axe', 'u_heavy', 'u_light',
+	    'u_marcher', 'u_spear', 'u_sword', 'zsakmany'],
 	   'a fresh farm state carries every counter the panel reads');
 
 	var a = api();
@@ -3167,24 +3169,28 @@ suite('farmolo -- mekkora sereg hozta haza', function () {
 
 	/* His own report: five light cavalry, which is the 20 population he has
 	   Min sereg/falu set to. */
-	eq(api.jelentesNepesseg(doc(ikonSor + sor({ spear: 0, light: 5 }))), 20,
-	   'the army that went is priced in population');
+	eq(api.jelentesNepesseg(doc(ikonSor + sor({ spear: 0, light: 5 }))),
+	   { pop: 20, egysegek: { light: 5 } },
+	   'the army that went is priced in population, and its mix kept');
 
 	/* The row of losses repeats every class the quantity row has. Summing the
 	   whole table would charge him for the dead a second time. */
-	eq(api.jelentesNepesseg(doc(ikonSor + sor({ light: 5 }) + sor({ light: 3 }))), 20,
+	eq(api.jelentesNepesseg(doc(ikonSor + sor({ light: 5 }) + sor({ light: 3 }))).pop, 20,
 	   'the losses row underneath is not added to the army that was sent');
 
-	eq(api.jelentesNepesseg(doc(ikonSor + sor({ spear: 10, light: 5, heavy: 2 }))), 42,
-	   'a mixed army is priced unit by unit');
+	var vegyes = api.jelentesNepesseg(doc(ikonSor + sor({ spear: 10, light: 5, heavy: 2 })));
+	eq(vegyes.pop, 42, 'a mixed army is priced unit by unit');
+	eq(vegyes.egysegek, { spear: 10, light: 5, heavy: 2 },
+	   'and every type in it is kept, so the advice can be given in units');
 
 	/* The scout rides along with the farm attack when Kem/falu is set, so it
 	   is on nearly every one of his reports -- but it carries nothing and it
 	   is attached after the army is planned, so it was never part of the
 	   Min sereg/falu floor either. Counting its 2 population would state the
 	   recommendation in different units from the setting it recommends. */
-	eq(api.jelentesNepesseg(doc(ikonSor + sor({ spy: 1, light: 5 }))), 20,
-	   'the scout riding along is not counted as part of the army');
+	var kemmel = api.jelentesNepesseg(doc(ikonSor + sor({ spy: 1, light: 5 })));
+	eq(kemmel.pop, 20, 'the scout riding along is not counted as part of the army');
+	ok(!('spy' in kemmel.egysegek), 'and does not appear in the mix either');
 	ok(api.jelentesNepesseg(doc(ikonSor + sor({ spy: 3 }))) === null,
 	   'and a pure scouting run is not an army at all');
 
@@ -3194,7 +3200,7 @@ suite('farmolo -- mekkora sereg hozta haza', function () {
 	   direction this must never guess in. */
 	ok(api.jelentesNepesseg(doc(ikonSor + sor({ light: 5, ram: 3 }))) === null,
 	   'an army with a unit we cannot price is skipped rather than half-counted');
-	eq(api.jelentesNepesseg(doc(ikonSor + sor({ light: 5, ram: 0 }))), 20,
+	eq(api.jelentesNepesseg(doc(ikonSor + sor({ light: 5, ram: 0 }))).pop, 20,
 	   'though a column merely showing a zero of one is not that');
 
 	ok(api.jelentesNepesseg(doc(ikonSor)) === null,
@@ -3217,7 +3223,8 @@ suite('farmolo -- mit mondanak a szamlalok', function () {
 	function stat(o) {
 		var s = { kezdet: 1, kuldes: 0, minsereg: 0, keves: 0,
 		          jelentes: 0, zsakmany: 0, jelTeher: 0, tele: 0,
-		          pop: 0, popMinta: 0 };
+		          pop: 0, popMinta: 0, u_spear: 0, u_sword: 0, u_axe: 0,
+		          u_archer: 0, u_light: 0, u_marcher: 0, u_heavy: 0 };
 		for (var k in o) s[k] = o[k];
 		return s;
 	}
@@ -3485,7 +3492,8 @@ suite('farmolo -- a valos zsakmany a jelentesbol', function () {
 				DOMINFO_FARMS: farmok === undefined ? { '527|466': {} } : farmok,
 				STAT: { kezdet: 0, kuldes: 0, teher: 0, vart: 0, alul: 0, minsereg: 0,
 				        keves: 0, jelentes: 0, zsakmany: 0, jelTeher: 0, tele: 0,
-				        pop: 0, popMinta: 0 }
+				        pop: 0, popMinta: 0, u_spear: 0, u_sword: 0, u_axe: 0,
+				        u_archer: 0, u_light: 0, u_marcher: 0, u_heavy: 0 }
 			},
 			Date: { now: function () { return 5000; } }
 		};
@@ -3495,7 +3503,7 @@ suite('farmolo -- a valos zsakmany a jelentesbol', function () {
 	}
 
 	var r = rec();
-	r.farmStatJelentes('527|466', 238, 400, 20);
+	r.farmStatJelentes('527|466', 238, 400, { pop: 20, egysegek: { light: 5 } });
 	eq(r.stat.jelentes, 1, 'a report about a farm is counted');
 	eq(r.stat.zsakmany, 238, 'the real haul is recorded');
 	eq(r.stat.jelTeher, 400, 'against the capacity that fetched it');
@@ -3503,13 +3511,15 @@ suite('farmolo -- a valos zsakmany a jelentesbol', function () {
 	eq(r.stat.kezdet, 5000, 'and the measurement records when it began');
 	eq(r.stat.pop, 20, 'the size of the army that fetched it is recorded too');
 	eq(r.stat.popMinta, 1, 'against its own sample count');
+	eq(r.stat.u_light, 5, 'and the units it was made of, by type');
+	eq(r.stat.u_spear, 0, 'leaving the types that were not sent at nothing');
 
 	/* Kept apart from the report count on purpose: if the unit table ever
 	   moves, the fill rate must keep its sample rather than losing it to a
 	   size that could not be read. */
 	var p = rec();
 	p.farmStatJelentes('527|466', 238, 400);
-	p.farmStatJelentes('527|466', 238, 400, 0);
+	p.farmStatJelentes('527|466', 238, 400, { pop: 0, egysegek: {} });
 	eq(p.stat.jelentes, 2, 'a report whose army could not be sized still counts as a report');
 	eq(p.stat.popMinta, 0, 'but not toward the sizes');
 	eq(p.stat.pop, 0, 'and adds nothing to them');

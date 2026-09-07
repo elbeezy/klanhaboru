@@ -2558,7 +2558,12 @@ function defaultFarmState() {
 			/* A tamado sereg merete, hogy a Min sereg/falu ajanlas ugyanabban a
 			   mertekegysegben (nepesseg) szulessen meg, mint amiben a beallitas van. */
 			pop: 0,       // a jelentesekben szereplo tamado seregek nepessege
-			popMinta: 0   // ennyi jelentesbol tudtuk kiolvasni a sereg meretet
+			popMinta: 0,  // ennyi jelentesbol tudtuk kiolvasni a sereg meretet
+			/* A tenylegesen kikuldott osszetetel, tipusonkent. Lapos szamok es
+			   nem egy beagyazott objektum, hogy az upgradeFarmStat szam-
+			   ellenorzese valtozatlanul javitsa oket. */
+			u_spear: 0, u_sword: 0, u_axe: 0, u_archer: 0,
+			u_light: 0, u_marcher: 0, u_heavy: 0
 		}
 	};
 }
@@ -3219,7 +3224,7 @@ function farmStatElakadt(minSeregMiatt) {
    Total for the same reason as the send-path recorders -- it runs inside the
    report analyser, whose catch would report a throw here as an unreadable
    report and lose the analysis that follows. */
-function farmStatJelentes(koord, zsakmany, teherbiras, nepesseg) {
+function farmStatJelentes(koord, zsakmany, teherbiras, sereg) {
 	var s = SZEM4_FARM && SZEM4_FARM.STAT;
 	if (!s) return;
 	if (!SZEM4_FARM.DOMINFO_FARMS || !SZEM4_FARM.DOMINFO_FARMS[koord]) return;
@@ -3237,9 +3242,14 @@ function farmStatJelentes(koord, zsakmany, teherbiras, nepesseg) {
 	if (zsakmany >= teherbiras) s.tele++;
 	/* Counted separately from the reports themselves: if the unit table ever
 	   moves, the fill rate must not lose its sample along with the sizes. */
-	if (nepesseg > 0) {
-		s.pop += nepesseg;
+	if (sereg && sereg.pop > 0) {
+		s.pop += sereg.pop;
 		s.popMinta++;
+		/* The mix is what lets the advice be given in units he recognises
+		   rather than in a population figure he would have to convert. */
+		for (var tipus in sereg.egysegek) {
+			if (typeof s['u_' + tipus] === 'number') s['u_' + tipus] += sereg.egysegek[tipus];
+		}
 	}
 }
 /* A STAT saved before a counter existed comes back without it, and the load
@@ -4345,7 +4355,7 @@ function jelentesNepesseg(doc) {
 	for (var i = 0; i < tabla.rows.length; i++) {
 		var cellak = tabla.rows[i].querySelectorAll('[data-unit-count]');
 		if (!cellak.length) continue;
-		var pop = 0;
+		var pop = 0, egysegek = {};
 		for (var j = 0; j < cellak.length; j++) {
 			var db = parseInt(cellak[j].getAttribute('data-unit-count'), 10);
 			if (!(db > 0)) continue;
@@ -4358,8 +4368,9 @@ function jelentesNepesseg(doc) {
 			   the two in different units. */
 			if (tipus === 'spy') continue;
 			pop += db * TANYA[tipus];
+			egysegek[tipus] = (egysegek[tipus] || 0) + db;
 		}
-		return pop > 0 ? pop : null;
+		return pop > 0 ? { pop: pop, egysegek: egysegek } : null;
 	}
 	return null;
 }
