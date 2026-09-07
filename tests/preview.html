@@ -19,6 +19,13 @@
 		font: 14px/1.6 monospace; color: #c00; background: #fee;
 		padding: 12px; margin: 40px auto; max-width: 900px; white-space: pre-wrap;
 	}
+	/* Preview-only: the interface holds one capacity reading at a time, the one
+	   his counters currently produce. All of them are shown here at once, each
+	   under a label naming the reading the real code gave that fixture. */
+	.preview_valtozat {
+		font: 11px/2 monospace; color: #b00; text-transform: uppercase;
+		letter-spacing: 0.08em; padding: 6px 0 0;
+	}
 </style>
 </head>
 <body>
@@ -82,6 +89,91 @@ function modulIkonBetolt(src) {
 	szemIkon = api.szemIkon;
 	stopIkon = api.stopIkon;
 	modulIkon = api.modulIkon;
+}
+
+/* The Farmoló panel's markup carries the capacity row as an empty div: it is
+   filled at runtime by farmStatKiir(), off counters that only exist once real
+   farm reports have been analysed. So the one part of that panel the preview
+   could never show was the row itself. The real reading functions are compiled
+   here and run against made-up counters, exactly as with the icons -- no
+   markup is retyped, so nothing can drift.
+
+   The thresholds live in the same block as the sentences they choose between,
+   which is why they are taken as one slice rather than named one by one. */
+function allandokKivag(src) {
+	const start = src.indexOf('var STAT_MIN_MINTA');
+	if (start === -1) throw new Error('nem találom a STAT küszöböket');
+	const end = src.indexOf('\n};', start);
+	if (end === -1) throw new Error('a STAT_SZOVEG blokk nincs lezárva');
+	return src.slice(start, end + 3);
+}
+
+function farmStatBetolt(src) {
+	const nevek = ['farmStatErtekeles', 'farmStatEgysegKiir', 'farmStatKiir'];
+	const kod = allandokKivag(src) + '\n\n' +
+		nevek.map(function (n) { return fuggvenyKivag(src, n); }).join('\n\n');
+	/* farmStatKiir() reads the counters off SZEM4_FARM and paints into
+	   #farm_kapacitas by id, so the fixture is handed to it the way the real
+	   save does: by being what SZEM4_FARM holds when it runs. Declared inside
+	   the compiled scope rather than passed in, so the real code's own reads
+	   and writes land on the same object. */
+	const api = new Function(
+		'var SZEM4_FARM = { STAT: null };\n' + kod + '\n' +
+		'return { fest: function (stat) { SZEM4_FARM.STAT = stat; farmStatKiir(); },' +
+		'         ertekel: farmStatErtekeles };')();
+
+	return {
+		/* Returns what was painted, so a reading can be lifted out and shown
+		   beside the others. The recommended army is drawn with the game's own
+		   unit art, asked for by root-relative path like the rest of the panel. */
+		fest: function (stat) {
+			api.fest(stat);
+			const el = document.getElementById('farm_kapacitas');
+			el.innerHTML = el.innerHTML.replace(/src="\/graphic\//g, 'src="' + GAME_ASSET);
+			return el.innerHTML;
+		},
+		ertekel: api.ertekel
+	};
+}
+
+/* One set of counters per reading the panel can give. The numbers are chosen
+   to sit either side of the real thresholds, but no fixture is labelled by
+   hand: each label is the verdict the real code returns for it, so a changed
+   threshold shows up as a relabelled row rather than as a quiet lie. */
+const STAT_MINTAK = [
+	null,
+	{ jelentes: 8,  jelTeher: 3200,  zsakmany: 1900,  tele: 1,  kuldes: 12, minsereg: 0, keves: 0,
+	  pop: 160,  popMinta: 8,  u_light: 40 },
+	{ jelentes: 40, jelTeher: 24000, zsakmany: 10200, tele: 2,  kuldes: 60, minsereg: 3, keves: 0,
+	  pop: 1200, popMinta: 40, u_light: 200, u_axe: 400 },
+	{ jelentes: 40, jelTeher: 16000, zsakmany: 12800, tele: 18, kuldes: 55, minsereg: 2, keves: 1,
+	  pop: 800,  popMinta: 40, u_light: 200 },
+	{ jelentes: 40, jelTeher: 16000, zsakmany: 9600,  tele: 4,  kuldes: 50, minsereg: 2, keves: 12,
+	  pop: 800,  popMinta: 40, u_light: 200 },
+	{ jelentes: 40, jelTeher: 16000, zsakmany: 10400, tele: 5,  kuldes: 60, minsereg: 4, keves: 2,
+	  pop: 800,  popMinta: 40, u_light: 200 }
+];
+
+/* The first reading stays in the real div, where the panel really puts it;
+   the rest are appended into the same cell so they inherit the same box. */
+function kapacitasSorok(api) {
+	const el = document.getElementById('farm_kapacitas');
+	if (!el) throw new Error('a farm panelben nincs #farm_kapacitas sor');
+	const szulo = el.parentNode;
+	const tobbi = STAT_MINTAK.slice(1).map(function (stat) {
+		return { szint: api.ertekel(stat).szint, html: api.fest(stat) };
+	});
+	api.fest(STAT_MINTAK[0]);
+	tobbi.forEach(function (v) {
+		const cimke = document.createElement('div');
+		cimke.className = 'preview_valtozat';
+		cimke.textContent = 'előnézet — „' + v.szint + '” olvasat';
+		szulo.appendChild(cimke);
+		const sor = document.createElement('div');
+		sor.className = 'szem4_kapacitas';
+		sor.innerHTML = v.html;
+		szulo.appendChild(sor);
+	});
 }
 
 function modul(id, nev, all) {
@@ -281,6 +373,14 @@ fetch('../scripts/SZEM4.js')
 		/* After the stylesheet is in: the icons read their colours off it. */
 		modulIkonBetolt(src);
 		document.getElementById('preview_root').innerHTML = tartalom(src);
+		/* After the panel is on the page: the capacity row is painted into it
+		   by id, so the div has to exist before the real code looks for it. */
+		const statApi = farmStatBetolt(src);
+		/* The clear control is the panel's own markup and is clickable here.
+		   Clearing really does reset the counters and repaint, which is what
+		   the empty reading looks like, so the preview does just that. */
+		window.farmStatNullaz = function () { statApi.fest(null); };
+		kapacitasSorok(statApi);
 	})
 	.catch(function (e) {
 		hiba('Az előnézet nem tudott elindulni:\n\n' + e.message +

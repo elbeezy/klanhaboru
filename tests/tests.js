@@ -1476,6 +1476,73 @@ suite('The preview mirrors the real interface', function () {
 });
 
 /* ------------------------------------------------------------------------ */
+suite('The preview shows the capacity row', function () {
+	/* Every other part of the Farmoló panel is markup, so mirroring the markup
+	   is enough. This row is not: the panel carries an empty div and
+	   farmStatKiir() fills it at runtime off counters that only exist once real
+	   reports have been analysed. Holding the two texts side by side would
+	   therefore prove nothing about it.
+
+	   So the test does what the page does -- compiles the real reading code out
+	   of the real source, through the preview's own slicing functions. A rename
+	   on either side lands here rather than as a preview that silently shows an
+	   empty strip. */
+	var doboz = document.createElement('div');
+	doboz.id = 'farm_kapacitas';
+	document.body.appendChild(doboz);
+	try {
+		/* Compiled inside a catch, so a slice that no longer finds what it names
+		   reads as this one named failure. Left to throw, it would abort the
+		   suite and report "threw before finishing" -- hiding which of the
+		   checks below would have died with it. */
+		var api = null, baj = '';
+		try {
+			var kod = ['fuggvenyKivag', 'allandokKivag', 'farmStatBetolt']
+				.map(function (n) { return sliceFn(PREVIEW_SRC, n); }).join('\n\n');
+			/* A made-up asset prefix rather than the real CDN: what matters is
+			   that the rewrite ran at all, and a sentinel says so without a
+			   request going out. */
+			api = new Function('FORRAS',
+				'var GAME_ASSET = "ASSET/";\n' + kod +
+				'\nreturn farmStatBetolt(FORRAS);')(SZEM4_SRC);
+		} catch (e) { baj = e.message; }
+
+		ok(api && typeof api.fest === 'function',
+		   'the preview compiles the real reading code out of the real source', baj);
+		if (!api) return;
+
+		var ures = api.fest(null);
+		ok(ures.indexOf('&ndash;') !== -1 || ures.indexOf('–') !== -1,
+		   'with no counters at all it shows a dash, not a number');
+
+		/* Deliberately the 'tele' reading: it is the only one that recommends a
+		   size it did not measure, so it exercises the whole chain -- verdict,
+		   step up, and the army drawn in units. */
+		var teli = { jelentes: 40, jelTeher: 16000, zsakmany: 12800, tele: 18,
+		             kuldes: 55, minsereg: 2, keves: 1,
+		             pop: 800, popMinta: 40, u_light: 200 };
+		eq(api.ertekel(teli).szint, 'tele',
+		   'and reads these counters as the reading the checks below assume');
+
+		/* Painted into a real element and read back off it. A readout's
+		   likeliest failure is being computed and then dropped on the floor,
+		   and no test of the pure function can see that happen. */
+		var festett = api.fest(teli);
+		ok(festett.indexOf('80%') !== -1, 'the measured fill rate is shown');
+		ok(doboz.querySelector('.szem4_kapacitas_ajanlas') !== null,
+		   'the recommendation really lands in the element');
+		ok(doboz.querySelector('.szem4_kapacitas_egyseg') !== null,
+		   'with the recommended army drawn in unit pictures');
+		eq(festett.indexOf('src="/graphic/'), -1,
+		   'and no root-relative art is left to fail to load');
+		ok(festett.indexOf('src="ASSET/unit/') !== -1,
+		   'because the preview repoints it the same way it does the panel');
+	} finally {
+		doboz.parentNode.removeChild(doboz);
+	}
+});
+
+/* ------------------------------------------------------------------------ */
 suite('The type', function () {
 	var szabalyok = szemCssRules();
 
