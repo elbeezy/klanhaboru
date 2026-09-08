@@ -2816,6 +2816,104 @@ function toborzoTerv(sablon, birtokolt, allapot) {
 	}
 	return { egysegek: egysegek, nepesseg: felhasznaltNep, sorok: sorok, ok: ok };
 }
+
+/* Numbers out of a cell, with the thousands separator removed first.
+
+   "1.000/2.400" parses as 1 and 2 without this, and the bug arrives the day a
+   village passes a thousand of something -- silently, presenting as the
+   recruiter suddenly believing the army is tiny. It has already appeared twice
+   in this file. */
+function toborzoSzamok(szoveg) {
+	return (String(szoveg == null ? '' : szoveg).replace(/\./g, '').match(/[0-9]+/g) || [])
+		.map(Number);
+}
+
+/* How long this building's queue still runs, in seconds.
+
+   Read off his own stable: the wrapper holds a header row, then one row per
+   order -- "4 Kém", "0:09:20", "ma ekkor: 21:10:51", "Visszavonás" -- and it is
+   ABSENT ENTIRELY when nothing is queued, which is not the same as the building
+   being missing. His garage is level 5 and has no wrapper at all.
+
+   Rows are found by shape rather than by position: an order row starts with a
+   count, and its duration is the first cell that reads as one. Column indexes
+   would break on the footer the game adds to longer queues, and the completion
+   cell can look like a duration once its "ma ekkor:" prefix is gone.
+
+   The duration is the order's full length rather than what is left of it, so
+   this reads slightly long on the order currently training. That errs toward
+   leaving the queue alone, which is the safe direction. */
+function toborzoSorHossz(doc, epulet) {
+	var wrap = doc && doc.getElementById('trainqueue_wrap_' + epulet);
+	if (!wrap) return 0;
+	var ossz = 0, sorok = wrap.querySelectorAll('tr');
+	for (var i = 0; i < sorok.length; i++) {
+		var cellak = sorok[i].cells;
+		if (!cellak || !cellak.length || !/^[0-9]/.test(cellak[0].textContent.trim())) continue;
+		for (var j = 1; j < cellak.length; j++) {
+			var mp = countdownSeconds(cellak[j].textContent.trim());
+			if (mp !== null) { ossz += mp; break; }
+		}
+	}
+	return ossz;
+}
+
+/* Everything one recruit screen states, in the shape the planner takes.
+
+   There is a screen per building -- barracks, stable and workshop are three
+   separate pages, each listing only its own units -- so one village costs one
+   visit per building it recruits from.
+
+   A unit only has a row once the village can actually train it: his workshop
+   is level 5 and lists the ram but not the catapult. That is a better answer
+   than working it out from building levels, because it is the game's own.
+
+   The cost cell carries everything at once ("50 30 10 1 0:02:58" is wood, clay,
+   iron, POPULATION, then the training time), and the stock cell is written
+   "in village/total" -- the second number is the one that matters, since the
+   first goes to zero the moment the army leaves to farm or scavenge.
+
+   Only this building's units are here, so the caller merges what it learns
+   across the three screens; a plan made from one screen alone would compare a
+   unit against nothing. */
+function toborzoKepernyo(win) {
+	var doc = win && win.document;
+	var form = doc && doc.getElementById('train_form');
+	var tabla = form && form.querySelector('table');
+	var falu = win && win.game_data && win.game_data.village;
+	if (!tabla || !falu) return null;
+
+	var koltseg = {}, ido = {}, nepesseg = {}, birtokolt = {}, epitheto = {}, epulet = null;
+	for (var i = 0; i < tabla.rows.length; i++) {
+		var sor = tabla.rows[i];
+		var mezo = sor.querySelector && sor.querySelector('input[type="text"][name]');
+		if (!mezo || !TOBORZO_EPULET[mezo.name] || sor.cells.length < 3) continue;
+
+		var ar = toborzoSzamok(sor.cells[1].textContent);
+		if (ar.length < 7) continue; // three resources, population, and h:mm:ss
+		var tipus = mezo.name;
+		koltseg[tipus] = [ar[0], ar[1], ar[2]];
+		nepesseg[tipus] = ar[3];
+		ido[tipus] = ar[ar.length - 3] * 3600 + ar[ar.length - 2] * 60 + ar[ar.length - 1];
+
+		var keszlet = toborzoSzamok(sor.cells[2].textContent);
+		birtokolt[tipus] = keszlet.length > 1 ? keszlet[1] : (keszlet[0] || 0);
+		epitheto[tipus] = true;
+		if (!epulet) epulet = TOBORZO_EPULET[tipus];
+	}
+	if (!epulet) return null;
+
+	var sorHossz = {};
+	sorHossz[epulet] = toborzoSorHossz(doc, epulet);
+	return {
+		epulet: epulet,
+		koltseg: koltseg, ido: ido, nepesseg: nepesseg,
+		birtokolt: birtokolt, epitheto: epitheto, sorHossz: sorHossz,
+		nepessegMax: Number(falu.pop_max) || 0,
+		nepessegHasznalt: Number(falu.pop) || 0,
+		nyers: [Number(falu.wood) || 0, Number(falu.stone) || 0, Number(falu.iron) || 0]
+	};
+}
 /* The four colours the interface shipped with before it had a palette.
 
    The style boxes are saved as soon as anything on the sound panel is, so an

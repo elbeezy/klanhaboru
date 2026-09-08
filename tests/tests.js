@@ -3262,6 +3262,134 @@ suite('What the recruiter puts in the queue', function () {
 });
 
 /* ------------------------------------------------------------------------ */
+/* Reading a recruit screen. Every fixture below mirrors his own pages, dumped
+   from the game on 2026-09-08: the barracks at screen=train, the stable, and
+   the workshop, which is level 5 and lists the ram but not the catapult. */
+suite('What a recruit screen tells the recruiter', function () {
+	var api = sandbox(
+		{ TOBORZO_EPULET: { spear: 'barracks', sword: 'barracks', axe: 'barracks',
+		                    archer: 'barracks', spy: 'stable', light: 'stable',
+		                    marcher: 'stable', heavy: 'stable', ram: 'garage',
+		                    catapult: 'garage' } },
+		[sliceFn(SZEM4_SRC, 'countdownSeconds'), sliceFn(SZEM4_SRC, 'toborzoSzamok'),
+		 sliceFn(SZEM4_SRC, 'toborzoSorHossz'), sliceFn(SZEM4_SRC, 'toborzoKepernyo')]
+	);
+
+	/* The real cells, in the real order: unit, cost + population + time,
+	   "in village/total", and the trainable count in brackets. */
+	function sor(nev, koltsegSzoveg, keszlet) {
+		var tr = document.createElement('tr');
+		[nev, koltsegSzoveg, keszlet, '(86)'].forEach(function (szoveg, i) {
+			var td = document.createElement('td');
+			td.textContent = szoveg;
+			if (i === 0 && nev) {
+				var input = document.createElement('input');
+				input.type = 'text'; input.name = nev; input.id = nev + '_0';
+				td.appendChild(input);
+			}
+			tr.appendChild(td);
+		});
+		return tr;
+	}
+	function kepernyo(sorok, opts) {
+		opts = opts || {};
+		var gyoker = document.createElement('div');
+		var form = document.createElement('form');
+		form.id = 'train_form';
+		var tabla = document.createElement('table');
+		var fej = document.createElement('tr');
+		['Egység', 'Szükséglet', 'A faluban/összesen', 'Kiképzés'].forEach(function (c) {
+			var th = document.createElement('td'); th.textContent = c; fej.appendChild(th);
+		});
+		tabla.appendChild(fej);
+		sorok.forEach(function (s) { tabla.appendChild(s); });
+		form.appendChild(tabla);
+		gyoker.appendChild(form);
+		if (opts.sorHtml) {
+			var wrap = document.createElement('div');
+			wrap.id = 'trainqueue_wrap_' + opts.sorEpulet;
+			wrap.innerHTML = opts.sorHtml;
+			gyoker.appendChild(wrap);
+		}
+		return {
+			document: {
+				getElementById: function (id) {
+					if (id === 'train_form') return form;
+					return gyoker.querySelector('#' + id);
+				}
+			},
+			game_data: { village: opts.falu ||
+				{ pop: 2347, pop_max: 2598, wood: 40000, stone: 30000, iron: 25000 } }
+		};
+	}
+
+	/* --- the barracks, as his page states it --- */
+	var barakk = api.toborzoKepernyo(kepernyo([
+		sor('spear', '50 30 10 1 0:02:58', '0/100'),
+		sor('sword', '30 30 70 1 0:04:21', '0/100')
+	]));
+	eq(barakk.epulet, 'barracks', 'the screen says which building it belongs to, from its own units');
+	eq(barakk.koltseg.spear, [50, 30, 10], 'a unit costs what the page says it costs');
+	eq(barakk.nepesseg.spear, 1, 'the population per unit is on the page too, not guessed from a table');
+	eq(barakk.ido.spear, 178, 'and 0:02:58 of training reads as 178 seconds');
+	eq(barakk.ido.sword, 261, 'as does 0:04:21');
+
+	/* "0/100" is none at home and a hundred owned -- his spears were all out
+	   scavenging. Reading the first number would say the village owns nothing
+	   and recruit a second army on top of the one it already has. */
+	eq(barakk.birtokolt.spear, 100,
+	   'the army it owns is the second number, not the number standing at home');
+	eq(barakk.nepessegMax, 2598, 'the farm comes off game_data');
+	eq(barakk.nepessegHasznalt, 2347, 'as does what is already in it');
+	eq(barakk.nyers, [40000, 30000, 25000], 'and the resources it may spend');
+
+	/* --- what the village cannot train has no row at all --- */
+	var muhely = api.toborzoKepernyo(kepernyo([sor('ram', '300 200 200 5 0:24:00', '0/12')]));
+	eq(muhely.epulet, 'garage', 'the workshop is recognised from the ram alone');
+	eq(muhely.epitheto, { ram: true },
+	   'a level 5 workshop offers the ram and not the catapult, and the page is what says so');
+
+	/* --- the queue --- */
+	/* His stable, exactly: a header row, then one order. */
+	var stallo = api.toborzoKepernyo(kepernyo([sor('light', '125 100 250 4 0:12:00', '6/6')], {
+		sorEpulet: 'stable',
+		sorHtml: '<table><tr><td>Képzés</td><td>Időtartam</td><td>Elkészül</td><td>Mégsem *</td></tr>'
+		       + '<tr><td>4 Kém</td><td>0:09:20</td><td>ma ekkor: 21:10:51</td><td>Visszavonás</td></tr></table>'
+	}));
+	eq(stallo.sorHossz.stable, 560, 'a queued order of 0:09:20 counts as 560 seconds of queue');
+
+	/* The completion cell reads like a duration once its prefix is stripped, and
+	   a longer queue gains a footer -- so rows are taken by shape, not position. */
+	var tobbSor = api.toborzoKepernyo(kepernyo([sor('light', '125 100 250 4 0:12:00', '6/6')], {
+		sorEpulet: 'stable',
+		sorHtml: '<table><tr><td>Képzés</td><td>Időtartam</td><td>Elkészül</td></tr>'
+		       + '<tr><td>4 Kém</td><td>0:09:20</td><td>ma ekkor: 21:10:51</td></tr>'
+		       + '<tr><td>10 Könnyűlovas</td><td>2:00:00</td><td>ma ekkor: 23:10:51</td></tr>'
+		       + '<tr><td>Összesen</td><td>2:09:20</td><td></td></tr></table>'
+	}));
+	eq(tobbSor.sorHossz.stable, 7760,
+	   'two orders are summed, while the header and the footer add nothing');
+
+	/* Verified on his workshop: no wrapper at all means an empty queue, NOT a
+	   missing building. Reading it the other way would leave the workshop out. */
+	eq(muhely.sorHossz.garage, 0, 'a building with nothing queued reads as an empty queue');
+
+	/* --- the thousands separator, which has bitten this file twice --- */
+	var ezrek = api.toborzoKepernyo(kepernyo([sor('spear', '50 30 10 1 0:02:58', '1.200/2.400')]));
+	eq(ezrek.birtokolt.spear, 2400,
+	   'an army past a thousand is read as thousands, not as the digits before the dot');
+
+	/* --- total: this reads a live game page mid-navigation --- */
+	var vedett;
+	try {
+		vedett = [api.toborzoKepernyo(null), api.toborzoKepernyo({ document: { getElementById: function () { return null; } } }),
+		          api.toborzoKepernyo(kepernyo([sor('spear', 'nincs ár', '0/100')]))];
+	} catch (e) { vedett = 'threw: ' + e.message; }
+	ok(vedett.length === 3 && vedett[0] === null && vedett[1] === null && vedett[2] === null,
+	   'no window, no form, or a row without prices is nothing to plan from rather than a crash');
+});
+
+/* ------------------------------------------------------------------------ */
 /* Auto befejező is on every other persistence path (saveNow, loadNow, restart,
    the #adat_opts row) but was missing from the two cloud sync functions, so a
    fresh machine restoring from the cloud lost which villages had it enabled. */
