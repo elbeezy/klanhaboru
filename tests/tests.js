@@ -3125,6 +3125,22 @@ suite('The army templates a village grows into', function () {
 });
 
 /* ------------------------------------------------------------------------ */
+/* Auto befejező is on every other persistence path (saveNow, loadNow, restart,
+   the #adat_opts row) but was missing from the two cloud sync functions, so a
+   fresh machine restoring from the cloud lost which villages had it enabled. */
+suite('saveLocalDataToCloud / loadCloudDataIntoLocal carry bef', function () {
+	var mento = codeOnly(sliceFn(SZEM4_SRC, 'saveLocalDataToCloud'));
+	ok(mento.indexOf('bef:') !== -1 && mento.indexOf('AZON+"_bef"') !== -1,
+	   'saving to the cloud reads the bef state out of localStorage, same as the other modules');
+
+	var betolto = codeOnly(sliceFn(SZEM4_SRC, 'loadCloudDataIntoLocal'));
+	ok(betolto.indexOf('if (cloudData.bef)') !== -1,
+	   'restoring from the cloud guards bef the same way toborzo is guarded');
+	ok(betolto.indexOf('localStorage.setItem(AZON+"_bef", cloudData.bef)') !== -1,
+	   'and, when present, writes it back under the same key szem4_ADAT_loadNow reads');
+});
+
+/* ------------------------------------------------------------------------ */
 /* The gatherer books its next visit for when a squad gets home. Under 'max' it
    waits for the SLOWEST option, so the quick options' troops stand idle in
    between -- on a real saved page the two running squads were 1h33m apart.

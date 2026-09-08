@@ -6840,6 +6840,7 @@ function loadCloudDataIntoLocal() {
 		localStorage.setItem(AZON+"_epit",   cloudData.epit);
 		localStorage.setItem(AZON+"_sys",    cloudData.sys);
 		localStorage.setItem(AZON+"_gyujto", cloudData.gyujto);
+		if (cloudData.bef) localStorage.setItem(AZON+"_bef", cloudData.bef);
 		if (cloudData.toborzo) localStorage.setItem(AZON+"_toborzo", cloudData.toborzo);
 		szem4_ADAT_LoadAll();
 	});
@@ -6862,6 +6863,7 @@ function saveLocalDataToCloud(isAll, isByHand=false) {
 		vije:  localStorage.getItem(AZON+"_vije"),
 		sys:   localStorage.getItem(AZON+"_sys"),
 		gyujto:localStorage.getItem(AZON+"_gyujto"),
+		bef:   localStorage.getItem(AZON+"_bef"),
 		toborzo:localStorage.getItem(AZON+"_toborzo"),
 	};
 	updateData(jsonToSave).then(() => {
