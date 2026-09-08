@@ -3,6 +3,11 @@
 This file is read in full every session — keep entries as single crisp
 bullets/paragraphs. Incident backstory, "how we found this" narrative, and
 anything not needed to act correctly belongs in commit messages, not here.
+Add something here only if it must survive independent of any one session
+or machine (a standing rule, or a fact about the code/game that would
+otherwise be silently rediscovered); anything else — incident detail,
+in-progress state, evolving context — belongs in the commit message or
+elsewhere, not in this file.
 
 ## Model and effort routing
 
