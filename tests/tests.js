@@ -3387,6 +3387,75 @@ suite('When the gatherer picks the troops for a squad', function () {
 });
 
 /* ------------------------------------------------------------------------ */
+/* Reading the screen. The scavenge screen is drawn by the game's own script
+   after the page loads and cannot be saved to disk, so everything is taken
+   from ScavengeScreen.village -- the data model behind it. The fixture mirrors
+   his own console dump: four options, one still locked, one with a squad out,
+   and a village holding cavalry and scouts the gatherer must not touch. */
+suite('What the gatherer sees on the scavenge screen', function () {
+	var api = sandbox(
+		{ TEHER: { spear: 25, sword: 15, axe: 10, archer: 10, spy: 0, light: 80 },
+		  GYUJTO_EGYSEGEK: ['spear', 'sword', 'axe', 'archer'] },
+		[sliceFn(SZEM4_SRC, 'scavengeBaseOk'), sliceFn(SZEM4_SRC, 'scavengeAllapot')]
+	);
+
+	function base(lootFactor) {
+		return { loot_factor: lootFactor, duration_exponent: 0.45,
+		         duration_initial_seconds: 1800, duration_factor: 0.7237692407143577 };
+	}
+	function kepernyo(extra) {
+		var falu = {
+			unit_carry_factor: 1,
+			unit_counts_home: { spear: 52, sword: 51, axe: 250, light: 100, spy: 20 },
+			options: {
+				1: { is_locked: false, scavenging_squad: null, base: base(0.1) },
+				2: { is_locked: false, scavenging_squad: null, base: base(0.25) },
+				3: { is_locked: false, scavenging_squad: { return_time: 1788694401 }, base: base(0.5) },
+				4: { is_locked: true, scavenging_squad: null, base: base(0.75) }
+			}
+		};
+		for (var k in (extra || {})) falu[k] = extra[k];
+		return { ScavengeScreen: { village: falu } };
+	}
+
+	var most = api.scavengeAllapot(kepernyo());
+	eq(most.opciok.map(function (o) { return o.id; }), [1, 2],
+	   'only the options that are unlocked and standing empty can be sent on');
+	eq(most.opciok[0].base.loot_factor, 0.1,
+	   'and each one carries its own arithmetic, so the world is never written down here');
+
+	/* The pool is the number the whole plan is sized from, and it is exactly the
+	   figure his account produced: 52 spear, 51 sword and 250 axe. */
+	eq(most.teherPool, 4565, 'the troops at home price out as the carry his own village has');
+	eq(most.elerheto, { spear: 52, sword: 51, axe: 250, archer: 0 },
+	   'the cavalry and the scouts are not even offered to the planner');
+	eq(most.opcioSzam, 4,
+	   'every option is counted, because the send buttons are found by position');
+
+	/* A world multiplier on carry. His is 1, so this is the case that would
+	   otherwise be wrong everywhere and visible nowhere. */
+	eq(api.scavengeAllapot(kepernyo({ unit_carry_factor: 2 })).teherPool, 9130,
+	   'a world that multiplies carry is priced with the multiplier, not without it');
+	eq(api.scavengeAllapot(kepernyo({ unit_carry_factor: 2 })).szorzo, 2,
+	   'and it is handed on, so a capacity can be turned back into troops');
+	eq(api.scavengeAllapot(kepernyo({ unit_carry_factor: undefined })).teherPool, 4565,
+	   'a world that does not state one is not multiplied by nothing');
+
+	/* --- total: this runs against a window that may be mid-navigation --- */
+	var romlott = kepernyo();
+	romlott.ScavengeScreen.village.options[2].base = {};
+	eq(api.scavengeAllapot(romlott).opciok.map(function (o) { return o.id; }), [1],
+	   'an option missing its constants is left out instead of poisoning the plan');
+	ok(api.scavengeAllapot({}) === null, 'a window with no scavenge screen on it says so');
+	ok(api.scavengeAllapot(null) === null, 'and so does no window at all');
+	var ureskeny;
+	try { ureskeny = api.scavengeAllapot(kepernyo({ unit_counts_home: undefined })).teherPool; }
+	catch (e) { ureskeny = 'threw: ' + e.message; }
+	ok(ureskeny === 0,
+	   'a village with no troop counts has nothing to send, rather than NaN to send it with');
+});
+
+/* ------------------------------------------------------------------------ */
 /* How full the armies come home is measured from the reports, not guessed at
    on the way out. What is still worth counting here is how many attempts
    became attacks, and why the rest did not -- a plan the minimum-army floor

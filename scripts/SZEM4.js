@@ -5699,6 +5699,54 @@ function scavengeEgysegek(teherCel, elerheto, tipusok, minNepesseg) {
 	if (nepesseg < minNep) return null;
 	return { egysegek: egysegek, teher: teher, nepesseg: nepesseg };
 }
+
+/* What the scavenge screen is offering at this moment, in the shape the
+   planner above already takes.
+
+   Everything comes off ScavengeScreen.village, the game's own data model,
+   rather than off the drawn screen. That screen is built by JavaScript after
+   the page arrives -- it cannot even be saved to disk -- so reading the model
+   avoids waiting for paint, avoids a text shape to guess at, and survives the
+   game restyling itself. Each option states its own arithmetic constants in
+   .base, so nothing about the world is written down here.
+
+   An option is available only if it is unlocked and has no squad out; one that
+   is missing its constants is dropped rather than allowed to poison a plan.
+
+   The pool is real game carry: unit_carry_factor is a world multiplier on top
+   of the carry table (his is 1), so anything converting a capacity back into
+   troops has to divide it out again. Only GYUJTO_EGYSEGEK are counted, which
+   is what keeps the farm engine's cavalry out of the gatherer's reach.
+
+   opcioSzam is every option the village has, locked and busy ones included,
+   because the send buttons are addressed by position and that count is what
+   proves the positions still line up. */
+function scavengeAllapot(win) {
+	var falu = win && win.ScavengeScreen && win.ScavengeScreen.village;
+	if (!falu || !falu.options) return null;
+	var szorzo = Number(falu.unit_carry_factor);
+	if (!isFinite(szorzo) || szorzo <= 0) szorzo = 1;
+
+	var opciok = [], opcioSzam = 0;
+	for (var kulcs in falu.options) {
+		var o = falu.options[kulcs];
+		if (!o) continue;
+		opcioSzam++;
+		if (o.is_locked || o.scavenging_squad || !scavengeBaseOk(o.base)) continue;
+		opciok.push({ id: Number(kulcs), base: o.base });
+	}
+	opciok.sort(function (a, b) { return a.id - b.id; });
+
+	var otthon = falu.unit_counts_home || {}, elerheto = {}, teherPool = 0;
+	for (var i = 0; i < GYUJTO_EGYSEGEK.length; i++) {
+		var tipus = GYUJTO_EGYSEGEK[i];
+		var db = Math.max(0, Math.floor(Number(otthon[tipus]) || 0));
+		elerheto[tipus] = db;
+		teherPool += db * TEHER[tipus] * szorzo;
+	}
+	return { opciok: opciok, opcioSzam: opcioSzam, elerheto: elerheto,
+	         teherPool: teherPool, szorzo: szorzo };
+}
 function szem4_GYUJTO_1keres() {try{
 	/* Appointments are booked on the real clock now (see scavengeReturnsMs),
 	   so they have to be read against the real clock too. */
