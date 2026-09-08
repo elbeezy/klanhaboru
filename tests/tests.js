@@ -3502,6 +3502,17 @@ suite('How the recruiter schedules its visits', function () {
 	   'a unit set to nothing is not a reason to open its building');
 	eq(api.toborzoEpuletek(null), [], 'and no template is no visit at all');
 
+	/* --- and not the ones that cannot take work yet --- */
+	var tamado = { osszetetel: { axe: 70, light: 30, ram: 3 } };
+	eq(api.toborzoEpuletek(tamado, { stable: MOST + 9 * 3600 * 1000 }, MOST),
+	   ['barracks', 'garage'],
+	   'a building still queued past the cap is not opened, since it could only say so again');
+	eq(api.toborzoEpuletek(tamado, { stable: MOST + 3600 * 1000 }, MOST),
+	   ['barracks', 'stable', 'garage'],
+	   'while one with room again is visited as usual');
+	eq(api.toborzoEpuletek(tamado, {}, MOST), ['barracks', 'stable', 'garage'],
+	   'and a village never visited before is looked at in full');
+
 	/* --- when to come back --- */
 	var sorra = api.toborzoKovetkezoLatogatas(['sor'], { barracks: 3600, stable: 1800 }, MOST);
 	eq(sorra - MOST, 1800000,
@@ -3539,6 +3550,8 @@ suite('How the recruiter schedules its visits', function () {
 	 ['ido: info.ido', 'and timed from all of them'],
 	 ['epitheto: info.epitheto', 'and knows every unit the village can train, not only this building\'s'],
 	 ['sorHossz: info.sorHossz', 'and every queue, so a full building elsewhere is taken into account'],
+	 ['toborzoEpuletek(sablon, info.szabadMs, most)', 'a visit leaves out the buildings that are still full'],
+	 ['info.szabadMs[ep] = most + TOBORZO_MUNKA.sorok[ep] * 1000', 'and each visit records when they come free'],
 	 ["if (TOBORZO_EPULET[u] !== kepernyo.epulet) continue", 'while only this building\'s share of it is ordered'],
 	 ["ujkieg('toborzo'", 'and it has a panel at all']
 	].forEach(function (par) {

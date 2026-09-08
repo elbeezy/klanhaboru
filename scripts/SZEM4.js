@@ -3014,13 +3014,24 @@ function toborzoKovetkezoLatogatas(okok, sorok, mostMs) {
 }
 
 /* Only the buildings this template actually wants, in a fixed order so a visit
-   is repeatable. A defensive template never opens the workshop. */
-function toborzoEpuletek(sablon) {
+   is repeatable. A defensive template never opens the workshop.
+
+   A building whose queue is known to still be fuller than the cap is left out
+   as well. Its screen could only report the same full queue, and opening it
+   costs a page load on an account the game is watching. What is known comes
+   from the last visit -- each building's queue end was recorded then -- so a
+   village never seen before is always looked at in full. */
+function toborzoEpuletek(sablon, szabadMs, mostMs) {
 	var kell = {}, ossz = sablon && sablon.osszetetel ? sablon.osszetetel : {};
 	for (var tipus in ossz) {
 		if (ossz[tipus] > 0 && TOBORZO_EPULET[tipus]) kell[TOBORZO_EPULET[tipus]] = true;
 	}
-	return ['barracks', 'stable', 'garage'].filter(function (ep) { return kell[ep]; });
+	var teto = TOBORZO_SOR_ORA * 3600 * 1000;
+	return ['barracks', 'stable', 'garage'].filter(function (ep) {
+		if (!kell[ep]) return false;
+		var vege = szabadMs && szabadMs[ep];
+		return !(vege && vege - mostMs >= teto);
+	});
 }
 
 function toborzo_setSzerep(el, villId) {
@@ -3122,7 +3133,7 @@ function szem4_TOBORZO_1keres() {try{
 		if (!TOBORZO_VILLINFO[villId]) TOBORZO_VILLINFO[villId] = { birtokolt: {} };
 		var info = TOBORZO_VILLINFO[villId];
 		if (info.ujraMs && info.ujraMs > most) continue;
-		var epuletek = toborzoEpuletek(sablon);
+		var epuletek = toborzoEpuletek(sablon, info.szabadMs, most);
 		if (!epuletek.length) { info.ujraMs = most + TOBORZO_URES_MS; continue; }
 		TOBORZO_DATA = villId;
 		TOBORZO_MUNKA = { epuletek: epuletek, index: 0, okok: [], sorok: {} };
@@ -3148,8 +3159,14 @@ function toborzoKovetkezoEpulet() {
 		TOBORZO_STATE = 1;
 		return;
 	}
-	var info = TOBORZO_VILLINFO[TOBORZO_DATA];
-	info.ujraMs = toborzoKovetkezoLatogatas(TOBORZO_MUNKA.okok, TOBORZO_MUNKA.sorok, Date.now());
+	var info = TOBORZO_VILLINFO[TOBORZO_DATA], most = Date.now();
+	/* When each building this visit touched comes free, so the next visit can
+	   leave out the ones that cannot take work yet. */
+	info.szabadMs = info.szabadMs || {};
+	for (var ep in TOBORZO_MUNKA.sorok) {
+		info.szabadMs[ep] = most + TOBORZO_MUNKA.sorok[ep] * 1000;
+	}
+	info.ujraMs = toborzoKovetkezoLatogatas(TOBORZO_MUNKA.okok, TOBORZO_MUNKA.sorok, most);
 	var sor = document.querySelector(`#tob_${TOBORZO_DATA}`);
 	if (sor) sor.cells[4].innerHTML = new Date(info.ujraMs).toLocaleString();
 	TOBORZO_STATE = 0;
