@@ -20,7 +20,7 @@
 Object.assign(window, {
 	BotvedelemBe, BotvedelemKi, addTooltip_build, add_farmolando,
 	add_farmolo, alert2, debug_urit, gyujto_setMaxOra,
-	gyujto_setStrategia, gyujto_setVill,
+	gyujto_setStrategia, gyujto_setVill, toborzo_setSablon, toborzo_setSzerep,
 	hattercsere, hattertolor, learnCatapult, loadCloudDataIntoLocal,
 	modosit_szam, naplo, nyit, onWallpChange,
 	playSound, removeTooltip, rendez, restartKieg,
@@ -165,6 +165,7 @@ try{ /*Rendszeradatok*/
 			case 'adatok': szem4_ADAT_motor(); break;
 			case 'gyujto': szem4_GYUJTO_motor(); break;
 			case 'bef': szem4_BEF_motor(); break;
+			case 'toborzo': szem4_TOBORZO_motor(); break;
 			default: debug('worker','Ismeretlen ID', JSON.stringify(worker_message))
 		}
 	};
@@ -1710,7 +1711,7 @@ function ujkieg(id,nev,tartalom){
 	/* The icon reflects current state, not the action, so a module that starts
 	   paused shows the pause image. Keep this in step with the *_PAUSE initial
 	   values further down. */
-	const startsPaused = ['farm', 'vije', 'gyujto', 'epit', 'bef'];
+	const startsPaused = ['farm', 'vije', 'gyujto', 'epit', 'bef', 'toborzo'];
 	document.getElementById("kiegs").innerHTML+='<img onclick=\'szunet("'+id+'",this)\' name="'+id+'" onmouseover=\'sugo(this,"Az érintett scriptet tudod megállítani/elindítani.")\' src="'+modulIkon(startsPaused.includes(id))+'" alt="Stop" title="Klikk a szüneteltetéshez"> <a href=\'javascript: nyit("'+id+'");\'>'+nev.toUpperCase()+'</a> ';
 	document.getElementById("content").innerHTML+='<table class="menuitem" width="1024px" align="center" id="'+id+'" style="display: none">'+tartalom+'</table>';
 	return true;
@@ -1741,6 +1742,7 @@ function moduleIsPaused(script) {
 		case "adatok": return ADAT_PAUSE;
 		case "gyujto": return GYUJTO_PAUSE;
 		case "bef":    return BEF_PAUSE;
+		case "toborzo": return TOBORZO_PAUSE;
 		default:       return null;
 	}
 }
@@ -1753,6 +1755,7 @@ function setModulePause(script, paused, kep) {
 		case "adatok": ADAT_PAUSE   = paused; break;
 		case "gyujto": GYUJTO_PAUSE = paused; break;
 		case "bef":    BEF_PAUSE    = paused; break;
+		case "toborzo": TOBORZO_PAUSE = paused; break;
 		default: return false;
 	}
 
@@ -2169,7 +2172,7 @@ var BOT_REF;
 function nyitottAblakok() {
 	var lista = [['FARM_REF', FARM_REF], ['VIJE_REF1', VIJE_REF1], ['VIJE_REF2', VIJE_REF2],
 	             ['EPIT_REF', EPIT_REF], ['GYUJTO_REF', GYUJTO_REF], ['BOT_REF', BOT_REF],
-	             ['BEF_REF', BEF_REF]];
+	             ['BEF_REF', BEF_REF], ['TOBORZO_REF', TOBORZO_REF]];
 	var nyitva = [];
 	for (var i = 0; i < lista.length; i++) {
 		/* Reading .closed throws on a window that has gone away underneath us. */
@@ -2966,6 +2969,294 @@ function toborzoIndit(win, egysegek) {
 	gomb.click();
 	return true;
 }
+
+/*-------------------------------- TOBORZÓ --------------------------------*/
+
+/* Which screen trains which building's units. Three separate pages, verified
+   on his own account, so a village costs one page load per building it
+   recruits from -- which is the whole reason the waits below exist. */
+var TOBORZO_KEPERNYO = { barracks: 'train', stable: 'stable', garage: 'garage' };
+
+/* How deep the queue may be filled, in hours. Deeper means fewer visits and
+   fewer page loads; it also freezes resources and decisions for that long. */
+var TOBORZO_SOR_ORA = 8;
+
+/* Waits between visits. */
+var TOBORZO_PADLO_MS = 10 * 60 * 1000,   // never come back sooner than this
+    TOBORZO_NYERS_MS = 20 * 60 * 1000,   // out of resources: they refill on their own
+    TOBORZO_URES_MS  = 60 * 60 * 1000,   // nothing here to do at all
+    TOBORZO_TETO_MS  = 8 * 3600 * 1000;  // and never look further ahead than this
+
+/* When to come back, decided by what stopped the recruiting.
+
+   A queue that filled up says exactly when there will be room again, so that
+   is what gets booked -- the shortest of them, since that building frees up
+   first. Resources refill on their own, so that is a short wait. A full farm
+   needs a building raised, which is slow, so it is the long one.
+
+   Clamped at both ends: a floor so a village cannot be reopened every tick,
+   and a ceiling so nothing is forgotten for a day. */
+function toborzoKovetkezoLatogatas(okok, sorok, mostMs) {
+	var lista = okok || [], jeloltek = [];
+	if (lista.indexOf('nyers') !== -1) jeloltek.push(TOBORZO_NYERS_MS);
+	if (lista.indexOf('sor') !== -1) {
+		var rovidebb = Infinity;
+		for (var ep in (sorok || {})) {
+			if (sorok[ep] > 0 && sorok[ep] < rovidebb) rovidebb = sorok[ep];
+		}
+		/* The queue's own length, NOT shortened to the idle wait: a queue two
+		   days deep looked at every hour is two dozen page loads that can only
+		   find the same full queue again. */
+		if (isFinite(rovidebb)) jeloltek.push(rovidebb * 1000);
+	}
+	var varakozas = jeloltek.length ? Math.min.apply(null, jeloltek) : TOBORZO_URES_MS;
+	return mostMs + Math.min(TOBORZO_TETO_MS, Math.max(TOBORZO_PADLO_MS, varakozas));
+}
+
+/* Only the buildings this template actually wants, in a fixed order so a visit
+   is repeatable. A defensive template never opens the workshop. */
+function toborzoEpuletek(sablon) {
+	var kell = {}, ossz = sablon && sablon.osszetetel ? sablon.osszetetel : {};
+	for (var tipus in ossz) {
+		if (ossz[tipus] > 0 && TOBORZO_EPULET[tipus]) kell[TOBORZO_EPULET[tipus]] = true;
+	}
+	return ['barracks', 'stable', 'garage'].filter(function (ep) { return kell[ep]; });
+}
+
+function toborzo_setSzerep(el, villId) {
+	if (!el) return;
+	if (el.value) SZEM4_TOBORZO.falvak[villId] = el.value;
+	else delete SZEM4_TOBORZO.falvak[villId];
+}
+
+/* One handler for the whole template editor: a unit's share, whether the
+   gatherer may spend it, and the army's ceiling on the farm. A rejected value
+   puts the box back to what the recruiter is really using, so the editor can
+   never show a number the engine is not reading. */
+function toborzo_setSablon(el, sablonNev, mezo, egyseg) {
+	var sablon = SZEM4_TOBORZO.sablonok[sablonNev];
+	if (!el || !sablon) return;
+	if (mezo === 'gyujto') {
+		var lista = sablon.gyujtoEgysegek.filter(function (t) { return t !== egyseg; });
+		if (el.checked) lista.push(egyseg);
+		sablon.gyujtoEgysegek = lista;
+		return;
+	}
+	var szam = parseInt(el.value, 10);
+	if (mezo === 'arany') {
+		if (isFinite(szam) && szam > 0 && szam <= 100) sablon.nepessegAranyMax = szam / 100;
+		el.value = Math.round(sablon.nepessegAranyMax * 100);
+		return;
+	}
+	if (!isFinite(szam) || szam < 0) { el.value = sablon.osszetetel[egyseg] || 0; return; }
+	if (szam === 0) delete sablon.osszetetel[egyseg];
+	else sablon.osszetetel[egyseg] = szam;
+}
+
+function toborzo_listAllVillages() {
+	var sorok = '';
+	for (var koord in KTID) {
+		var faluId = KTID[koord], valaszto = '<option value="">Nincs</option>';
+		for (var nev in SZEM4_TOBORZO.sablonok) {
+			valaszto += `<option value="${nev}">${SZEM4_TOBORZO.sablonok[nev].nev}</option>`;
+		}
+		sorok += `<tr id="tob_${faluId}">
+			<td>${ID_TO_INFO[faluId].name} (${koord})</td>
+			<td>${ID_TO_INFO[faluId].point}</td>
+			<td>${ID_TO_INFO[faluId].pop}</td>
+			<td><select name="sz${faluId}" onchange="toborzo_setSzerep(this, ${faluId})">${valaszto}</select></td>
+			<td>&mdash;</td>
+		</tr>`;
+	}
+	return sorok;
+}
+
+function toborzoSablonUrlap() {
+	var html = '';
+	for (var nev in SZEM4_TOBORZO.sablonok) {
+		var s = SZEM4_TOBORZO.sablonok[nev];
+		html += `<h3>${s.nev}</h3><table class="vis" id="tobsablon_${nev}"><thead><tr>
+			<th>Egység</th><th>Arány</th><th>Gyűjtsön vele?</th></tr></thead><tbody>`;
+		for (var tipus in TOBORZO_EPULET) {
+			html += `<tr><td><img src="/graphic/unit/unit_${tipus}.png"> ${tipus}</td>
+				<td><input size="4" name="${nev}_${tipus}" value="${s.osszetetel[tipus] || 0}"
+					onkeypress="validate(event)" onchange="toborzo_setSablon(this, '${nev}', 'egyseg', '${tipus}')"></td>
+				<td><input type="checkbox" name="gy_${nev}_${tipus}"
+					onchange="toborzo_setSablon(this, '${nev}', 'gyujto', '${tipus}')"></td></tr>`;
+		}
+		html += `<tr><td>A sereg legfeljebb ennyit foglalhat a tanyából</td>
+			<td><input size="4" name="ar_${nev}" value="${Math.round(s.nepessegAranyMax * 100)}"
+				onkeypress="validate(event)" onchange="toborzo_setSablon(this, '${nev}', 'arany', '')">%</td>
+			<td>A maradék az épületeké marad</td></tr></tbody></table>`;
+	}
+	return html;
+}
+
+/* The load and reset paths are the only things that write the interface, the
+   same as every other module's rebuild. */
+function rebuildDOM_toborzo() {
+	var f = document.querySelector('#toborzo_form');
+	if (!f) return;
+	for (var villId in SZEM4_TOBORZO.falvak) {
+		if (f['sz' + villId]) f['sz' + villId].value = SZEM4_TOBORZO.falvak[villId];
+	}
+	for (var nev in SZEM4_TOBORZO.sablonok) {
+		var s = SZEM4_TOBORZO.sablonok[nev];
+		for (var tipus in TOBORZO_EPULET) {
+			if (f[nev + '_' + tipus]) f[nev + '_' + tipus].value = s.osszetetel[tipus] || 0;
+			if (f['gy_' + nev + '_' + tipus]) {
+				f['gy_' + nev + '_' + tipus].checked = s.gyujtoEgysegek.indexOf(tipus) !== -1;
+			}
+		}
+		if (f['ar_' + nev]) f['ar_' + nev].value = Math.round(s.nepessegAranyMax * 100);
+	}
+}
+
+function szem4_TOBORZO_1keres() {try{
+	var most = Date.now();
+	for (var koord in KTID) {
+		var villId = KTID[koord];
+		var sablonNev = SZEM4_TOBORZO.falvak[villId];
+		var sablon = sablonNev && SZEM4_TOBORZO.sablonok[sablonNev];
+		if (!sablon) continue;
+		if (!TOBORZO_VILLINFO[villId]) TOBORZO_VILLINFO[villId] = { birtokolt: {} };
+		var info = TOBORZO_VILLINFO[villId];
+		if (info.ujraMs && info.ujraMs > most) continue;
+		var epuletek = toborzoEpuletek(sablon);
+		if (!epuletek.length) { info.ujraMs = most + TOBORZO_URES_MS; continue; }
+		TOBORZO_DATA = villId;
+		TOBORZO_MUNKA = { epuletek: epuletek, index: 0, okok: [], sorok: {} };
+		toborzoAblakNyit();
+		TOBORZO_STATE = 1;
+		return false;
+	}
+	return true;
+} catch(e) { TOBORZO_HIBA++; console.error(e); debug('szem4_TOBORZO_1keres', e); }}
+
+function toborzoAblakNyit() {
+	var kepernyo = TOBORZO_KEPERNYO[TOBORZO_MUNKA.epuletek[TOBORZO_MUNKA.index]];
+	TOBORZO_REF = windowOpener('toborzo',
+		gameUrl({ village: TOBORZO_DATA, screen: kepernyo, group: null, page: null }),
+		AZON + '_toborzo');
+}
+
+/* Move to the next building, or close the visit and book the next one. */
+function toborzoKovetkezoEpulet() {
+	TOBORZO_MUNKA.index++;
+	if (TOBORZO_MUNKA.index < TOBORZO_MUNKA.epuletek.length) {
+		toborzoAblakNyit();
+		TOBORZO_STATE = 1;
+		return;
+	}
+	var info = TOBORZO_VILLINFO[TOBORZO_DATA];
+	info.ujraMs = toborzoKovetkezoLatogatas(TOBORZO_MUNKA.okok, TOBORZO_MUNKA.sorok, Date.now());
+	var sor = document.querySelector(`#tob_${TOBORZO_DATA}`);
+	if (sor) sor.cells[4].innerHTML = new Date(info.ujraMs).toLocaleString();
+	TOBORZO_STATE = 0;
+	TOBORZO_HIBA = 0;
+}
+
+/* One building: read the screen, decide, order.
+
+   The troop counts are remembered across the three screens, because a screen
+   only lists its own units and a plan made from one alone would compare a unit
+   against nothing -- the barracks would never know the village is already long
+   on cavalry. */
+function szem4_TOBORZO_2toboroz() {try{
+	var kepernyo = toborzoKepernyo(TOBORZO_REF);
+	if (!kepernyo) { TOBORZO_HIBA++; return; }
+
+	var info = TOBORZO_VILLINFO[TOBORZO_DATA];
+	for (var tipus in kepernyo.birtokolt) info.birtokolt[tipus] = kepernyo.birtokolt[tipus];
+	for (var ep in kepernyo.sorHossz) TOBORZO_MUNKA.sorok[ep] = kepernyo.sorHossz[ep];
+
+	var sablon = SZEM4_TOBORZO.sablonok[SZEM4_TOBORZO.falvak[TOBORZO_DATA]];
+	var terv = toborzoTerv(sablon, info.birtokolt, {
+		nepessegMax: kepernyo.nepessegMax, nepessegHasznalt: kepernyo.nepessegHasznalt,
+		nyers: kepernyo.nyers, koltseg: kepernyo.koltseg, ido: kepernyo.ido,
+		epitheto: kepernyo.epitheto, sorHossz: kepernyo.sorHossz,
+		sorMaxMp: TOBORZO_SOR_ORA * 3600
+	});
+	TOBORZO_MUNKA.okok.push(terv.ok);
+
+	var darab = 0;
+	for (var u in terv.egysegek) darab += terv.egysegek[u];
+	if (darab > 0 && toborzoIndit(TOBORZO_REF, terv.egysegek)) {
+		debug('szem4_TOBORZO_2toboroz',
+			`${TOBORZO_DATA} ${kepernyo.epulet}: ${JSON.stringify(terv.egysegek)} (${terv.nepesseg} tanyahely), megállt: ${terv.ok}`);
+		TOBORZO_STATE = 2;
+		return;
+	}
+	toborzoKovetkezoEpulet();
+} catch(e) { TOBORZO_HIBA++; console.error(e); debug('szem4_TOBORZO_2toboroz', e); }}
+
+function szem4_TOBORZO_motor() {
+	let nexttime = 1000;
+	try {
+		if (BOT || TOBORZO_PAUSE || USER_ACTIVITY) {
+			nexttime = 5000;
+		} else {
+			if (TOBORZO_HIBA > 30) {
+				naplo('szem4_TOBORZO_motor', `Valami baj van a toborzónál (${TOBORZO_STATE}. lépésben elakadt) - újraindítom... Oldal: ${pageUrl(TOBORZO_REF)}`);
+				if (TOBORZO_REF) TOBORZO_REF.close();
+				TOBORZO_STATE = 0;
+				TOBORZO_HIBA = 0;
+			}
+			switch (TOBORZO_STATE) {
+				case 0:
+					if (szem4_TOBORZO_1keres()) nexttime = 60000;
+					if (TOBORZO_REF && TOBORZO_REF.document) TOBORZO_REF.document.title = 'szem4/toborzó';
+					break;
+				case 1:
+					var kep = TOBORZO_KEPERNYO[TOBORZO_MUNKA.epuletek[TOBORZO_MUNKA.index]];
+					if (isPageLoaded(TOBORZO_REF, TOBORZO_DATA, 'screen=' + kep, ['#train_form'])) {
+						szem4_TOBORZO_2toboroz();
+					} else TOBORZO_HIBA++;
+					break;
+				case 2:
+					/* The order was submitted and the page is coming back. One tick
+					   of grace before the next building replaces it. */
+					toborzoKovetkezoEpulet();
+					break;
+			}
+		}
+	} catch(e) {
+		console.error(e);
+		debug('toborzo_motor', e);
+	}
+	try {
+		worker.postMessage({'id': 'toborzo', 'time': nexttime});
+	}catch(e){debug('toborzo_motor', 'Worker engine error: ' + e);setTimeout(function(){szem4_TOBORZO_motor();}, 1000);}
+}
+var TOBORZO_VILLINFO = {}, // villId: {ujraMs, birtokolt: {tipus: db}}
+TOBORZO_MUNKA = { epuletek: [], index: 0, okok: [], sorok: {} },
+TOBORZO_STATE = 0,
+TOBORZO_REF,
+TOBORZO_DATA,
+TOBORZO_HIBA = 0,
+TOBORZO_PAUSE = true;
+ujkieg('toborzo','Toborzó',`<tr><td>
+	<h2 align="center">Toborzó</h2>
+	Adj a faluknak szerepet, a szerep sablonja pedig megmondja, milyen arányban nőjön a seregük.
+	A számok arányok, nem darabszámok: a 70 bárd / 30 könnyűlovas ugyanazt jelenti, mint a 7000 / 3000.
+	Mindig azt az egységet toborozza, amelyik a legjobban le van maradva a saját arányától.<br>
+	Legfeljebb ${TOBORZO_SOR_ORA} órányi kiképzést tesz be egyszerre.
+	<form id="toborzo_form">
+		<table class="vis" id="toborzo_tabla">
+			<thead><tr>
+				<th onclick="rendez('szoveg', false, this, 'toborzo_tabla', 0)">Falu</th>
+				<th onclick="rendez('szam', false, this, 'toborzo_tabla', 1)">Pont</th>
+				<th onclick="rendez('tanya', false, this, 'toborzo_tabla', 2)">Tanya</th>
+				<th>Szerep</th>
+				<th onclick="rendez('datum', false, this, 'toborzo_tabla', 4)">Következő nézés</th>
+			</tr></thead>
+			<tbody>${toborzo_listAllVillages()}</tbody>
+		</table>
+		<br>
+		${toborzoSablonUrlap()}
+	</form>
+</td></tr>`);
+szem4_TOBORZO_motor();
 /* The four colours the interface shipped with before it had a palette.
 
    The style boxes are saved as soon as anything on the sound panel is, so an
@@ -6826,8 +7117,8 @@ function szem4_ADAT_loadNow(tipus) {try{
 			rebuildDOM_bef();
 			break;
 		case "toborzo":
-			/* No interface to rebuild yet -- the panel arrives with the module. */
 			SZEM4_TOBORZO = mergeToborzoState(dataObj);
+			rebuildDOM_toborzo();
 			break;
 		default: debug('szem4_ADAT_loadNow', `Nincs ilyen típus: ${tipus}`);
 	}
@@ -6879,6 +7170,10 @@ function szem4_ADAT_restart(tipus) {try{
 			break;
 		case 'toborzo':
 			SZEM4_TOBORZO = defaultToborzoState();
+			TOBORZO_VILLINFO = {};
+			/* rebuildDOM_toborzo only writes chosen values, so clear the roles first */
+			document.querySelectorAll('#toborzo_tabla select').forEach(el => { el.value = ''; });
+			rebuildDOM_toborzo();
 			break;
 		case 'bef':
 			SZEM4_BEF = defaultBefState();

@@ -12,7 +12,7 @@
 var EXPECTED_EXPORTS = [
 	'BotvedelemBe', 'BotvedelemKi', 'addTooltip_build', 'add_farmolando',
 	'add_farmolo', 'alert2', 'debug_urit', 'gyujto_setMaxOra',
-	'gyujto_setStrategia', 'gyujto_setVill',
+	'gyujto_setStrategia', 'gyujto_setVill', 'toborzo_setSablon', 'toborzo_setSzerep',
 	'hattercsere', 'hattertolor', 'learnCatapult', 'loadCloudDataIntoLocal',
 	'modosit_szam', 'naplo', 'nyit', 'onWallpChange',
 	'playSound', 'removeTooltip', 'rendez', 'restartKieg',
@@ -758,6 +758,7 @@ suite('The bot-protection alarm', function () {
 		w.EPIT_REF.closed = true;
 		w.GYUJTO_REF = { get closed() { throw new Error('elt\u00fbnt'); } };
 		w.BEF_REF = null;
+		w.TOBORZO_REF = null;
 		w.window = { open: function () { w.botAblak.closed = false; return w.botAblak; } };
 		/* One element, not a fresh stub per call: the question is whether
 		   anything ever actually paused the clip. */
@@ -2845,6 +2846,7 @@ function befWorld() {
 		BEF_FALU: 0,
 		BEF_HIBA: 0,
 		BEF_REF: null,
+		TOBORZO_REF: null,
 		AZON: 'X',
 		clock: 1788770000000,
 		opened: [], logged: [], allapotok: {},
@@ -3462,6 +3464,91 @@ suite('When the recruiter places an order', function () {
 		          api.toborzoIndit({ document: { getElementById: function () { return null; } } }, { spear: 1 })];
 	} catch (e) { vedett = 'threw: ' + e.message; }
 	eq(vedett, [false, false], 'no window and no form are refusals rather than crashes');
+});
+
+/* ------------------------------------------------------------------------ */
+/* The module: which buildings a village is visited for, when it is visited
+   again, and whether it is wired into everything a SZEM module has to be
+   wired into. */
+suite('How the recruiter schedules its visits', function () {
+	var api = sandbox(
+		{ TOBORZO_EPULET: { spear: 'barracks', sword: 'barracks', axe: 'barracks',
+		                    archer: 'barracks', spy: 'stable', light: 'stable',
+		                    marcher: 'stable', heavy: 'stable', ram: 'garage',
+		                    catapult: 'garage' } },
+		[sliceFrom(SZEM4_SRC, 'var TOBORZO_KEPERNYO', 'toborzoEpuletek')]
+	);
+	var MOST = 1000000000000;
+
+	/* --- only the buildings the template actually wants --- */
+	eq(api.toborzoEpuletek({ osszetetel: { axe: 70, light: 30, ram: 3 } }),
+	   ['barracks', 'stable', 'garage'], 'an attacking village is visited at all three buildings');
+	eq(api.toborzoEpuletek({ osszetetel: { spear: 45, sword: 45, heavy: 10 } }),
+	   ['barracks', 'stable'], 'a defensive one never opens the workshop');
+	eq(api.toborzoEpuletek({ osszetetel: { spear: 1, axe: 2 } }), ['barracks'],
+	   'and a village wanting only infantry costs a single page load');
+	eq(api.toborzoEpuletek({ osszetetel: { axe: 0 } }), [],
+	   'a unit set to nothing is not a reason to open its building');
+	eq(api.toborzoEpuletek(null), [], 'and no template is no visit at all');
+
+	/* --- when to come back --- */
+	var sorra = api.toborzoKovetkezoLatogatas(['sor'], { barracks: 3600, stable: 1800 }, MOST);
+	eq(sorra - MOST, 1800000,
+	   'a full queue is waited out, timed by the building that frees up first');
+
+	eq(api.toborzoKovetkezoLatogatas(['nyers'], {}, MOST) - MOST, 20 * 60 * 1000,
+	   'running out of resources is a short wait, since they refill on their own');
+	eq(api.toborzoKovetkezoLatogatas(['nepesseg'], {}, MOST) - MOST, 60 * 60 * 1000,
+	   'a full farm is a long one, since it needs a building raised first');
+	eq(api.toborzoKovetkezoLatogatas(['nincs_egyseg'], {}, MOST) - MOST, 60 * 60 * 1000,
+	   'as is a village that cannot train anything in its template yet');
+
+	/* Buildings stop for different reasons on the same visit: come back for the
+	   soonest of them, or the village sits idle while one building could work. */
+	eq(api.toborzoKovetkezoLatogatas(['sor', 'nyers'], { barracks: 4 * 3600 }, MOST) - MOST,
+	   20 * 60 * 1000,
+	   'with one building queued full and another short of resources, the sooner one decides');
+
+	/* --- the clamps, which is what stops a page-load storm --- */
+	eq(api.toborzoKovetkezoLatogatas(['sor'], { barracks: 30 }, MOST) - MOST, 10 * 60 * 1000,
+	   'a queue about to empty still does not reopen the village within ten minutes');
+	eq(api.toborzoKovetkezoLatogatas(['sor'], { barracks: 48 * 3600 }, MOST) - MOST, 8 * 3600 * 1000,
+	   'and a queue two days deep is looked at again inside eight hours, not forgotten');
+
+	/* --- wiring: a module that is not registered everywhere fails silently --- */
+	var forras = codeOnly(SZEM4_SRC);
+	[["case 'toborzo': szem4_TOBORZO_motor()", 'the worker ticks it'],
+	 ["'bef', 'toborzo']", 'it starts paused, like every other module'],
+	 ['case "toborzo": return TOBORZO_PAUSE', 'the pause switch can read it'],
+	 ['case "toborzo": TOBORZO_PAUSE = paused', 'and can stop it'],
+	 ["['TOBORZO_REF', TOBORZO_REF]", 'its window is swept for the bot check'],
+	 ['rebuildDOM_toborzo()', 'a load paints the templates back into the panel'],
+	 ["ujkieg('toborzo'", 'and it has a panel at all']
+	].forEach(function (par) {
+		ok(forras.indexOf(par[0]) !== -1, par[1]);
+	});
+
+	/* Every inline handler in the panel must be exported, or verifyInlineHandlers
+	   reports it at startup as a control calling something that does not exist. */
+	/* The panel's markup is generated by the two builders above the ujkieg call,
+	   so the handlers live there rather than in the template literal. */
+	var panel = SZEM4_SRC.slice(SZEM4_SRC.indexOf('function toborzo_listAllVillages'));
+	/* lastIndexOf: the motor's own retry names itself too, and that call sits
+	   above the panel. */
+	panel = panel.slice(0, panel.lastIndexOf('szem4_TOBORZO_motor();'));
+	/* Against the source's own export block, not the list at the top of this
+	   file -- comparing that list with itself passes while the export is gone. */
+	var exportBlokk = SZEM4_SRC.slice(SZEM4_SRC.indexOf('Object.assign(window, {'));
+	exportBlokk = exportBlokk.slice(0, exportBlokk.indexOf('});'));
+	['toborzo_setSzerep', 'toborzo_setSablon'].forEach(function (nev) {
+		ok(panel.indexOf(nev + '(') !== -1 && exportBlokk.indexOf(nev) !== -1,
+		   'the panel calls ' + nev + ' and the script exports it');
+	});
+
+	/* The on-screen text has to say what the numbers mean, or the first thing
+	   he does with the editor is type unit counts into a ratio. */
+	ok(panel.indexOf('arányok, nem darabszámok') !== -1,
+	   'the panel says outright that the template numbers are ratios, not counts');
 });
 
 /* ------------------------------------------------------------------------ */
