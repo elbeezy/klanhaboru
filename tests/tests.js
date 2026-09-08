@@ -3206,6 +3206,17 @@ suite('What the recruiter puts in the queue', function () {
 	   'an army at its share of the farm stops there, leaving the rest for buildings');
 	eq(seregHatar.ok, 'nepesseg', 'and says so');
 
+	/* --- what the queue will look like once the order is in --- */
+	/* The module books the next visit from this, not from the queue it found:
+	   coming back against the old length means arriving while the building is
+	   still busy. */
+	var sorral = api.toborzoTerv(sablon, {},
+		keret({ nepessegHasznalt: 0, nyers: [3000, 3000, 3000], sorHossz: { barracks: 600, stable: 0, garage: 0 } }));
+	eq(sorral.sorok.barracks, 600 + sorral.egysegek.axe * 120,
+	   'the plan reports the queue as it will stand, the order added to what was already there');
+	ok(sorral.sorok.stable === sorral.egysegek.light * 300,
+	   'for every building it put work into');
+
 	/* --- resources --- */
 	var szegeny = api.toborzoTerv(sablon, {}, keret({ nepessegHasznalt: 0, nyers: [600, 300, 400] }));
 	eq(szegeny.ok, 'nyers', 'a village out of resources says that is what stopped it');
@@ -3523,6 +3534,7 @@ suite('How the recruiter schedules its visits', function () {
 	 ['case "toborzo": TOBORZO_PAUSE = paused', 'and can stop it'],
 	 ["['TOBORZO_REF', TOBORZO_REF]", 'its window is swept for the bot check'],
 	 ['rebuildDOM_toborzo()', 'a load paints the templates back into the panel'],
+	 ['terv.sorok || kepernyo.sorHossz', 'the next visit is booked from the queue the order leaves behind'],
 	 ["ujkieg('toborzo'", 'and it has a panel at all']
 	].forEach(function (par) {
 		ok(forras.indexOf(par[0]) !== -1, par[1]);

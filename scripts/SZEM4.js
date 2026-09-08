@@ -3168,7 +3168,6 @@ function szem4_TOBORZO_2toboroz() {try{
 
 	var info = TOBORZO_VILLINFO[TOBORZO_DATA];
 	for (var tipus in kepernyo.birtokolt) info.birtokolt[tipus] = kepernyo.birtokolt[tipus];
-	for (var ep in kepernyo.sorHossz) TOBORZO_MUNKA.sorok[ep] = kepernyo.sorHossz[ep];
 
 	var sablon = SZEM4_TOBORZO.sablonok[SZEM4_TOBORZO.falvak[TOBORZO_DATA]];
 	var terv = toborzoTerv(sablon, info.birtokolt, {
@@ -3178,6 +3177,12 @@ function szem4_TOBORZO_2toboroz() {try{
 		sorMaxMp: TOBORZO_SOR_ORA * 3600
 	});
 	TOBORZO_MUNKA.okok.push(terv.ok);
+	/* The queue as it will stand once this order is in, not as it was found.
+	   Booking the next visit against the queue before the order went in brings
+	   the recruiter back while the building is still busy, and every one of
+	   those visits is a page load that can only find the same full queue. */
+	var utana = terv.sorok || kepernyo.sorHossz;
+	for (var ep in utana) TOBORZO_MUNKA.sorok[ep] = utana[ep];
 
 	var darab = 0;
 	for (var u in terv.egysegek) darab += terv.egysegek[u];
