@@ -5618,6 +5618,74 @@ function scavengeTerv(opciok, teherPool, hataridoMp, maxMp) {
 	if (!tetelek.length) return null;
 	return { mp: mp, tetelek: tetelek, ora: scavengeTervOra(tetelek, mp) };
 }
+
+/* Which units the gatherer is allowed to spend.
+
+   Cavalry and scouts are deliberately absent. The farm engine's armies are
+   light cavalry, so a gatherer helping itself to them would quietly empty the
+   farm -- the two modules would fight over the same troops and the farm would
+   lose, silently, because it only ever reads what is left. Spies carry nothing
+   at all, so they would be locked away for no haul whatsoever.
+
+   This is also exactly what his account already sends today (spear, sword and
+   axe), so nothing that was working changes. */
+var GYUJTO_EGYSEGEK = ['spear', 'sword', 'axe', 'archer'];
+
+/* The game refuses a squad smaller than this, in population -- his own screen
+   states it as candidate_squad.min_pop_to_send. */
+var GYUJTO_MIN_NEPESSEG = 10;
+
+/* Turn a carry target into actual troops.
+
+   A run's length depends only on total carry, never on how many bodies carry
+   it, so every mix that reaches the target behaves identically and the order
+   is free to be chosen for another reason: spending the units with the most
+   carry per population first reaches the target with the fewest troops locked
+   away, leaving the most at home.
+
+   Filling never exceeds the target, so a squad lands at or before the moment
+   it was aimed at and never holds the others up. Landing early is the cheap
+   direction: that squad is simply re-aligned on the next visit, whereas
+   landing late drags the whole group's next round out with it.
+
+   The one exception is the minimum: the game refuses a squad under 10
+   population, so a target too small to reach it is topped up rather than
+   abandoned -- that is the "send the shortest run anyway" case, where the
+   window is under the floor and the point is to keep the troops working. If
+   even the top-up cannot be met there is genuinely nothing to send. */
+function scavengeEgysegek(teherCel, elerheto, tipusok, minNepesseg) {
+	if (!elerheto || !isFinite(teherCel) || teherCel < 0) return null;
+	var minNep = isFinite(minNepesseg) && minNepesseg > 0 ? minNepesseg : GYUJTO_MIN_NEPESSEG;
+	var lista = (tipusok || GYUJTO_EGYSEGEK).filter(function (t) {
+		return TEHER[t] > 0 && TANYA[t] > 0;
+	});
+	lista.sort(function (a, b) {
+		return (TEHER[b] / TANYA[b]) - (TEHER[a] / TANYA[a]);
+	});
+	function van(t) { return Math.max(0, Math.floor(Number(elerheto[t]) || 0)); }
+
+	var egysegek = {}, teher = 0, nepesseg = 0, kell = teherCel, i;
+	for (i = 0; i < lista.length; i++) {
+		var tipus = lista[i], keszlet = van(tipus);
+		if (!keszlet || kell < TEHER[tipus]) continue;
+		var db = Math.min(keszlet, Math.floor(kell / TEHER[tipus]));
+		if (db <= 0) continue;
+		egysegek[tipus] = db;
+		teher += db * TEHER[tipus];
+		nepesseg += db * TANYA[tipus];
+		kell -= db * TEHER[tipus];
+	}
+	for (i = 0; i < lista.length && nepesseg < minNep; i++) {
+		var t2 = lista[i], keszlet2 = van(t2);
+		while (nepesseg < minNep && (egysegek[t2] || 0) < keszlet2) {
+			egysegek[t2] = (egysegek[t2] || 0) + 1;
+			teher += TEHER[t2];
+			nepesseg += TANYA[t2];
+		}
+	}
+	if (nepesseg < minNep) return null;
+	return { egysegek: egysegek, teher: teher, nepesseg: nepesseg };
+}
 function szem4_GYUJTO_1keres() {try{
 	/* Appointments are booked on the real clock now (see scavengeReturnsMs),
 	   so they have to be read against the real clock too. */

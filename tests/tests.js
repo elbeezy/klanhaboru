@@ -3295,6 +3295,70 @@ suite('When the gatherer plans a round of scavenging', function () {
 });
 
 /* ------------------------------------------------------------------------ */
+/* Turning a carry target into troops that can actually be typed into the send
+   form. The carry and population tables are sliced out of the source rather
+   than retyped, on the same reasoning as the farm's population suite: a squad
+   costed against a made-up table is costed against nothing. */
+suite('When the gatherer picks the troops for a squad', function () {
+	function tabla(nev) {
+		var kezd = SZEM4_SRC.indexOf(nev + ' = {');
+		return 'var ' + SZEM4_SRC.slice(kezd, matchBraces(SZEM4_SRC, kezd)) + ';';
+	}
+	var api = sandbox({}, [
+		tabla('TEHER'), tabla('TANYA'),
+		sliceFrom(SZEM4_SRC, 'var GYUJTO_EGYSEGEK', 'scavengeEgysegek')
+	]);
+
+	var otthon = { spear: 52, sword: 51, axe: 250 };
+
+	/* --- the ordinary case: reach the target, never pass it --- */
+	var resz = api.scavengeEgysegek(1522, { spear: 52, sword: 51 });
+	eq(resz.egysegek, { spear: 52, sword: 14 },
+	   'the units carrying most per head go first, so fewest troops are locked away');
+	eq(resz.teher, 1510, 'and the squad stops under the target rather than overshooting it');
+	ok(resz.teher <= 1522, 'so it lands at or before the moment it was aimed at, never after');
+
+	eq(api.scavengeEgysegek(4565, otthon).egysegek, otthon,
+	   'a target that needs everything he has sends exactly everything he has');
+	eq(api.scavengeEgysegek(4565, otthon).nepesseg, 353, 'and reports what that costs in population');
+
+	eq(api.scavengeEgysegek(400, { spear: 10, sword: 10, axe: 10 }).egysegek,
+	   { spear: 10, sword: 10 },
+	   'the cheapest carriers are left at home once the target is met');
+
+	eq(api.scavengeEgysegek(1010, { spear: 100 }).teher, 1000,
+	   'a target that no whole number of units hits exactly is undershot, not rounded up');
+
+	/* --- the minimum the game will accept --- */
+	/* Guarded: without the top-up there is no squad here at all, and reading
+	   through null would abandon the suite rather than name these two. */
+	var parany = api.scavengeEgysegek(0, otthon);
+	ok(parany && parany.nepesseg === 10,
+	   'a target too small to be legal is topped up to the smallest squad allowed');
+	eq(parany ? parany.egysegek : 'nincs csapat', { spear: 10 },
+	   'rather than refused, so the troops keep working');
+	ok(api.scavengeEgysegek(100, { spear: 3 }) === null,
+	   'but with too few troops for even that, there is nothing to send');
+
+	/* --- what it must never touch, and this is the dangerous one --- */
+	ok(api.scavengeEgysegek(1000, { light: 100 }) === null,
+	   'the farm engine cavalry is never taken, even when it is all that is home');
+	ok(api.scavengeEgysegek(1000, { spy: 50 }) === null,
+	   'nor are scouts, which would be locked away carrying nothing');
+	var vegyes = api.scavengeEgysegek(1000, { spear: 20, light: 100, spy: 50 });
+	eq(vegyes.egysegek, { spear: 20 }, 'and a mixed village still only spends the infantry');
+
+	/* --- caller may narrow it further --- */
+	eq(api.scavengeEgysegek(100, { spear: 50, axe: 50 }, ['axe']).egysegek, { axe: 10 },
+	   'a named list of types is honoured over the default');
+
+	/* --- total: this is the last step before troops actually move --- */
+	ok(api.scavengeEgysegek(100, null) === null, 'no troop counts, no squad');
+	ok(api.scavengeEgysegek(-1, otthon) === null, 'no squad for a negative target');
+	ok(api.scavengeEgysegek(NaN, otthon) === null, 'and none for one that is not a number');
+});
+
+/* ------------------------------------------------------------------------ */
 /* How full the armies come home is measured from the reports, not guessed at
    on the way out. What is still worth counting here is how many attempts
    became attacks, and why the rest did not -- a plan the minimum-army floor
