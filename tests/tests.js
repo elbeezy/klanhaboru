@@ -3217,6 +3217,34 @@ suite('What the recruiter puts in the queue', function () {
 	ok(sorral.sorok.stable === sorral.egysegek.light * 300,
 	   'for every building it put work into');
 
+	/* --- keeping every building working --- */
+	/* This village is long on cavalry, so the shape says recruit axes and
+	   nothing else. Its stable is empty, and an idle stable-hour cannot be got
+	   back, whereas the ratio can be corrected on any later visit. */
+	/* The cavalry lead is big enough, and the population budget small enough,
+	   that axes can never catch up inside this round -- so any cavalry at all
+	   is the floor's doing and not the ratio's. The queue cap is lifted for the
+	   same reason: a full barracks would hand the stable work by itself. */
+	var TAG = { nepessegHasznalt: 0, sorMaxMp: 100 * 3600 };
+	var allo = api.toborzoTerv(sablon, { light: 300 },
+		keret({ nepessegHasznalt: 0, sorMaxMp: 100 * 3600, sorPadloMp: 2 * 3600 }));
+	ok(allo.egysegek.light > 0,
+	   'an idle building is given work even when its unit is ahead of its share');
+	ok(allo.egysegek.axe > allo.egysegek.light,
+	   'while the unit that is actually behind still takes most of the round');
+
+	/* And exactly the floor's worth: the stable comes out at two hours to the
+	   second, the rest of the round going to the unit that is behind. The floor
+	   is there to stop a building idling, not to give it a share of its own. */
+	eq(allo.sorok.stable, 2 * 3600,
+	   'the idle building is filled to the floor and not one unit past it');
+
+	/* And with no floor set, the template alone decides -- the behaviour every
+	   other case in this suite is written against. */
+	var padloNelkul = api.toborzoTerv(sablon, { light: 300 }, keret(TAG));
+	eq(padloNelkul.egysegek.light, undefined,
+	   'turning the floor off leaves the shape in sole charge');
+
 	/* --- resources --- */
 	var szegeny = api.toborzoTerv(sablon, {}, keret({ nepessegHasznalt: 0, nyers: [600, 300, 400] }));
 	eq(szegeny.ok, 'nyers', 'a village out of resources says that is what stopped it');
@@ -3550,6 +3578,7 @@ suite('How the recruiter schedules its visits', function () {
 	 ['ido: info.ido', 'and timed from all of them'],
 	 ['epitheto: info.epitheto', 'and knows every unit the village can train, not only this building\'s'],
 	 ['sorHossz: info.sorHossz', 'and every queue, so a full building elsewhere is taken into account'],
+	 ['sorPadloMp: TOBORZO_SOR_PADLO_ORA * 3600', 'the engine asks for every building to be kept working'],
 	 ['toborzoEpuletek(sablon, info.szabadMs, most)', 'a visit leaves out the buildings that are still full'],
 	 ['info.szabadMs[ep] = most + TOBORZO_MUNKA.sorok[ep] * 1000', 'and each visit records when they come free'],
 	 ["if (TOBORZO_EPULET[u] !== kepernyo.epulet) continue", 'while only this building\'s share of it is ordered'],

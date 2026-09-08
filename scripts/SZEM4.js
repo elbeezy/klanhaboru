@@ -2762,6 +2762,7 @@ function toborzoTerv(sablon, birtokolt, allapot) {
 	var koltseg = allapot.koltseg || {}, ido = allapot.ido || {};
 	var epitheto = allapot.epitheto || {};
 	var sorMax = allapot.sorMaxMp > 0 ? allapot.sorMaxMp : Infinity;
+	var padlo = allapot.sorPadloMp > 0 ? Math.min(allapot.sorPadloMp, sorMax) : 0;
 
 	/* Two ceilings, and the tighter one wins: the farm cannot be exceeded at
 	   all, and the army may only have the share of it the template allows --
@@ -2806,7 +2807,25 @@ function toborzoTerv(sablon, birtokolt, allapot) {
 			break;
 		}
 
-		var tipus = toborzoKovetkezo(sablon.osszetetel, hozzaadva, engedett);
+		/* Keep every building working before shaping the army.
+
+		   Training time is the one thing that cannot be stored: resources and
+		   population keep, but an hour of an idle stable is gone for good. So a
+		   building with almost nothing queued takes its most overdue unit even
+		   when that unit is ahead of its share -- the ratio can be corrected on
+		   a later visit, the lost hour cannot.
+
+		   It only bites on a building that would otherwise get nothing: the
+		   queue being measured includes what this plan has already given it, so
+		   once a building is working the template decides the rest. */
+		var tipus = null;
+		if (padlo > 0) {
+			var ehes = engedett.filter(function (t) {
+				return (sorok[TOBORZO_EPULET[t]] || 0) < padlo;
+			});
+			if (ehes.length) tipus = toborzoKovetkezo(sablon.osszetetel, hozzaadva, ehes);
+		}
+		if (!tipus) tipus = toborzoKovetkezo(sablon.osszetetel, hozzaadva, engedett);
 		if (!tipus) { ok = 'nyers'; break; }
 
 		egysegek[tipus] = (egysegek[tipus] || 0) + 1;
@@ -2980,6 +2999,12 @@ var TOBORZO_KEPERNYO = { barracks: 'train', stable: 'stable', garage: 'garage' }
 /* How deep the queue may be filled, in hours. Deeper means fewer visits and
    fewer page loads; it also freezes resources and decisions for that long. */
 var TOBORZO_SOR_ORA = 8;
+
+/* And how much work every building should have before the template's ratios
+   get a say. Training time cannot be stored, so a building left idle to
+   protect a ratio has thrown away something the ratio can be given back
+   later. Set this to 0 to let the template decide everything. */
+var TOBORZO_SOR_PADLO_ORA = 2;
 
 /* Waits between visits. */
 var TOBORZO_PADLO_MS = 10 * 60 * 1000,   // never come back sooner than this
@@ -3210,7 +3235,7 @@ function szem4_TOBORZO_2toboroz() {try{
 		nepessegMax: kepernyo.nepessegMax, nepessegHasznalt: kepernyo.nepessegHasznalt,
 		nyers: kepernyo.nyers, koltseg: info.koltseg, ido: info.ido,
 		epitheto: info.epitheto, sorHossz: info.sorHossz,
-		sorMaxMp: TOBORZO_SOR_ORA * 3600
+		sorMaxMp: TOBORZO_SOR_ORA * 3600, sorPadloMp: TOBORZO_SOR_PADLO_ORA * 3600
 	});
 	TOBORZO_MUNKA.okok.push(terv.ok);
 	/* Only this building's part of the plan is ordered here. The rest is what
@@ -3294,7 +3319,8 @@ ujkieg('toborzo','Toborzó',`<tr><td>
 	Adj a faluknak szerepet, a szerep sablonja pedig megmondja, milyen arányban nőjön a seregük.
 	A számok arányok, nem darabszámok: a 70 bárd / 30 könnyűlovas ugyanazt jelenti, mint a 7000 / 3000.
 	Mindig azt az egységet toborozza, amelyik a legjobban le van maradva a saját arányától.<br>
-	Legfeljebb ${TOBORZO_SOR_ORA} órányi kiképzést tesz be egyszerre.
+	Legfeljebb ${TOBORZO_SOR_ORA} órányi kiképzést tesz be egyszerre, és minden épületnek ad legalább ${TOBORZO_SOR_PADLO_ORA} órányi munkát,
+	mielőtt az arányokra figyelne: az álló épület ideje elveszik, az arány viszont később is behozható.
 	<form id="toborzo_form">
 		<table class="vis" id="toborzo_tabla">
 			<thead><tr>
