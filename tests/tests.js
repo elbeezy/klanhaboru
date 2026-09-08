@@ -3390,6 +3390,81 @@ suite('What a recruit screen tells the recruiter', function () {
 });
 
 /* ------------------------------------------------------------------------ */
+/* Placing the order -- the line that spends his resources.
+
+   The form carries a hidden request token beside the unit boxes, and a submit
+   input with no name or id of its own. Both come from his own page. */
+suite('When the recruiter places an order', function () {
+	var naplozott = [];
+	var api = sandbox(
+		{ TOBORZO_EPULET: { spear: 'barracks', sword: 'barracks', axe: 'barracks',
+		                    archer: 'barracks', light: 'stable', ram: 'garage' },
+		  debug: function (hol, mit) { naplozott.push(hol + ': ' + mit); },
+		  pageUrl: function () { return 'screen=train'; } },
+		[sliceFn(SZEM4_SRC, 'toborzoUrlapKitolt'), sliceFn(SZEM4_SRC, 'toborzoIndit')]
+	);
+
+	function ablak(opts) {
+		opts = opts || {};
+		var kattintott = [];
+		var form = document.createElement('form');
+		form.id = 'train_form';
+		(opts.egysegek || ['spear', 'sword', 'axe']).forEach(function (nev) {
+			var i = document.createElement('input');
+			i.type = 'text'; i.name = nev; i.id = nev + '_0'; i.value = opts.elozo || '';
+			form.appendChild(i);
+		});
+		/* The request token, exactly as his page has it. */
+		var rejtett = document.createElement('input');
+		rejtett.type = 'hidden'; rejtett.name = 'h'; rejtett.value = 'abc123';
+		form.appendChild(rejtett);
+		if (!opts.nincsGomb) {
+			var gomb = document.createElement('input');
+			gomb.type = 'submit';
+			gomb.click = function () { kattintott.push(true); };
+			form.appendChild(gomb);
+		}
+		return {
+			document: { getElementById: function (id) { return id === 'train_form' ? form : null; } },
+			form: form, kattintott: kattintott,
+			ertek: function (nev) { return form.querySelector('[name="' + nev + '"]').value; }
+		};
+	}
+
+	var w = ablak();
+	ok(api.toborzoIndit(w, { spear: 12, axe: 5 }) === true, 'a planned order is placed');
+	eq(w.kattintott.length, 1, 'once');
+	eq(w.ertek('spear'), '12', 'with the numbers the plan asked for');
+	eq(w.ertek('axe'), '5', 'for every unit in it');
+	eq(w.ertek('sword'), '0',
+	   'and a zero for the units it did not ask for, so nothing left in a box rides along');
+	eq(w.ertek('h'), 'abc123',
+	   'while the form request token is left alone -- writing to it would break the order');
+
+	/* --- the refusals, each of which must leave the resources unspent --- */
+	var ures = ablak();
+	ok(api.toborzoIndit(ures, {}) === false, 'an empty plan is not submitted');
+	eq(ures.kattintott, [], 'and nothing is clicked');
+	ok((naplozott[naplozott.length - 1] || '').indexOf('egyetlen egység sem') !== -1,
+	   'the refusal says so rather than looking like a village with nothing to do');
+
+	var nincsGomb = ablak({ nincsGomb: true });
+	ok(api.toborzoIndit(nincsGomb, { spear: 5 }) === false, 'a form with no submit control is refused');
+	eq(nincsGomb.ertek('spear'), '',
+	   'and the boxes are left untouched, since the order was never going to be placed');
+	ok((naplozott[naplozott.length - 1] || '').indexOf('nincs indító gomb') !== -1,
+	   'and that refusal names itself too');
+
+	/* --- total: it runs on a game page that may be reloading under it --- */
+	var vedett;
+	try {
+		vedett = [api.toborzoIndit(null, { spear: 1 }),
+		          api.toborzoIndit({ document: { getElementById: function () { return null; } } }, { spear: 1 })];
+	} catch (e) { vedett = 'threw: ' + e.message; }
+	eq(vedett, [false, false], 'no window and no form are refusals rather than crashes');
+});
+
+/* ------------------------------------------------------------------------ */
 /* Auto befejező is on every other persistence path (saveNow, loadNow, restart,
    the #adat_opts row) but was missing from the two cloud sync functions, so a
    fresh machine restoring from the cloud lost which villages had it enabled. */

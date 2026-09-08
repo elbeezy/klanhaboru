@@ -2914,6 +2914,58 @@ function toborzoKepernyo(win) {
 		nyers: [Number(falu.wood) || 0, Number(falu.stone) || 0, Number(falu.iron) || 0]
 	};
 }
+
+/* Write a plan into the recruit form.
+
+   Only the boxes that name a unit are touched. The form also carries a hidden
+   field of its own -- `h`, the request token -- and writing to that would break
+   the submission rather than change a number.
+
+   Every unit box on the page is written, the unused ones to zero, so the order
+   that goes out is exactly the plan and never the plan plus whatever was left
+   in a box. Returns how many units were written, so a caller can refuse to
+   submit an empty form. */
+function toborzoUrlapKitolt(win, egysegek) {
+	var form = win && win.document && win.document.getElementById('train_form');
+	if (!form) return 0;
+	var mezok = form.querySelectorAll('input[type="text"][name]'), ossz = 0;
+	for (var i = 0; i < mezok.length; i++) {
+		var nev = mezok[i].name;
+		if (!TOBORZO_EPULET[nev]) continue;
+		var db = Math.max(0, Math.floor(Number(egysegek && egysegek[nev]) || 0));
+		mezok[i].value = db;
+		ossz += db;
+	}
+	return ossz;
+}
+
+/* Order the units. This is the line that spends his resources.
+
+   The submit control is found as the form's own submit input, which is what
+   his page actually carries -- the script this replaces reaches for a
+   `btn-recruit` class instead, and a class name is the kind of thing that
+   changes with a redesign while `type="submit"` cannot.
+
+   The button is found before the boxes are filled, so a send that cannot
+   happen leaves no numbers behind in the form. Every refusal says so: a
+   recruiter that plans an order and then silently does not place it looks
+   exactly like one with nothing to do, which is the fault that cost a live
+   test on the gatherer this morning. */
+function toborzoIndit(win, egysegek) {
+	var form = win && win.document && win.document.getElementById('train_form');
+	if (!form) return false;
+	var gomb = form.querySelector('input[type="submit"]');
+	if (!gomb) {
+		debug('toborzoIndit', `A kiképzési űrlapon nincs indító gomb, ezért nem toborzok. Oldal: ${pageUrl(win)}`);
+		return false;
+	}
+	if (!toborzoUrlapKitolt(win, egysegek)) {
+		debug('toborzoIndit', `A tervből egyetlen egység sem került az űrlapra, ezért nem toborzok. Oldal: ${pageUrl(win)}`);
+		return false;
+	}
+	gomb.click();
+	return true;
+}
 /* The four colours the interface shipped with before it had a palette.
 
    The style boxes are saved as soon as anything on the sound panel is, so an
