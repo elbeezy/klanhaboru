@@ -3522,11 +3522,15 @@ suite('When the gatherer sends a squad out', function () {
 		var irt = [], esemenyek = [], kattintott = [];
 		var mezok = (beallit.mezok || ['spear', 'sword', 'axe', 'light', 'spy'])
 			.map(function (nev) { return { name: nev }; });
-		var gombok = (beallit.gombok || [[], [], [], []]).map(function (osztalyok, i) {
-			return {
+		/* The real screen, read off his account: a card per option, and a card
+		   with nothing to start carries NO button at all -- four cards, three
+		   buttons. `null` below is such a card. */
+		var kartyak = (beallit.gombok || [[], [], [], null]).map(function (osztalyok, i) {
+			var gomb = osztalyok && {
 				classList: { contains: function (c) { return osztalyok.indexOf(c) !== -1; } },
 				click: function () { kattintott.push(i + 1); }
 			};
+			return { querySelector: function () { return gomb || null; } };
 		});
 		function $(mi) {
 			if (typeof mi === 'string') {
@@ -3539,15 +3543,25 @@ suite('When the gatherer sends a squad out', function () {
 		}
 		return {
 			$: beallit.nincsJquery ? null : $,
-			document: { querySelectorAll: function () { return gombok; } },
+			document: { querySelectorAll: function () { return kartyak; } },
 			irt: irt, esemenyek: esemenyek, kattintott: kattintott
 		};
 	}
 
 	var w = ablak();
 	var ment = api.scavengeIndit(w, 3, { spear: 52, axe: 250 }, 4);
-	ok(ment === true, 'a squad the plan asked for is sent');
+	ok(ment === true,
+	   'a squad is sent even though one option carries no button -- the live case that sent nothing');
 	eq(w.kattintott, [3], 'and it is the third option that starts, not whichever button came first');
+
+	/* An option with no button of its own is refused, never answered with some
+	   other option's button. This is what breaks once squads are out: an option
+	   already gathering has nothing to start. */
+	var zart = ablak();
+	ok(api.scavengeIndit(zart, 4, { spear: 10 }, 4) === false,
+	   'an option with no button of its own is left alone');
+	eq(zart.kattintott, [], 'and no other option is started in its place');
+	eq(zart.irt, [], 'nor are troops typed in for a send that cannot happen');
 
 	/* The boxes are shared between the options, so anything left in them from
 	   the last send goes out with this one unless every box is written. */
@@ -3612,9 +3626,14 @@ suite('A whole gathering visit under the aligned strategy', function () {
 
 		var irt = [], kattintott = [], naplozott = [], mezok =
 			['spear', 'sword', 'axe', 'light'].map(function (n) { return { name: n }; });
-		var gombok = [1, 2, 3, 4].map(function (id) {
-			return { classList: { contains: function () { return false; } },
-			         click: function () { kattintott.push(id); } };
+		/* Mirrors his real screen: a card per option, and the locked fourth
+		   carries no button at all. Modelling four buttons here is what let the
+		   first version of this feature pass every test and send nothing. */
+		var kartyak = [1, 2, 3, 4].map(function (id) {
+			var gomb = opciok[id].is_locked ? null
+				: { classList: { contains: function () { return false; } },
+				    click: function () { kattintott.push(id); } };
+			return { querySelector: function () { return gomb; } };
 		});
 		function $(mi) {
 			if (typeof mi === 'string') {
@@ -3624,8 +3643,8 @@ suite('A whole gathering visit under the aligned strategy', function () {
 			         trigger: function () { return this; } };
 		}
 		var ablak = {
-			$: beallit.nincsKepernyo ? $ : $,
-			document: { querySelectorAll: function () { return gombok; } }
+			$: $,
+			document: { querySelectorAll: function () { return kartyak; } }
 		};
 		if (!beallit.nincsKepernyo) {
 			ablak.ScavengeScreen = { village: {

@@ -5796,25 +5796,30 @@ function scavengeUrlapKitolt(win, egysegek) {
 
 /* Send one option's squad. This is the line where troops actually leave.
 
-   The button for option N is the Nth on the screen. That is not a guess: it is
-   how the game's own bundled helper addresses them ($('.free_send_button')
-   [optionId - 1]). The same script also derives the id from the option
-   portrait's image filename, which is deliberately NOT copied -- a filename is
-   exactly what broke the build queue reader when the game moved its art to
-   .webp, whereas position has no format to change.
+   Option N is the Nth card on the screen, and its button is found INSIDE that
+   card. The game's own bundled helper instead takes the Nth send button of the
+   whole page, and that is wrong: a card without a usable button renders no
+   button at all -- read off his live screen, where four cards carry three
+   buttons because the fourth option is not unlocked -- so the buttons stop
+   lining up with the options as soon as any option is missing one. That is not
+   a rare case, it is the normal one here: an option with a squad out is an
+   option that cannot be started.
 
-   Nothing is clicked unless the position can still be trusted: if the screen
-   is not showing a button per option, the count disagrees and the send is
-   refused rather than aimed at whichever option happens to sit there. The
-   game's own .btn-disabled marks a button that cannot be used, and the form is
-   only filled once the button has passed both tests, so a refused send never
-   leaves troops sitting in the boxes. */
+   The card list is what gets checked against the option count, since the game
+   draws a card for every option including the ones that cannot be sent on.
+   Reading the id off the option portrait's image filename, which the helper
+   also does, is deliberately avoided: a filename is exactly what broke the
+   build queue reader when the game moved its art to .webp.
+
+   The form is only filled once the button has been found and is usable, so a
+   refused send never leaves troops sitting in the boxes. */
 function scavengeIndit(win, opcioId, egysegek, opcioSzam) {
-	var gombok = win && win.document
-	          && win.document.querySelectorAll('#scavenge_screen .free_send_button');
-	if (!gombok || !gombok.length) return false;
-	if (isFinite(opcioSzam) && opcioSzam > 0 && gombok.length !== opcioSzam) return false;
-	var gomb = gombok[opcioId - 1];
+	var kartyak = win && win.document
+	           && win.document.querySelectorAll('#scavenge_screen .scavenge-option');
+	if (!kartyak || !kartyak.length) return false;
+	if (isFinite(opcioSzam) && opcioSzam > 0 && kartyak.length !== opcioSzam) return false;
+	var kartya = kartyak[opcioId - 1];
+	var gomb = kartya && kartya.querySelector('.free_send_button');
 	if (!gomb || (gomb.classList && gomb.classList.contains('btn-disabled'))) return false;
 	if (!scavengeUrlapKitolt(win, egysegek)) return false;
 	gomb.click();
