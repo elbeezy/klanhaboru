@@ -3162,33 +3162,65 @@ function toborzoKovetkezoEpulet() {
    only lists its own units and a plan made from one alone would compare a unit
    against nothing -- the barracks would never know the village is already long
    on cavalry. */
+/* Merge what a screen just said into what earlier screens said. */
+function toborzoOsszefuz(regi, uj) {
+	var ossz = {};
+	for (var a in (regi || {})) ossz[a] = regi[a];
+	for (var b in (uj || {})) ossz[b] = uj[b];
+	return ossz;
+}
+
 function szem4_TOBORZO_2toboroz() {try{
 	var kepernyo = toborzoKepernyo(TOBORZO_REF);
 	if (!kepernyo) { TOBORZO_HIBA++; return; }
 
 	var info = TOBORZO_VILLINFO[TOBORZO_DATA];
-	for (var tipus in kepernyo.birtokolt) info.birtokolt[tipus] = kepernyo.birtokolt[tipus];
+	/* Everything this screen states is remembered, not just the troop counts.
+	   A screen lists one building's units, so planning from it alone lets each
+	   building fill itself to the cap independently and the template's shape is
+	   only ever honoured inside a building -- the barracks would recruit axes
+	   at full speed while the army starves for the cavalry it is short of.
+	   With the other buildings' prices and times remembered, the plan is made
+	   for the whole village and only this building's share of it is ordered. */
+	info.birtokolt = toborzoOsszefuz(info.birtokolt, kepernyo.birtokolt);
+	info.koltseg   = toborzoOsszefuz(info.koltseg, kepernyo.koltseg);
+	info.ido       = toborzoOsszefuz(info.ido, kepernyo.ido);
+	info.epitheto  = toborzoOsszefuz(info.epitheto, kepernyo.epitheto);
+	info.sorHossz  = toborzoOsszefuz(info.sorHossz, kepernyo.sorHossz);
 
 	var sablon = SZEM4_TOBORZO.sablonok[SZEM4_TOBORZO.falvak[TOBORZO_DATA]];
 	var terv = toborzoTerv(sablon, info.birtokolt, {
 		nepessegMax: kepernyo.nepessegMax, nepessegHasznalt: kepernyo.nepessegHasznalt,
-		nyers: kepernyo.nyers, koltseg: kepernyo.koltseg, ido: kepernyo.ido,
-		epitheto: kepernyo.epitheto, sorHossz: kepernyo.sorHossz,
+		nyers: kepernyo.nyers, koltseg: info.koltseg, ido: info.ido,
+		epitheto: info.epitheto, sorHossz: info.sorHossz,
 		sorMaxMp: TOBORZO_SOR_ORA * 3600
 	});
 	TOBORZO_MUNKA.okok.push(terv.ok);
-	/* The queue as it will stand once this order is in, not as it was found.
-	   Booking the next visit against the queue before the order went in brings
-	   the recruiter back while the building is still busy, and every one of
-	   those visits is a page load that can only find the same full queue. */
-	var utana = terv.sorok || kepernyo.sorHossz;
-	for (var ep in utana) TOBORZO_MUNKA.sorok[ep] = utana[ep];
+	/* Only this building's part of the plan is ordered here. The rest is what
+	   keeps the shares honest across the village; each other building places
+	   its own share when its screen is opened, replanned against the resources
+	   and population this order has by then spent. */
+	var ezek = {}, darab = 0;
+	for (var u in terv.egysegek) {
+		if (TOBORZO_EPULET[u] !== kepernyo.epulet) continue;
+		ezek[u] = terv.egysegek[u];
+		darab += terv.egysegek[u];
+	}
 
-	var darab = 0;
-	for (var u in terv.egysegek) darab += terv.egysegek[u];
-	if (darab > 0 && toborzoIndit(TOBORZO_REF, terv.egysegek)) {
+	/* The queue as it will stand once this order is in, not as it was found --
+	   and only for the building actually being ordered on, since the plan's
+	   figures for the others were never submitted. Booking against the queue
+	   before the order went in brings the recruiter back while the building is
+	   still busy, and every such visit is a page load that can only find the
+	   same full queue. */
+	var utana = terv.sorok || kepernyo.sorHossz;
+	TOBORZO_MUNKA.sorok[kepernyo.epulet] = darab > 0
+		? utana[kepernyo.epulet]
+		: (kepernyo.sorHossz[kepernyo.epulet] || 0);
+
+	if (darab > 0 && toborzoIndit(TOBORZO_REF, ezek)) {
 		debug('szem4_TOBORZO_2toboroz',
-			`${TOBORZO_DATA} ${kepernyo.epulet}: ${JSON.stringify(terv.egysegek)} (${terv.nepesseg} tanyahely), megállt: ${terv.ok}`);
+			`${TOBORZO_DATA} ${kepernyo.epulet}: ${JSON.stringify(ezek)} (${terv.nepesseg} tanyahely a teljes tervben), megállt: ${terv.ok}`);
 		TOBORZO_STATE = 2;
 		return;
 	}

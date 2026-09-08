@@ -3535,6 +3535,11 @@ suite('How the recruiter schedules its visits', function () {
 	 ["['TOBORZO_REF', TOBORZO_REF]", 'its window is swept for the bot check'],
 	 ['rebuildDOM_toborzo()', 'a load paints the templates back into the panel'],
 	 ['terv.sorok || kepernyo.sorHossz', 'the next visit is booked from the queue the order leaves behind'],
+	 ['koltseg: info.koltseg', 'the plan is priced from what every screen has said, not just this one'],
+	 ['ido: info.ido', 'and timed from all of them'],
+	 ['epitheto: info.epitheto', 'and knows every unit the village can train, not only this building\'s'],
+	 ['sorHossz: info.sorHossz', 'and every queue, so a full building elsewhere is taken into account'],
+	 ["if (TOBORZO_EPULET[u] !== kepernyo.epulet) continue", 'while only this building\'s share of it is ordered'],
 	 ["ujkieg('toborzo'", 'and it has a panel at all']
 	].forEach(function (par) {
 		ok(forras.indexOf(par[0]) !== -1, par[1]);
@@ -3556,6 +3561,17 @@ suite('How the recruiter schedules its visits', function () {
 		ok(panel.indexOf(nev + '(') !== -1 && exportBlokk.indexOf(nev) !== -1,
 		   'the panel calls ' + nev + ' and the script exports it');
 	});
+
+	/* What the merge across screens has to do: keep the earlier screens' figures
+	   and take the newer ones where they overlap. Without it the plan sees one
+	   building at a time and the template's shape only holds inside a building. */
+	var osszefuz = sandbox({}, [sliceFn(SZEM4_SRC, 'toborzoOsszefuz')]).toborzoOsszefuz;
+	eq(osszefuz({ axe: 120 }, { light: 300 }), { axe: 120, light: 300 },
+	   'what the stable says is added to what the barracks said');
+	eq(osszefuz({ axe: 120 }, { axe: 130 }), { axe: 130 },
+	   'and where they disagree the newer screen wins');
+	eq(osszefuz(undefined, { axe: 1 }), { axe: 1 }, 'the first screen of a visit has nothing to merge into');
+	eq(osszefuz({ axe: 1 }, undefined), { axe: 1 }, 'and a screen that stated nothing loses nothing');
 
 	/* The on-screen text has to say what the numbers mean, or the first thing
 	   he does with the editor is type unit counts into a ratio. */
