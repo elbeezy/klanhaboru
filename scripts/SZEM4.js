@@ -5817,11 +5817,25 @@ function scavengeIndit(win, opcioId, egysegek, opcioSzam) {
 	var kartyak = win && win.document
 	           && win.document.querySelectorAll('#scavenge_screen .scavenge-option');
 	if (!kartyak || !kartyak.length) return false;
-	if (isFinite(opcioSzam) && opcioSzam > 0 && kartyak.length !== opcioSzam) return false;
+	/* Every refusal from here down says so. The first version of this stayed
+	   silent, so a screen the code did not expect looked exactly like a
+	   gatherer with nothing to do: the visit finished, booked its next look and
+	   sent nobody, with nothing anywhere to point at. A send that was planned
+	   and then did not happen is always worth a line. */
+	if (isFinite(opcioSzam) && opcioSzam > 0 && kartyak.length !== opcioSzam) {
+		debug('scavengeIndit', `A gyűjtögető képernyőn ${kartyak.length} lehetőség látszik, a játék viszont ${opcioSzam} opciót tart nyilván, ezért egyiket sem indítom el.`);
+		return false;
+	}
 	var kartya = kartyak[opcioId - 1];
 	var gomb = kartya && kartya.querySelector('.free_send_button');
-	if (!gomb || (gomb.classList && gomb.classList.contains('btn-disabled'))) return false;
-	if (!scavengeUrlapKitolt(win, egysegek)) return false;
+	if (!gomb || (gomb.classList && gomb.classList.contains('btn-disabled'))) {
+		debug('scavengeIndit', `A(z) ${opcioId}. gyűjtögetési lehetőségnek nincs indítható gombja, ezért kimarad ebből a körből.`);
+		return false;
+	}
+	if (!scavengeUrlapKitolt(win, egysegek)) {
+		debug('scavengeIndit', `A(z) ${opcioId}. lehetőséghez egyetlen egység sem került az űrlapra, ezért nem indítom el.`);
+		return false;
+	}
 	gomb.click();
 	return true;
 }

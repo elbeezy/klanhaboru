@@ -3512,7 +3512,8 @@ suite('What the gatherer sees on the scavenge screen', function () {
    built to the shape the game's own helper script uses: a jQuery that can
    select the boxes and wrap one, and buttons that record being clicked. */
 suite('When the gatherer sends a squad out', function () {
-	var api = sandbox({}, [
+	var naplozott = [];
+	var api = sandbox({ debug: function (hol, mit) { naplozott.push(hol + ': ' + mit); } }, [
 		sliceFn(SZEM4_SRC, 'scavengeUrlapKitolt'),
 		sliceFn(SZEM4_SRC, 'scavengeIndit')
 	]);
@@ -3562,6 +3563,8 @@ suite('When the gatherer sends a squad out', function () {
 	   'an option with no button of its own is left alone');
 	eq(zart.kattintott, [], 'and no other option is started in its place');
 	eq(zart.irt, [], 'nor are troops typed in for a send that cannot happen');
+	ok((naplozott[naplozott.length - 1] || '').indexOf('4. gyűjtögetési') !== -1,
+	   'and the refusal is written down, naming the option that was skipped');
 
 	/* The boxes are shared between the options, so anything left in them from
 	   the last send goes out with this one unless every box is written. */
@@ -3582,6 +3585,17 @@ suite('When the gatherer sends a squad out', function () {
 	ok(api.scavengeIndit(eltolodott, 3, { spear: 10 }, 5) === false,
 	   'a screen not showing a button per option is refused, not aimed at the wrong one');
 	eq(eltolodott.kattintott, [], 'so no option is started by guesswork');
+	/* This is the shape the live failure took: a screen the code did not expect,
+	   refusing everything, looking from the outside exactly like a gatherer
+	   with nothing to do. It must never be silent again. */
+	ok((naplozott[naplozott.length - 1] || '').indexOf('4 lehetőség') !== -1
+	   && (naplozott[naplozott.length - 1] || '').indexOf('5 opciót') !== -1,
+	   'and a screen that does not match the game says so, with both counts');
+
+	var uresUrlap = ablak({ mezok: [] });
+	api.scavengeIndit(uresUrlap, 2, { spear: 10 }, 4);
+	ok((naplozott[naplozott.length - 1] || '').indexOf('egyetlen egység sem') !== -1,
+	   'and so does a send that would have gone out with an empty form');
 
 	var ures = ablak();
 	ok(api.scavengeIndit(ures, 2, {}, 4) === false, 'an empty squad is not sent');
