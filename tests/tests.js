@@ -3211,6 +3211,90 @@ suite('When the gatherer works out how long a run would take', function () {
 });
 
 /* ------------------------------------------------------------------------ */
+/* Choosing the run length and the squad sizes -- the strategy itself.
+
+   sliceFrom() cuts to the END of the function it is given, so scavengeTerv has
+   to stay the last of the planning block in the source or the rest drop out of
+   the sandbox. The arithmetic it leans on sits above the block and is cut
+   function by function. */
+suite('When the gatherer plans a round of scavenging', function () {
+	var api = sandbox({}, [
+		sliceFn(SZEM4_SRC, 'scavengeBaseOk'),
+		sliceFn(SZEM4_SRC, 'scavengeDurationSec'),
+		sliceFn(SZEM4_SRC, 'scavengeMinDurationSec'),
+		sliceFn(SZEM4_SRC, 'scavengeCapacityFor'),
+		sliceFn(SZEM4_SRC, 'scavengeHaul'),
+		sliceFrom(SZEM4_SRC, 'var GYUJTO_MAX_FUTAS_MP', 'scavengeTerv')
+	]);
+
+	function base(lootFactor) {
+		return { loot_factor: lootFactor, duration_exponent: 0.45,
+		         duration_initial_seconds: 1800, duration_factor: 0.7237692407143577 };
+	}
+	/* His three unlocked options, and the fourth he has not bought yet. */
+	var opciok = [{ id: 1, base: base(0.1) }, { id: 2, base: base(0.25) }, { id: 3, base: base(0.5) }];
+	var negy = opciok.concat([{ id: 4, base: base(0.75) }]);
+	var NYOLC_ORA = 8 * 3600;
+	function idk(terv) { return terv.tetelek.map(function (t) { return t.id; }); }
+	function teherek(terv) { return terv.tetelek.map(function (t) { return t.kapacitas; }); }
+
+	/* --- nothing out there: the run length is ours to choose --- */
+	var szabad = api.scavengeTerv(opciok, 4565, null, NYOLC_ORA);
+	eq(szabad.mp, 3556,
+	   'his own troop pool today comes out as a 59-minute run, not a chosen number');
+	eq(idk(szabad), [3, 2],
+	   'and it leaves the 10% option out: a weak option starves the good ones of troops');
+	eq(teherek(szabad), [1522, 3043], 'the good option gets the smaller squad, being worth more per unit carried');
+
+	/* The point of the whole strategy, asserted as a property rather than by
+	   reading the number back: whatever it decided, every squad it sends has to
+	   come home at the same moment. */
+	var egyszerre = szabad.tetelek.map(function (t) { return api.scavengeDurationSec(t.kapacitas, t.base); });
+	eq(egyszerre, [szabad.mp, szabad.mp], 'and every squad it sends lands at the same moment');
+
+	/* --- the cap: free until it binds, and then it is the reserve --- */
+	eq(api.scavengeTerv(opciok, 4565, null, 24 * 3600).mp, 3556,
+	   'raising the cap changes nothing while it is not binding');
+	var nagy = api.scavengeTerv(negy, 400000, null, NYOLC_ORA);
+	eq(nagy.mp, 28800, 'a late-game army is held to the cap instead of running half a day');
+	var elkuldott = teherek(nagy).reduce(function (a, b) { return a + b; }, 0);
+	eq(elkuldott, 212533, 'and only what fits inside the cap goes out');
+	ok(elkuldott < 400000 * 0.6,
+	   'so nearly half the army stays home -- the cap doubles as the defensive reserve');
+
+	/* --- squads still out: the deadline decides, we only size to it --- */
+	eq(api.scavengeTerv(opciok, 4565, 2400, NYOLC_ORA).mp, 2400,
+	   'with a squad still out the run is cut to land with it, not chosen freely');
+	/* Guarded rather than read straight off: without the floor clamp there is no
+	   plan at all here, and reading .mp off null would abandon the suite instead
+	   of naming this one assertion. */
+	var rovid = api.scavengeTerv(opciok, 4565, 600, NYOLC_ORA);
+	ok(rovid && rovid.mp === 1303,
+	   'a window under the floor gets the shortest run that exists rather than a refusal');
+	eq(api.scavengeTerv(opciok, 4565, 12 * 3600, NYOLC_ORA).mp, 28800,
+	   'and one beyond the cap gets the cap, landing early rather than staying out too long');
+
+	/* --- too few troops to fill every option at that deadline --- */
+	var szuk = api.scavengeTerv(opciok, 900, 2400, NYOLC_ORA);
+	eq(idk(szuk), [3, 2], 'the best option is filled first when there is not enough for all');
+	eq(teherek(szuk), [684, 216], 'and what is left over goes out rather than staying home');
+	eq(api.scavengeDurationSec(szuk.tetelek[0].kapacitas, szuk.tetelek[0].base), 2400,
+	   'the option that got its full share lands exactly on the deadline');
+	/* Guarded the same way: filling in the wrong order leaves only one squad
+	   here, and indexing into the missing second one would throw. */
+	var masodik = szuk.tetelek[1];
+	ok(masodik && api.scavengeDurationSec(masodik.kapacitas, masodik.base) < 2400,
+	   'while the leftover squad lands early, to be re-aligned on the next visit');
+
+	/* --- total: this feeds a form that sends real troops --- */
+	ok(api.scavengeTerv([], 4565, null, NYOLC_ORA) === null, 'no options, no plan');
+	ok(api.scavengeTerv(opciok, 0, null, NYOLC_ORA) === null, 'no troops, no plan');
+	ok(api.scavengeTerv(null, 4565, null, NYOLC_ORA) === null, 'and no option list at all is not a crash');
+	eq(api.scavengeTerv(opciok, 4565, null, 0).mp, 3556,
+	   'a nonsense cap falls back to the built-in one instead of sending nothing');
+});
+
+/* ------------------------------------------------------------------------ */
 /* How full the armies come home is measured from the reports, not guessed at
    on the way out. What is still worth counting here is how many attempts
    became attacks, and why the rest did not -- a plan the minimum-army floor

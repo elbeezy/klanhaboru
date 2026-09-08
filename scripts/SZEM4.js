@@ -5487,6 +5487,137 @@ function scavengeHaul(kapacitas, base) {
 	if (!scavengeBaseOk(base) || !isFinite(kapacitas) || kapacitas < 0) return null;
 	return Math.round(kapacitas * Number(base.loot_factor));
 }
+
+/* Never send a run longer than this. Not an efficiency figure -- efficiency
+   says longer is always better -- but a safety one: run length climbs with the
+   army without limit, and scavenging uses the very units that defend the
+   village, so an uncapped late-game run is the whole garrison away for half a
+   day. Troops that do not fit inside the cap simply stay home, which is the
+   defensive reserve. It costs nothing at all until it actually binds. */
+var GYUJTO_MAX_FUTAS_MP = 8 * 3600;
+
+/* The carry capacity needed to run every one of these options for mp seconds.
+   Null if any of them cannot be run that long at all, so a caller never adds
+   up a partial answer. */
+function scavengeOsszTeher(opciok, mp) {
+	var ossz = 0;
+	for (var i = 0; i < opciok.length; i++) {
+		var teher = scavengeCapacityFor(mp, opciok[i].base);
+		if (teher === null) return null;
+		ossz += teher;
+	}
+	return ossz;
+}
+
+/* The longest run this set of options can ALL be filled to out of the pool --
+   i.e. the run length that spends the troops exactly, capped.
+
+   Searched rather than solved: each option inverts cleanly on its own, but the
+   sum of several does not, and a search over a monotonic function is both
+   shorter and obviously right. Sixty halvings settle it to well under a
+   second, which is far finer than a run length needs. */
+function scavengeKitoltoIdo(opciok, teherPool, maxMp) {
+	if (!opciok.length || !isFinite(teherPool) || teherPool < 0) return null;
+	var also = 0;
+	for (var i = 0; i < opciok.length; i++) {
+		var padlo = scavengeMinDurationSec(opciok[i].base);
+		if (padlo === null) return null;
+		if (padlo > also) also = padlo;
+	}
+	var felso = isFinite(maxMp) && maxMp > also ? maxMp : also;
+	for (var k = 0; k < 60; k++) {
+		var kozep = (also + felso) / 2;
+		var kell = scavengeOsszTeher(opciok, kozep);
+		if (kell !== null && kell <= teherPool) also = kozep; else felso = kozep;
+	}
+	return Math.round(also);
+}
+
+/* Hand out the pool at a run length that is already decided.
+
+   Best option first, and each one gets its FULL share or the remainder --
+   never a trimmed share to make everything fit. A trimmed squad runs shorter
+   and lands early, which is precisely the drift this strategy exists to stop,
+   so it is better to leave an option unsent than to send it out of step. The
+   remainder does go to the next option in line: troops kept at home earn
+   nothing, and an early lander is re-aligned on the next visit anyway. */
+function scavengeReszTerv(opciok, mp, teherPool) {
+	var sorrend = opciok.slice().sort(function (a, b) {
+		return Number(b.base.loot_factor) - Number(a.base.loot_factor);
+	});
+	var maradek = teherPool, tetelek = [];
+	for (var i = 0; i < sorrend.length; i++) {
+		if (maradek <= 0) break;
+		var kell = scavengeCapacityFor(mp, sorrend[i].base);
+		if (kell === null) continue;
+		var kap = Math.min(kell, maradek);
+		tetelek.push({ id: sorrend[i].id, kapacitas: Math.round(kap), base: sorrend[i].base });
+		maradek -= kap;
+	}
+	return tetelek;
+}
+
+/* What a plan is worth, per hour, so two of them can be compared. */
+function scavengeTervOra(tetelek, mp) {
+	if (!tetelek.length || !(mp > 0)) return 0;
+	var zsakmany = 0;
+	for (var i = 0; i < tetelek.length; i++) {
+		var z = scavengeHaul(tetelek[i].kapacitas, tetelek[i].base);
+		if (z !== null) zsakmany += z;
+	}
+	return zsakmany / (mp / 3600);
+}
+
+/* With nothing outstanding there is no deadline, so both the run length and
+   the choice of options are free -- and "use every option" is the wrong
+   answer. An option costs capacity in proportion to 1/loot_factor but adds the
+   same amount to the haul, so a weak one starves the good ones: on his account
+   today, leaving the 10% option out is worth about +12%.
+
+   So every combination is priced and the best per hour wins. Four options is
+   fifteen combinations, which is nothing; the guard is only there so a world
+   with far more of them cannot turn this into a hang. */
+function scavengeLegjobbCsoport(opciok, teherPool, maxMp) {
+	if (!opciok.length || opciok.length > 8) return null;
+	var legjobb = null;
+	for (var maszk = 1; maszk < (1 << opciok.length); maszk++) {
+		var reszhalmaz = [];
+		for (var i = 0; i < opciok.length; i++) {
+			if (maszk & (1 << i)) reszhalmaz.push(opciok[i]);
+		}
+		var mp = scavengeKitoltoIdo(reszhalmaz, teherPool, maxMp);
+		if (mp === null) continue;
+		var tetelek = scavengeReszTerv(reszhalmaz, mp, teherPool);
+		var ora = scavengeTervOra(tetelek, mp);
+		if (!legjobb || ora > legjobb.ora) legjobb = { mp: mp, tetelek: tetelek, ora: ora };
+	}
+	return legjobb;
+}
+
+/* The whole decision, in one place.
+
+   With squads still out the run length is not ours to choose: it is whatever
+   is left of the longest one, so the new squad lands with it. Two things can
+   make that impossible and both are clamped rather than refused -- a window
+   under the floor gets the shortest run that exists (his call: keep the troops
+   working and let it land a few minutes late, rather than idle them), and a
+   window beyond the cap gets the cap. */
+function scavengeTerv(opciok, teherPool, hataridoMp, maxMp) {
+	if (!opciok || !opciok.length || !isFinite(teherPool) || teherPool <= 0) return null;
+	var hatar = isFinite(maxMp) && maxMp > 0 ? maxMp : GYUJTO_MAX_FUTAS_MP;
+	if (hataridoMp === null || hataridoMp === undefined || !isFinite(hataridoMp)) {
+		return scavengeLegjobbCsoport(opciok, teherPool, hatar);
+	}
+	var padlo = 0;
+	for (var i = 0; i < opciok.length; i++) {
+		var p = scavengeMinDurationSec(opciok[i].base);
+		if (p !== null && p > padlo) padlo = p;
+	}
+	var mp = Math.max(padlo, Math.min(hataridoMp, hatar));
+	var tetelek = scavengeReszTerv(opciok, mp, teherPool);
+	if (!tetelek.length) return null;
+	return { mp: mp, tetelek: tetelek, ora: scavengeTervOra(tetelek, mp) };
+}
 function szem4_GYUJTO_1keres() {try{
 	/* Appointments are booked on the real clock now (see scavengeReturnsMs),
 	   so they have to be read against the real clock too. */
