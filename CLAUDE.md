@@ -1,5 +1,9 @@
 # Working agreements for this repo
 
+This file is read in full every session — keep entries as single crisp
+bullets/paragraphs. Incident backstory, "how we found this" narrative, and
+anything not needed to act correctly belongs in commit messages, not here.
+
 ## Model and effort routing
 
 Before starting any task, state which tier it falls in and why, as a single
@@ -67,6 +71,14 @@ source and confirm red before trusting green.
   in the browser tool, or serve the repo and open `tests/` (`tests/run.cmd`).
   A green run is required before committing; add a case in the same commit
   as the behaviour it covers.
+- **`scripts/SZEM4.js` is ~4,400 lines.** By default, grep/search for the
+  function or marker first and read narrow line ranges — don't read the
+  whole file start-to-end. This default doesn't apply when the task itself
+  is a full review or asks to read the whole file; follow the explicit ask.
+- **Reuse `tests/` and `tests/preview.html` rather than building a new
+  scratch harness.** They already run the real code (sliced from source,
+  not a replica) and mirror the real markup; a fresh one-off harness repeats
+  work that already exists and can drift from what's real.
 - **Never guess game markup.** Ask for a saved page (Ctrl+S, "Web Page, HTML
   only") or a pasted element before writing a selector against it.
 - **Numbers on-page use `.` as a thousands separator.** Strip it before
