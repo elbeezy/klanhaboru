@@ -11,8 +11,8 @@
    commit that exports it. */
 var EXPECTED_EXPORTS = [
 	'BotvedelemBe', 'BotvedelemKi', 'addTooltip_build', 'add_farmolando',
-	'add_farmolo', 'alert2', 'debug_urit', 'gyujto_setStrategia',
-	'gyujto_setVill',
+	'add_farmolo', 'alert2', 'debug_urit', 'gyujto_setMaxOra',
+	'gyujto_setStrategia', 'gyujto_setVill',
 	'hattercsere', 'hattertolor', 'learnCatapult', 'loadCloudDataIntoLocal',
 	'modosit_szam', 'naplo', 'nyit', 'onWallpChange',
 	'playSound', 'removeTooltip', 'rendez', 'restartKieg',
@@ -3017,7 +3017,10 @@ suite('auto befejezo -- a falu ki- es bekapcsolasa', function () {
    lists first, and if that disagrees with defaultGyujtoState() the interface
    silently misreports which strategy the engine is running. */
 suite('Which gathering the gatherer waits for', function () {
-	var api = sandbox({}, [sliceFn(SZEM4_SRC, 'defaultGyujtoState')]);
+	var api = sandbox({}, [
+		sliceFrom(SZEM4_SRC, 'var GYUJTO_MAX_FUTAS_MP', 'scavengeTerv'),
+		sliceFn(SZEM4_SRC, 'defaultGyujtoState')
+	]);
 	var alap = api.defaultGyujtoState().settings.strategy;
 
 	eq(alap, 'min', 'a fresh install comes back for the first squad home, so no troops idle');
@@ -3031,8 +3034,8 @@ suite('Which gathering the gatherer waits for', function () {
 		return '';
 	});
 
-	eq(opts.map(function (o) { return o.value; }), ['min', 'max'],
-	   'the two strategies are still the ones the engine branches on');
+	eq(opts.map(function (o) { return o.value; }), ['min', 'max', 'egyutt'],
+	   'the three strategies are still the ones the engine branches on');
 
 	var shown = opts.filter(function (o) { return o.selected; })[0] || opts[0];
 	eq(shown.value, alap, 'the box shows the strategy the engine actually starts with');
@@ -3072,6 +3075,52 @@ suite('Which gathering the gatherer waits for', function () {
 
 	ok(sel.indexOf('gyujto_setStrategia(this)') !== -1,
 	   'the box is wired to the handler, or picking a strategy does nothing again');
+
+	/* The new strategy is offered but not made the default: it has not been
+	   watched in a real game yet, and the running default has. */
+	var egyuttCimke = sel.slice(sel.indexOf('<option value="egyutt"'));
+	egyuttCimke = egyuttCimke.slice(egyuttCimke.indexOf('>') + 1, egyuttCimke.indexOf('</option>'));
+	ok(egyuttCimke.indexOf('egyszerre') !== -1 && egyuttCimke.indexOf('azonnal') !== -1,
+	   'and its label says what it does: sends at once, and lands together');
+
+	/* --- the cap, which is also the garrison left at home --- */
+	var caps = { SZEM4_GYUJTO: { settings: { strategy: 'min', maxora: 8 } } };
+	var capApi = sandbox(caps, [sliceFn(SZEM4_SRC, 'gyujto_setMaxOra')]);
+	eq(api.defaultGyujtoState().settings.maxora, 8,
+	   'a fresh install caps a gathering run at eight hours');
+
+	var doboz = { value: '3' };
+	capApi.gyujto_setMaxOra(doboz);
+	eq(caps.SZEM4_GYUJTO.settings.maxora, 3, 'a new cap is what the gatherer then plans against');
+
+	/* A blank box must not read as "no cap" while the engine runs on the old
+	   one, so a refused value is put back on screen. */
+	var rossz = { value: '' };
+	capApi.gyujto_setMaxOra(rossz);
+	eq(caps.SZEM4_GYUJTO.settings.maxora, 3, 'a blank cap is refused rather than stored');
+	eq(rossz.value, 3, 'and the box is put back to the cap actually in force');
+	capApi.gyujto_setMaxOra({ value: '0' });
+	eq(caps.SZEM4_GYUJTO.settings.maxora, 3, 'and so is a cap of nothing at all');
+
+	ok(codeOnly(SZEM4_SRC).indexOf('name="maxora"') !== -1
+	   && codeOnly(SZEM4_SRC).indexOf('gyujto_setMaxOra(this)') !== -1,
+	   'the cap has a box in the panel and it is wired, or it could only be changed by editing the script');
+
+	/* An install that has run before carries a stored settings object, and the
+	   load merges one level deep, so it replaces the default entire -- a
+	   setting added later arrives undefined on exactly the installs that have
+	   been used. The box would then sit blank while the engine capped at eight.
+	   Same trap as the farm's STAT block. */
+	var regi = {
+		SZEM4_GYUJTO: { 4242: true, settings: { strategy: 'max' } },
+		GYUJTO_MAX_FUTAS_MP: 8 * 3600,
+		document: { querySelector: function () {
+			return { strategy: {}, maxora: {}, f4242: {} };
+		} }
+	};
+	sandbox(regi, [sliceFn(SZEM4_SRC, 'rebuildDOM_gyujto')]).rebuildDOM_gyujto();
+	eq(regi.SZEM4_GYUJTO.settings.maxora, 8,
+	   'an install from before the cap existed is repaired on load, not left blank');
 });
 
 /* ------------------------------------------------------------------------ */
@@ -3667,6 +3716,19 @@ suite('A whole gathering visit under the aligned strategy', function () {
 	var celzott = kint.GYUJTO_VILLINFO[4242].returned;
 	ok(celzott > Date.now() + 2300000 && celzott < Date.now() + 2600000,
 	   'and they are sized to land with the squad already out, not on their own schedule');
+
+	/* --- the cap, which is what keeps a garrison at home --- */
+	/* A late-game army would otherwise run for half a day, and scavenging
+	   spends the very units that defend the village. */
+	var hadsereg = vilag({ otthon: { spear: 4000, sword: 4000, axe: 4000 } });
+	hadsereg.SZEM4_GYUJTO.settings.maxora = 2;
+	var hadApi = motor(hadsereg);
+	while (hadApi.szem4_GYUJTO_egyutt() && hadsereg.GYUJTO_STATE === 2) { /* run the visit out */ }
+	var zaras = hadsereg.GYUJTO_VILLINFO[4242].returned;
+	ok(zaras < Date.now() + 2.5 * 3600000,
+	   'a two-hour cap is what a big army is planned against, not the eight-hour default');
+	ok(zaras > Date.now() + 1.5 * 3600000,
+	   'and it is used up to the cap rather than cut short of it');
 
 	/* --- a window shorter than any run that exists --- */
 	/* No squad can run for less than about 22 minutes whatever its size, so a

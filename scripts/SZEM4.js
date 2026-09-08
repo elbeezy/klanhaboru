@@ -19,8 +19,8 @@
  * ========================================================================== */
 Object.assign(window, {
 	BotvedelemBe, BotvedelemKi, addTooltip_build, add_farmolando,
-	add_farmolo, alert2, debug_urit, gyujto_setStrategia,
-	gyujto_setVill,
+	add_farmolo, alert2, debug_urit, gyujto_setMaxOra,
+	gyujto_setStrategia, gyujto_setVill,
 	hattercsere, hattertolor, learnCatapult, loadCloudDataIntoLocal,
 	modosit_szam, naplo, nyit, onWallpChange,
 	playSound, removeTooltip, rendez, restartKieg,
@@ -2589,7 +2589,7 @@ function defaultVijeState() {
    strategy into it on a fresh install, so the default and that first option
    must agree or the box misreports what the engine is doing. */
 function defaultGyujtoState() {
-	return { settings: { strategy: 'min' } };
+	return { settings: { strategy: 'min', maxora: GYUJTO_MAX_FUTAS_MP / 3600 } };
 }
 /* The four colours the interface shipped with before it had a palette.
 
@@ -5318,7 +5318,16 @@ function rebuildDOM_gyujto() {
 	for (let villId in SZEM4_GYUJTO) {
 		if (SZEM4_GYUJTO[villId] === true) f['f' + villId].checked = true;
 	}
+	/* An install that has run before has a stored settings object, and the load
+	   merges only one level deep -- so that stored object replaces the default
+	   entire and any setting added later arrives undefined. Same trap as the
+	   farm's STAT block. Repairing it here means the box can never show blank
+	   while the engine runs on the fallback. */
+	if (!(SZEM4_GYUJTO.settings.maxora > 0)) {
+		SZEM4_GYUJTO.settings.maxora = GYUJTO_MAX_FUTAS_MP / 3600;
+	}
 	f.strategy.value = SZEM4_GYUJTO.settings.strategy;
+	f.maxora.value = SZEM4_GYUJTO.settings.maxora;
 }
 /* The Stratégia box was read nowhere: rebuildDOM_gyujto wrote the stored value
    into it on load, and nothing ever wrote a chosen value back out, so the
@@ -5331,6 +5340,17 @@ function rebuildDOM_gyujto() {
 function gyujto_setStrategia(el) {
 	if (!el || !el.value) return;
 	SZEM4_GYUJTO.settings.strategy = el.value;
+}
+/* The longest run the gatherer may start, in hours. Whatever does not fit
+   inside it stays at home, so this doubles as the defensive garrison.
+
+   A value that is not a positive number is refused and the box is put back to
+   what the engine is actually using: a blank or a zero here would otherwise
+   read as "no cap" in the interface while the engine ran on its fallback. */
+function gyujto_setMaxOra(el) {
+	var ora = parseFloat(el && el.value);
+	if (isFinite(ora) && ora > 0) SZEM4_GYUJTO.settings.maxora = ora;
+	if (el) el.value = SZEM4_GYUJTO.settings.maxora;
 }
 function szem4_GYUJTO_search(ev) {
 	ev.stopImmediatePropagation();
@@ -5831,7 +5851,9 @@ function szem4_GYUJTO_egyutt() {
 	if (!info.terv) {
 		var kint = scavengeReturnsMs(GYUJTO_REF, GYUJTO_REF.document, most);
 		var hatarido = kint.length ? (Math.max.apply(null, kint) - most) / 1000 : null;
-		var terv = scavengeTerv(allapot.opciok, allapot.teherPool, hatarido, GYUJTO_MAX_FUTAS_MP);
+		var maxOra = Number(SZEM4_GYUJTO.settings.maxora);
+		var maxMp = isFinite(maxOra) && maxOra > 0 ? maxOra * 3600 : GYUJTO_MAX_FUTAS_MP;
+		var terv = scavengeTerv(allapot.opciok, allapot.teherPool, hatarido, maxMp);
 		info.celMs = terv ? most + terv.mp * 1000 : null;
 		info.terv = [];
 		/* Every squad is picked here, in one pass, out of one reading of the
@@ -6029,7 +6051,10 @@ ujkieg('gyujto','Gyűjtő',`<tr><td>
 		<select name="strategy" onchange="gyujto_setStrategia(this)">
 			<option value="min">Amint kész egy gyűjtés, küldje a következőt</option>
 			<option value="max">Várja meg, amíg minden opció kész (jobb csapatelosztás, de a gyors opciók csapatai várnak)</option>
+			<option value="egyutt">Küldjön azonnal, de úgy méretezze a csapatokat, hogy egyszerre érjenek haza (nincs álló csapat és jó a csapatelosztás is)</option>
 		</select>
+		<br><br>
+		Leghosszabb gyűjtés: <input name="maxora" type="text" size="4" value="8" onkeypress="validate(event)" onchange="gyujto_setMaxOra(this)" onmouseover="sugo(this,'Ennél hosszabb gyűjtést nem indít. Ami nem fér bele, itthon marad védelemnek: csökkentsd, ha több katonát akarsz otthon tartani. Csak az egyszerre hazaérő stratégiánál számít.')"> óra
 	</form>
 </td></tr>`);
 szem4_GYUJTO_motor();
