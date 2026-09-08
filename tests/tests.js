@@ -3456,6 +3456,86 @@ suite('What the gatherer sees on the scavenge screen', function () {
 });
 
 /* ------------------------------------------------------------------------ */
+/* The send itself -- the line where troops actually leave the village.
+
+   The screen carries one shared set of troop boxes and one button per option,
+   and the button for option N is the Nth of them. The fake window below is
+   built to the shape the game's own helper script uses: a jQuery that can
+   select the boxes and wrap one, and buttons that record being clicked. */
+suite('When the gatherer sends a squad out', function () {
+	var api = sandbox({}, [
+		sliceFn(SZEM4_SRC, 'scavengeUrlapKitolt'),
+		sliceFn(SZEM4_SRC, 'scavengeIndit')
+	]);
+
+	function ablak(beallit) {
+		beallit = beallit || {};
+		var irt = [], esemenyek = [], kattintott = [];
+		var mezok = (beallit.mezok || ['spear', 'sword', 'axe', 'light', 'spy'])
+			.map(function (nev) { return { name: nev }; });
+		var gombok = (beallit.gombok || [[], [], [], []]).map(function (osztalyok, i) {
+			return {
+				classList: { contains: function (c) { return osztalyok.indexOf(c) !== -1; } },
+				click: function () { kattintott.push(i + 1); }
+			};
+		});
+		function $(mi) {
+			if (typeof mi === 'string') {
+				return { each: function (cb) { mezok.forEach(function (m) { cb.call(m); }); } };
+			}
+			return {
+				val: function (v) { irt.push([mi.name, v]); return this; },
+				trigger: function (nev) { esemenyek.push([mi.name, nev]); return this; }
+			};
+		}
+		return {
+			$: beallit.nincsJquery ? null : $,
+			document: { querySelectorAll: function () { return gombok; } },
+			irt: irt, esemenyek: esemenyek, kattintott: kattintott
+		};
+	}
+
+	var w = ablak();
+	var ment = api.scavengeIndit(w, 3, { spear: 52, axe: 250 }, 4);
+	ok(ment === true, 'a squad the plan asked for is sent');
+	eq(w.kattintott, [3], 'and it is the third option that starts, not whichever button came first');
+
+	/* The boxes are shared between the options, so anything left in them from
+	   the last send goes out with this one unless every box is written. */
+	eq(w.irt, [['spear', 52], ['sword', 0], ['axe', 250], ['light', 0], ['spy', 0]],
+	   'every box is written, so nothing left over from the last send rides along');
+	eq(w.esemenyek.length, 5,
+	   'and each one is changed rather than only set, which is what the game reads');
+
+	/* --- the refusals: each one must leave the troops at home --- */
+	var tiltott = ablak({ gombok: [[], [], ['btn-disabled'], []] });
+	ok(api.scavengeIndit(tiltott, 3, { spear: 10 }, 4) === false,
+	   'an option the game has disabled is not clicked');
+	eq(tiltott.irt, [], 'and its squad is never even typed into the form');
+
+	/* Five options, four buttons: position 3 still holds a button, just not the
+	   one option 3 is. Only the count says so. */
+	var eltolodott = ablak({ gombok: [[], [], [], []] });
+	ok(api.scavengeIndit(eltolodott, 3, { spear: 10 }, 5) === false,
+	   'a screen not showing a button per option is refused, not aimed at the wrong one');
+	eq(eltolodott.kattintott, [], 'so no option is started by guesswork');
+
+	var ures = ablak();
+	ok(api.scavengeIndit(ures, 2, {}, 4) === false, 'an empty squad is not sent');
+	eq(ures.kattintott, [], 'and nothing is clicked with an empty form');
+
+	/* --- total: the window is a game page that may be reloading under us --- */
+	var hiba;
+	try {
+		hiba = [api.scavengeIndit(null, 1, { spear: 5 }, 4),
+		        api.scavengeIndit(ablak({ gombok: [] }), 1, { spear: 5 }, 4),
+		        api.scavengeIndit(ablak({ nincsJquery: true }), 1, { spear: 5 }, 4)];
+	} catch (e) { hiba = 'threw: ' + e.message; }
+	eq(hiba, [false, false, false],
+	   'a window that is gone, empty or still loading is a refusal rather than a crash');
+});
+
+/* ------------------------------------------------------------------------ */
 /* How full the armies come home is measured from the reports, not guessed at
    on the way out. What is still worth counting here is how many attempts
    became attacks, and why the rest did not -- a plan the minimum-army floor

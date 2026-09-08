@@ -5747,6 +5747,59 @@ function scavengeAllapot(win) {
 	return { opciok: opciok, opcioSzam: opcioSzam, elerheto: elerheto,
 	         teherPool: teherPool, szorzo: szorzo };
 }
+
+/* Write a squad into the send form.
+
+   There is ONE set of troop boxes on that screen, shared by every option --
+   whichever option's button is clicked sends whatever the boxes hold at that
+   moment. So every box is written on every call, the unused ones to zero:
+   leaving a box alone would let the previous option's numbers, or the helper
+   script's own suggestion, ride along on this send. That is how the farm's
+   cavalry could end up scavenging despite never being planned for.
+
+   The boxes are driven through the game page's own jQuery with a change event,
+   the way the helper script does it, because the game recalculates the squad
+   from those events rather than from the values. Returns how many units were
+   written, so a caller can refuse to click on an empty form. */
+function scavengeUrlapKitolt(win, egysegek) {
+	var $ = win && win.$;
+	if (!$) return 0;
+	var ossz = 0;
+	$('.unitsInput').each(function () {
+		var nev = this.name || (this.getAttribute ? this.getAttribute('name') : '');
+		var db = Math.max(0, Math.floor(Number(egysegek && egysegek[nev]) || 0));
+		$(this).val(db).trigger('change');
+		ossz += db;
+	});
+	return ossz;
+}
+
+/* Send one option's squad. This is the line where troops actually leave.
+
+   The button for option N is the Nth on the screen. That is not a guess: it is
+   how the game's own bundled helper addresses them ($('.free_send_button')
+   [optionId - 1]). The same script also derives the id from the option
+   portrait's image filename, which is deliberately NOT copied -- a filename is
+   exactly what broke the build queue reader when the game moved its art to
+   .webp, whereas position has no format to change.
+
+   Nothing is clicked unless the position can still be trusted: if the screen
+   is not showing a button per option, the count disagrees and the send is
+   refused rather than aimed at whichever option happens to sit there. The
+   game's own .btn-disabled marks a button that cannot be used, and the form is
+   only filled once the button has passed both tests, so a refused send never
+   leaves troops sitting in the boxes. */
+function scavengeIndit(win, opcioId, egysegek, opcioSzam) {
+	var gombok = win && win.document
+	          && win.document.querySelectorAll('#scavenge_screen .free_send_button');
+	if (!gombok || !gombok.length) return false;
+	if (isFinite(opcioSzam) && opcioSzam > 0 && gombok.length !== opcioSzam) return false;
+	var gomb = gombok[opcioId - 1];
+	if (!gomb || (gomb.classList && gomb.classList.contains('btn-disabled'))) return false;
+	if (!scavengeUrlapKitolt(win, egysegek)) return false;
+	gomb.click();
+	return true;
+}
 function szem4_GYUJTO_1keres() {try{
 	/* Appointments are booked on the real clock now (see scavengeReturnsMs),
 	   so they have to be read against the real clock too. */
