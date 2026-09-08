@@ -3536,6 +3536,198 @@ suite('When the gatherer sends a squad out', function () {
 });
 
 /* ------------------------------------------------------------------------ */
+/* The whole visit, driven end to end: read the screen, plan the round, size
+   each squad, fill the form, click. A pure planner that is never called is the
+   likeliest way a feature like this fails, so this suite runs the real chain
+   against a fake game window rather than testing the pieces again.
+
+   The tick loop is real too: the engine sends one option per tick and is
+   re-entered, so each call below is one tick of the gatherer. */
+suite('A whole gathering visit under the aligned strategy', function () {
+	function base(lootFactor) {
+		return { loot_factor: lootFactor, duration_exponent: 0.45,
+		         duration_initial_seconds: 1800, duration_factor: 0.7237692407143577 };
+	}
+
+	/* His own village: 52 spear, 51 sword, 250 axe -- 4565 carry -- plus farm
+	   cavalry that must stay home. Options 1-3 unlocked, 4 not bought. */
+	function vilag(beallit) {
+		beallit = beallit || {};
+		var opciok = {
+			1: { is_locked: false, scavenging_squad: null, base: base(0.1) },
+			2: { is_locked: false, scavenging_squad: null, base: base(0.25) },
+			3: { is_locked: false, scavenging_squad: null, base: base(0.5) },
+			4: { is_locked: true, scavenging_squad: null, base: base(0.75) }
+		};
+		for (var k in (beallit.opciok || {})) opciok[k] = beallit.opciok[k];
+
+		var irt = [], kattintott = [], naplozott = [], mezok =
+			['spear', 'sword', 'axe', 'light'].map(function (n) { return { name: n }; });
+		var gombok = [1, 2, 3, 4].map(function (id) {
+			return { classList: { contains: function () { return false; } },
+			         click: function () { kattintott.push(id); } };
+		});
+		function $(mi) {
+			if (typeof mi === 'string') {
+				return { each: function (cb) { mezok.forEach(function (m) { cb.call(m); }); } };
+			}
+			return { val: function (v) { irt.push([mi.name, v]); return this; },
+			         trigger: function () { return this; } };
+		}
+		var ablak = {
+			$: beallit.nincsKepernyo ? $ : $,
+			document: { querySelectorAll: function () { return gombok; } }
+		};
+		if (!beallit.nincsKepernyo) {
+			ablak.ScavengeScreen = { village: {
+				unit_carry_factor: 1,
+				unit_counts_home: beallit.otthon || { spear: 52, sword: 51, axe: 250, light: 100 },
+				options: opciok
+			} };
+		}
+		var cella = { innerHTML: '' };
+		return {
+			TEHER: { spear: 25, sword: 15, axe: 10, archer: 10, spy: 0, light: 80 },
+			TANYA: { spear: 1, sword: 1, axe: 1, archer: 1, spy: 2, light: 4 },
+			GYUJTO_REF: ablak,
+			GYUJTO_DATA: 4242,
+			GYUJTO_VILLINFO: { 4242: { retry: false } },
+			GYUJTO_STATE: 2,
+			GYUJTO_HIBA: 7,
+			SZEM4_GYUJTO: { settings: { strategy: 'egyutt' } },
+			document: { querySelector: function () { return { cells: [0, 0, 0, 0, cella] }; } },
+			debug: function (hol, mit) { naplozott.push(hol + ': ' + mit); },
+			pageUrl: function () { return 'screen=place&mode=scavenge'; },
+			getServerTime: function () {},
+			irt: irt, kattintott: kattintott, naplozott: naplozott, cella: cella
+		};
+	}
+	function motor(w) {
+		return sandbox(w, [
+			sliceFn(SZEM4_SRC, 'countdownSeconds'),
+			sliceFrom(SZEM4_SRC, 'var GYUJTO_URES_MS', 'scavengeNextVisitMs'),
+			sliceFn(SZEM4_SRC, 'scavengeBaseOk'),
+			sliceFn(SZEM4_SRC, 'scavengeDurationSec'),
+			sliceFn(SZEM4_SRC, 'scavengeMinDurationSec'),
+			sliceFn(SZEM4_SRC, 'scavengeCapacityFor'),
+			sliceFn(SZEM4_SRC, 'scavengeHaul'),
+			sliceFrom(SZEM4_SRC, 'var GYUJTO_MAX_FUTAS_MP', 'scavengeTerv'),
+			sliceFrom(SZEM4_SRC, 'var GYUJTO_EGYSEGEK', 'scavengeEgysegek'),
+			sliceFn(SZEM4_SRC, 'scavengeAllapot'),
+			sliceFn(SZEM4_SRC, 'scavengeUrlapKitolt'),
+			sliceFn(SZEM4_SRC, 'scavengeIndit'),
+			sliceFn(SZEM4_SRC, 'szem4_GYUJTO_egyutt')
+		]);
+	}
+
+	/* --- an empty village: nothing is out, so the round is ours to shape --- */
+	var w = vilag(), api = motor(w);
+	var elso = Date.now();
+	ok(api.szem4_GYUJTO_egyutt() === true, 'the first tick of a visit sends a squad');
+	eq(w.kattintott.length, 1, 'exactly one option per tick, because the troop boxes are shared');
+	api.szem4_GYUJTO_egyutt();
+	eq(w.kattintott, [3, 2],
+	   'the best option is filled first, and the weak 10% one is left out entirely');
+
+	/* Nothing left to send: the visit closes and books its own return. */
+	ok(api.szem4_GYUJTO_egyutt() === true, 'and the visit finishes itself');
+	eq(w.kattintott, [3, 2], 'without sending anything a fourth time');
+	eq(w.GYUJTO_STATE, 0, 'the gatherer is free to move on to the next village');
+	eq(w.GYUJTO_HIBA, 0, 'and the visit counts as a clean one');
+	ok(w.GYUJTO_VILLINFO[4242].returned > elso + 3000000,
+	   'the next visit is booked for when the squads land, about an hour out');
+	ok(w.cella.innerHTML.length > 0, 'and the panel says when that is');
+	ok(w.GYUJTO_VILLINFO[4242].terv === null,
+	   'the spent plan is cleared, so the next visit plans against fresh troops');
+
+	/* The troops themselves: the farm's cavalry is the thing that must never
+	   go, and it is written to zero rather than merely left out. */
+	/* The two squads are picked out of one reading of the troops, so together
+	   they can never spend more than the village actually holds -- the page
+	   cannot be relied on to have taken the first squad off its own counts by
+	   the time the second is filled. */
+	var kuldottLandzsa = w.irt.filter(function (p) { return p[0] === 'spear'; })
+	                          .reduce(function (a, p) { return a + p[1]; }, 0);
+	ok(kuldottLandzsa <= 52,
+	   'the second squad takes what the first one left, not the whole village over again');
+
+	var lovas = w.irt.filter(function (p) { return p[0] === 'light'; });
+	ok(lovas.length > 0 && lovas.every(function (p) { return p[1] === 0; }),
+	   'the farm cavalry is zeroed into the form on every send, never sent');
+
+	/* --- a squad already out: the new ones are cut to land with it --- */
+	var kint = vilag({ opciok: { 3: { is_locked: false, base: base(0.5),
+		scavenging_squad: { return_time: Math.round(Date.now() / 1000) + 2400 } } } });
+	var kintApi = motor(kint);
+	kintApi.szem4_GYUJTO_egyutt();
+	kintApi.szem4_GYUJTO_egyutt();
+	kintApi.szem4_GYUJTO_egyutt();
+	eq(kint.kattintott, [2, 1],
+	   'with the good option busy the round is made up of the ones still free');
+	var celzott = kint.GYUJTO_VILLINFO[4242].returned;
+	ok(celzott > Date.now() + 2300000 && celzott < Date.now() + 2600000,
+	   'and they are sized to land with the squad already out, not on their own schedule');
+
+	/* --- a window shorter than any run that exists --- */
+	/* No squad can run for less than about 22 minutes whatever its size, so a
+	   squad landing in ten cannot be joined. His call was to send the shortest
+	   run anyway and let it land late rather than leave the troops standing --
+	   and then to come back for the squad that lands FIRST, which here is the
+	   one already out, not the ones just sent. */
+	var szuk = vilag({ opciok: { 3: { is_locked: false, base: base(0.5),
+		scavenging_squad: { return_time: Math.round(Date.now() / 1000) + 600 } } } });
+	var szukApi = motor(szuk);
+	szukApi.szem4_GYUJTO_egyutt();
+	szukApi.szem4_GYUJTO_egyutt();
+	szukApi.szem4_GYUJTO_egyutt();
+	ok(szuk.kattintott.length > 0, 'a window too short for any run still sends, rather than idling');
+	var korai = szuk.GYUJTO_VILLINFO[4242].returned;
+	ok(korai < Date.now() + 700000,
+	   'and the gatherer comes back for the squad landing first, not for the ones it just sent');
+
+	/* --- nothing to do here --- */
+	var szegeny = vilag({ otthon: { spear: 1 } });
+	var szegenyApi = motor(szegeny);
+	ok(szegenyApi.szem4_GYUJTO_egyutt() === true, 'a village with no troops still closes its visit');
+	eq(szegeny.kattintott, [], 'and sends nobody');
+	ok(szegeny.GYUJTO_VILLINFO[4242].returned > Date.now() + 1000000,
+	   'booking a look much later rather than reopening the page every second');
+
+	/* --- total: the screen may not be readable, and troops must still go --- */
+	var vak = vilag({ nincsKepernyo: true });
+	var vakApi = motor(vak);
+	ok(vakApi.szem4_GYUJTO_egyutt() === false,
+	   'an unreadable screen hands the visit back to the helper script instead of stalling');
+	eq(vak.kattintott, [], 'nothing is sent on a screen that could not be read');
+	ok((vak.naplozott[0] || '').indexOf('szem4_GYUJTO_egyutt') === 0,
+	   'and it says so in the debug log rather than failing silently');
+
+	/* Wiring. A planner nothing calls is the likeliest way this feature fails,
+	   and the call has to sit ABOVE the old button walk: below it, the helper
+	   script's own squad would already have gone out. */
+	var elindit = codeOnly(sliceFn(SZEM4_SRC, 'szem4_GYUJTO_3elindit'));
+	var hivas = elindit.indexOf('szem4_GYUJTO_egyutt()');
+	ok(hivas !== -1, 'the gatherer engine actually calls it, or the strategy is unreachable');
+	ok(hivas !== -1 && hivas < elindit.indexOf('free_send_button'),
+	   'and it decides before the old path sends anything of its own');
+
+	/* A visit that was cut short -- the motor restarts the window after 30
+	   failed checks -- must not leave its plan behind to be spent later
+	   against troops and a deadline that have both moved on. */
+	var kereso = { KTID: { '500|500': 4242 },
+		SZEM4_GYUJTO: { 4242: true, settings: { strategy: 'egyutt' } },
+		GYUJTO_VILLINFO: { 4242: { retry: false, terv: [{ id: 3, egysegek: { spear: 52 } }] } },
+		GYUJTO_STATE: 0, GYUJTO_DATA: null, GYUJTO_REF: null, GYUJTO_HIBA: 0, AZON: 'p_w',
+		windowOpener: function () { return { document: {} }; },
+		gameUrl: function () { return 'screen=place&mode=scavenge'; },
+		debug: function () {} };
+	sandbox(kereso, [sliceFn(SZEM4_SRC, 'szem4_GYUJTO_1keres')]).szem4_GYUJTO_1keres();
+	eq(kereso.GYUJTO_DATA, 4242, 'a village whose gathering is due gets the visit');
+	ok(kereso.GYUJTO_VILLINFO[4242].terv === null,
+	   'and every visit starts by throwing away any plan left over from a broken one');
+});
+
+/* ------------------------------------------------------------------------ */
 /* How full the armies come home is measured from the reports, not guessed at
    on the way out. What is still worth counting here is how many attempts
    became attacks, and why the rest did not -- a plan the minimum-army floor

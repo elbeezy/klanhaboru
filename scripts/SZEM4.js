@@ -5800,6 +5800,78 @@ function scavengeIndit(win, opcioId, egysegek, opcioSzam) {
 	gomb.click();
 	return true;
 }
+
+/* The third strategy, and the reason all of the above exists: keep every squad
+   working AND have them all come home together.
+
+   'min' sends troops out again as soon as one option lands, so nothing idles,
+   but the options drift apart and can never be redistributed. 'max' keeps them
+   aligned by leaving the quick ones standing still until the slowest returns --
+   on his own account that was an hour and a half of idle troops. This one sizes
+   each new squad so that it lands with the longest run already out: the troops
+   go straight back out AND the whole village comes free at one moment.
+
+   The plan is made once per visit and then spent one option per tick, because
+   the game needs the page to settle between sends and because the troop boxes
+   are shared -- two sends in one tick would fight over them. Re-planning after
+   every send would re-decide the run length against a smaller pool and pull the
+   landings apart again, which is the one thing this strategy exists to prevent.
+
+   The next visit is booked from our own aim as well as from the screen. A
+   squad sent moments ago may not be in the page's data yet, and reading only
+   the screen would then book the visit as though it had never gone out. */
+function szem4_GYUJTO_egyutt() {
+	var allapot = scavengeAllapot(GYUJTO_REF);
+	if (!allapot) {
+		debug('szem4_GYUJTO_egyutt', `A gyűjtögető képernyő adatai nem olvashatók, így a segédscript beosztása indul helyette. Oldal: ${pageUrl(GYUJTO_REF)}`);
+		return false;
+	}
+	var info = GYUJTO_VILLINFO[GYUJTO_DATA], most = Date.now();
+
+	if (!info.terv) {
+		var kint = scavengeReturnsMs(GYUJTO_REF, GYUJTO_REF.document, most);
+		var hatarido = kint.length ? (Math.max.apply(null, kint) - most) / 1000 : null;
+		var terv = scavengeTerv(allapot.opciok, allapot.teherPool, hatarido, GYUJTO_MAX_FUTAS_MP);
+		info.celMs = terv ? most + terv.mp * 1000 : null;
+		info.terv = [];
+		/* Every squad is picked here, in one pass, out of one reading of the
+		   troops -- each option's units taken off the count before the next
+		   option is filled. Deciding a squad at the moment it is sent instead
+		   would mean trusting the page to have already taken the previous
+		   squad off its own troop counts, and a squad sized from troops that
+		   have in fact just left is one the game refuses. */
+		var maradek = {}, tipus;
+		for (tipus in allapot.elerheto) maradek[tipus] = allapot.elerheto[tipus];
+		for (var i = 0; terv && i < terv.tetelek.length; i++) {
+			var tetel = terv.tetelek[i];
+			var csapat = scavengeEgysegek(tetel.kapacitas / allapot.szorzo, maradek);
+			if (!csapat) continue;
+			for (tipus in csapat.egysegek) maradek[tipus] -= csapat.egysegek[tipus];
+			info.terv.push({ id: tetel.id, egysegek: csapat.egysegek });
+		}
+	}
+
+	/* One send per tick: the game has to settle between sends, and the troop
+	   boxes are shared, so two sends in one tick would fight over them. */
+	while (info.terv.length) {
+		var kuldes = info.terv.shift();
+		if (scavengeIndit(GYUJTO_REF, kuldes.id, kuldes.egysegek, allapot.opcioSzam)) return true;
+	}
+
+	/* Same reason as the other strategies: a freshly loaded game page is a good
+	   moment to re-read the clock offset the other modules still use. */
+	getServerTime(GYUJTO_REF);
+	var vege = Date.now();
+	var hazaerkezes = scavengeReturnsMs(GYUJTO_REF, GYUJTO_REF.document, vege);
+	if (info.celMs) hazaerkezes.push(info.celMs);
+	info.returned = scavengeNextVisitMs(hazaerkezes, SZEM4_GYUJTO.settings.strategy, vege);
+	info.terv = null;
+	info.celMs = null;
+	document.querySelector(`#gy_${GYUJTO_DATA}`).cells[4].innerHTML = new Date(info.returned).toLocaleString();
+	GYUJTO_STATE = 0;
+	GYUJTO_HIBA = 0;
+	return true;
+}
 function szem4_GYUJTO_1keres() {try{
 	/* Appointments are booked on the real clock now (see scavengeReturnsMs),
 	   so they have to be read against the real clock too. */
@@ -5811,12 +5883,21 @@ function szem4_GYUJTO_1keres() {try{
 			GYUJTO_REF = windowOpener('gyujto', gameUrl({ village: villId, screen: 'place', mode: 'scavenge', group: null, page: null }), AZON + '_gyujto');
 			GYUJTO_STATE = 1;
 			GYUJTO_DATA = villId;
+			/* Every visit plans afresh. A plan left over from a visit that was
+			   cut short -- the motor restarts the window after 30 failed
+			   checks -- would otherwise be spent against troop counts and a
+			   deadline that have both moved on. */
+			GYUJTO_VILLINFO[villId].terv = null;
 			return false;
 		}
 	}
 	return true;
 } catch(e) { GYUJTO_HIBA++; console.error(e); debug('szem4_GYUJTO_1keres', e); }}
 function szem4_GYUJTO_3elindit() { try{
+	/* The 'egyutt' strategy plans and sends the whole visit itself. It stands
+	   aside only when it cannot read the screen at all, in which case the
+	   helper script's own assignment below still gets the troops out. */
+	if (SZEM4_GYUJTO.settings.strategy === 'egyutt' && szem4_GYUJTO_egyutt()) return;
 	const buttons = GYUJTO_REF.document.querySelectorAll('#scavenge_screen .free_send_button');
 	/* Options are listed worst to best, so the last is the most valuable and
 	   remains the preference. But only ever testing the last one meant a single
