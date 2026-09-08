@@ -3120,6 +3120,97 @@ suite('When the gatherer books its next visit', function () {
 });
 
 /* ------------------------------------------------------------------------ */
+/* Working out how long a run will take BEFORE sending it -- the thing the
+   gatherer could never do, and the reason squads drift apart.
+
+   The numbers below are not invented for the test. They are the constants his
+   own game handed back from ScavengeScreen.village.options[n].base, and the
+   4435 / 7203 / 2218 trio is a real squad of his: 48 spear + 49 sword + 250
+   axe, which the game ran for two hours and sent home with 2218 resources. So
+   these assertions hold the code against the game rather than against my
+   algebra. */
+suite('When the gatherer works out how long a run would take', function () {
+	var api = sandbox({}, [
+		sliceFn(SZEM4_SRC, 'scavengeBaseOk'),
+		sliceFn(SZEM4_SRC, 'scavengeDurationSec'),
+		sliceFn(SZEM4_SRC, 'scavengeMinDurationSec'),
+		sliceFn(SZEM4_SRC, 'scavengeCapacityFor'),
+		sliceFn(SZEM4_SRC, 'scavengeHaul')
+	]);
+
+	function base(lootFactor) {
+		return { loot_factor: lootFactor, duration_exponent: 0.45,
+		         duration_initial_seconds: 1800, duration_factor: 0.7237692407143577 };
+	}
+	var gyenge = base(0.1), kozepes = base(0.25), eros = base(0.5);
+
+	/* --- against his real squad --- */
+	eq(api.scavengeDurationSec(4435, eros), 7203,
+	   'his own squad of 4435 carry comes out as the two-hour run the game gave it');
+	eq(api.scavengeHaul(4435, eros), 2218,
+	   'and as the 2218 resources that squad actually came home with');
+	eq(api.scavengeCapacityFor(7203, eros), 4435,
+	   'and asking the other way round for that run length asks for that same squad back');
+
+	/* --- the floor, which is what makes landing together sometimes impossible --- */
+	eq(api.scavengeMinDurationSec(eros), 1303,
+	   'sending nobody at all still takes 21.7 minutes: no run can be shorter');
+	eq(api.scavengeDurationSec(0, eros), api.scavengeMinDurationSec(eros),
+	   'which is simply what an empty squad costs');
+	/* Identity, not eq(): below the floor the bracket goes negative and the
+	   fractional power is NaN, and the harness compares by JSON, where
+	   JSON.stringify(NaN) is "null" -- so eq(..., null) would pass on the very
+	   value this exists to refuse. Same trap as countdownSeconds. */
+	ok(api.scavengeCapacityFor(1302, eros) === null,
+	   'a window shorter than the floor has no squad size that fits it');
+	eq(api.scavengeCapacityFor(1303, eros), 0,
+	   'and exactly at the floor the answer is an empty squad, not a refusal');
+	/* The other end, and it is the only thing holding the last guard in that
+	   function: a window this long overflows the power to Infinity, which is
+	   finite-looking enough to be typed into a troop box. The floor check above
+	   cannot catch this one -- it only refuses windows that are too SHORT. */
+	ok(api.scavengeCapacityFor(1e308, eros) === null,
+	   'and a window too long to compute is refused rather than answered with Infinity');
+
+	/* --- the two directions agree, on more than the one live sample --- */
+	eq(api.scavengeDurationSec(api.scavengeCapacityFor(3600, eros), eros), 3600,
+	   'an hour asked for is an hour sent');
+	eq(api.scavengeDurationSec(api.scavengeCapacityFor(5400, kozepes), kozepes), 5400,
+	   'and on a different option too, so neither direction is fitted to one of them');
+
+	/* --- the option matters, and in the direction that drives the strategy --- */
+	eq(api.scavengeCapacityFor(3600, eros), 1555, 'an hour on the 50% option');
+	eq(api.scavengeCapacityFor(3600, gyenge), 7774, 'the same hour on the 10% option');
+	ok(api.scavengeCapacityFor(3600, gyenge) > api.scavengeCapacityFor(3600, eros),
+	   'the weak option costs far more troops to keep busy for the same time');
+
+	/* The constants are the option's own, never written down in SZEM: a world
+	   with different scavenging numbers has to come out different, or this is
+	   pinned to his server and silently wrong on any other. */
+	var maswilag = { loot_factor: 0.5, duration_exponent: 0.45,
+	                 duration_initial_seconds: 600, duration_factor: 1 };
+	eq(api.scavengeMinDurationSec(maswilag), 600,
+	   'the overhead of another world is read from that world, not assumed');
+
+	/* --- total, because the answers get typed into the game's own send form --- */
+	/* Caught on purpose: reading a constant off a missing option throws rather
+	   than returning anything, and an exception here would abandon the suite and
+	   hide every assertion below instead of naming this one. */
+	var nincsOpcio;
+	try { nincsOpcio = api.scavengeDurationSec(100, null); }
+	catch (e) { nincsOpcio = 'threw: ' + e.message; }
+	ok(nincsOpcio === null, 'no option, no answer');
+	ok(api.scavengeDurationSec(100, {}) === null, 'nor from an option missing its constants');
+	ok(api.scavengeDurationSec(100, base(undefined)) === null, 'nor with the loot factor missing');
+	ok(api.scavengeDurationSec(-1, eros) === null, 'a negative squad is not a squad');
+	ok(api.scavengeDurationSec(NaN, eros) === null, 'and NaN never becomes a run length');
+	ok(api.scavengeCapacityFor(NaN, eros) === null, 'nor a squad size');
+	ok(api.scavengeCapacityFor(3600, base(0)) === null,
+	   'an option that loots nothing would divide by zero rather than say so');
+	ok(api.scavengeHaul(-5, eros) === null, 'and no haul is owed to a negative squad');
+});
+
+/* ------------------------------------------------------------------------ */
 /* How full the armies come home is measured from the reports, not guessed at
    on the way out. What is still worth counting here is how many attempts
    became attacks, and why the rest did not -- a plan the minimum-army floor

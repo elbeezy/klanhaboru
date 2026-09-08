@@ -5420,6 +5420,73 @@ function scavengeNextVisitMs(hazaerkezesek, strategia, mostMs) {
 	   the game is watching. */
 	return Math.max(valasztott + GYUJTO_RATARTAS_MS, mostMs + GYUJTO_PADLO_MS);
 }
+
+/* The game's own scavenging arithmetic, read off the helper script SZEM
+   already loads (SCAVENGE_SCRIPT_URL, class ScavengeOption) rather than
+   guessed at:
+
+     duration = round((cap^2 * loot_factor*100 * loot_factor) ^ exponent
+                      + initial_seconds) * factor
+     haul     = cap * loot_factor
+
+   Each option states its own constants at
+   ScavengeScreen.village.options[n].base, so they are passed in rather than
+   written down here: a world with different numbers stays correct for free.
+
+   Verified against a live squad, not only algebra -- 4435 carry on the 50%
+   option gives 7203s, the two-hour run the game actually ran it for, and that
+   squad's own stated haul of 2218 is 4435 * 0.5. */
+function scavengeBaseOk(base) {
+	if (!base) return false;
+	var szuksegesek = ['loot_factor', 'duration_exponent', 'duration_initial_seconds', 'duration_factor'];
+	for (var i = 0; i < szuksegesek.length; i++) {
+		if (!isFinite(base[szuksegesek[i]])) return false;
+	}
+	return Number(base.loot_factor) > 0 && Number(base.duration_exponent) > 0
+	    && Number(base.duration_factor) > 0;
+}
+
+function scavengeDurationSec(kapacitas, base) {
+	if (!scavengeBaseOk(base) || !isFinite(kapacitas) || kapacitas < 0) return null;
+	var lf = Number(base.loot_factor);
+	var szam = (kapacitas * kapacitas) * (lf * 100) * lf;
+	var nyers = Math.pow(szam, Number(base.duration_exponent))
+	          + Number(base.duration_initial_seconds);
+	var mp = Math.round(nyers * Number(base.duration_factor));
+	return isFinite(mp) ? mp : null;
+}
+
+/* The shortest run an option can possibly do: no troops at all still pays the
+   whole initial_seconds overhead, about 21.7 minutes on his world. No squad
+   size goes under it, which is exactly why a homecoming squad sometimes
+   cannot be made to land with the ones still out. */
+function scavengeMinDurationSec(base) {
+	return scavengeDurationSec(0, base);
+}
+
+/* The inverse, and the one the scheduling actually needs: the carry capacity
+   that makes a run last this long.
+
+   Under the floor there is no answer at all -- the bracket goes negative, and
+   a fractional power of a negative number is NaN. NaN would travel silently
+   into a troop count and be typed into the game's own send form, so it is
+   turned away here as null and the caller decides what to do instead. Same
+   reasoning as countdownSeconds refusing to return NaN. */
+function scavengeCapacityFor(masodperc, base) {
+	if (!scavengeBaseOk(base) || !isFinite(masodperc)) return null;
+	var lf = Number(base.loot_factor);
+	var nyers = masodperc / Number(base.duration_factor)
+	          - Number(base.duration_initial_seconds);
+	if (!(nyers > 0)) return null;
+	var szam = Math.pow(nyers, 1 / Number(base.duration_exponent));
+	var teher = Math.sqrt(szam / (lf * 100) / lf);
+	return isFinite(teher) ? Math.round(teher) : null;
+}
+
+function scavengeHaul(kapacitas, base) {
+	if (!scavengeBaseOk(base) || !isFinite(kapacitas) || kapacitas < 0) return null;
+	return Math.round(kapacitas * Number(base.loot_factor));
+}
 function szem4_GYUJTO_1keres() {try{
 	/* Appointments are booked on the real clock now (see scavengeReturnsMs),
 	   so they have to be read against the real clock too. */
