@@ -2591,6 +2591,96 @@ function defaultVijeState() {
 function defaultGyujtoState() {
 	return { settings: { strategy: 'min', maxora: GYUJTO_MAX_FUTAS_MP / 3600 } };
 }
+
+/* The Toborzó's templates: what shape each village's army grows into.
+
+   A template states PROPORTIONS, never a quantity to reach. A finished
+   offensive army is many times larger than any village can hold, so absolute
+   numbers would be unreachable everywhere and meaningless on a young village;
+   proportions mean the same thing at 5% built and at 90%, and they turn "what
+   should I recruit next" into one answerable question: which unit is furthest
+   below its share?
+
+   Three roles, not two, because an early account has a single village that has
+   to farm, gather and defend itself at once. Forcing that into the attacker
+   template would order it a siege train it cannot use yet.
+
+   gyujtoEgysegek is which units the Gyűjtő may spend in a village with this
+   template. An attacker's cavalry is out farming, so its axes are the only
+   thing left to scavenge with -- chosen deliberately, with the run cap as the
+   lever that keeps a share of them at home. A defender owns no cavalry at all
+   and therefore never farms; its whole army can scavenge instead, and spears
+   carry more per population than anything else in the game. No template ever
+   hands the gatherer light cavalry: that is the farm engine's army.
+
+   nepessegAranyMax is the share of the village's farm space the ARMY may take.
+   Buildings cost population too, so without a ceiling the recruiter would
+   eventually fill the farm and no building could ever be raised again.
+
+   The numbers are a starting point, not advice. They are his to set once the
+   editor exists, and nothing computes from them until then. */
+var TOBORZO_SABLON_ALAP = {
+	tamado: {
+		nev: 'Támadó',
+		osszetetel: { axe: 70, light: 30, ram: 3, catapult: 3 },
+		gyujtoEgysegek: ['axe'],
+		nepessegAranyMax: 0.7
+	},
+	vedo: {
+		nev: 'Védő',
+		osszetetel: { spear: 45, sword: 45, heavy: 10 },
+		gyujtoEgysegek: ['spear', 'sword', 'archer'],
+		nepessegAranyMax: 0.7
+	},
+	vegyes: {
+		nev: 'Vegyes',
+		osszetetel: { light: 40, axe: 30, spear: 20, sword: 10 },
+		gyujtoEgysegek: ['axe', 'spear', 'sword'],
+		nepessegAranyMax: 0.7
+	}
+};
+
+/* Deep copied on the way out, so editing a template can never write back into
+   the defaults -- which would make a reset hand back the edited values and
+   quietly do nothing. */
+function defaultToborzoState() {
+	return {
+		falvak: {},   // villId: melyik sablon szerint toborozzon
+		sablonok: JSON.parse(JSON.stringify(TOBORZO_SABLON_ALAP))
+	};
+}
+
+/* Everything else in this file loads with a one-level-deep Object.assign, so a
+   stored object replaces the default entire and any field added later arrives
+   undefined on exactly the installs that have been used. That is how the
+   Gyűjtő's cap box shipped blank. This module repairs instead of replacing:
+   every value that was edited is kept, anything missing comes from the
+   defaults, and a template the defaults no longer carry is left alone rather
+   than deleted. */
+function mergeToborzoState(tarolt) {
+	var allapot = defaultToborzoState();
+	if (!tarolt || typeof tarolt !== 'object') return allapot;
+	if (tarolt.falvak && typeof tarolt.falvak === 'object') allapot.falvak = tarolt.falvak;
+
+	var taroltak = tarolt.sablonok && typeof tarolt.sablonok === 'object' ? tarolt.sablonok : {};
+	for (var nev in taroltak) {
+		var mentett = taroltak[nev];
+		if (!mentett || typeof mentett !== 'object') continue;
+		var alap = allapot.sablonok[nev] ||
+			{ nev: nev, osszetetel: {}, gyujtoEgysegek: [], nepessegAranyMax: 0.7 };
+		allapot.sablonok[nev] = {
+			nev: mentett.nev || alap.nev,
+			osszetetel: mentett.osszetetel && typeof mentett.osszetetel === 'object'
+				? mentett.osszetetel : alap.osszetetel,
+			gyujtoEgysegek: Array.isArray(mentett.gyujtoEgysegek)
+				? mentett.gyujtoEgysegek : alap.gyujtoEgysegek,
+			nepessegAranyMax: mentett.nepessegAranyMax > 0
+				? mentett.nepessegAranyMax : alap.nepessegAranyMax
+		};
+	}
+	return allapot;
+}
+var SZEM4_TOBORZO = defaultToborzoState();
 /* The four colours the interface shipped with before it had a palette.
 
    The style boxes are saved as soon as anything on the sound panel is, so an
@@ -6411,6 +6501,7 @@ function szem4_ADAT_saveNow(tipus) {
 		case "sys":    storeGuarded(AZON+"_sys", JSON.stringify(SZEM4_SETTINGS), 'Beállítások'); break;
 		case "gyujto": storeGuarded(AZON + '_gyujto', JSON.stringify(SZEM4_GYUJTO), 'Gyűjtögető'); break;
 		case "bef":    storeGuarded(AZON + '_bef', JSON.stringify(SZEM4_BEF), 'Auto befejező'); break;
+		case "toborzo": storeGuarded(AZON + '_toborzo', JSON.stringify(SZEM4_TOBORZO), 'Toborzó'); break;
 		case 'cloud':  saveLocalDataToCloud(false, false);
 	}
 	if (dateEl) dateEl.innerHTML = new Date().toLocaleString();
@@ -6449,6 +6540,10 @@ function szem4_ADAT_loadNow(tipus) {try{
 			SZEM4_BEF = Object.assign({}, SZEM4_BEF, dataObj);
 			rebuildDOM_bef();
 			break;
+		case "toborzo":
+			/* No interface to rebuild yet -- the panel arrives with the module. */
+			SZEM4_TOBORZO = mergeToborzoState(dataObj);
+			break;
 		default: debug('szem4_ADAT_loadNow', `Nincs ilyen típus: ${tipus}`);
 	}
 }catch(e) {debug('szem4_ADAT_loadNow', `Hiba ${tipus} adatbetöltésénél: ${e}`);}}
@@ -6463,7 +6558,8 @@ function szem4_ADAT_loadNow(tipus) {try{
 function szem4_ADAT_restart(tipus) {try{
 	const labels = {
 		farm: 'Farmol\u00f3', vije: 'Jelent\u00e9s Elemz\u0151', epit: '\u00c9p\u00edt\u0151',
-		gyujto: 'Gy\u0171jt\u00f6get\u0151', sys: 'Hangok \u00e9s t\u00e9m\u00e1k', bef: 'Auto befejez\u0151'
+		gyujto: 'Gy\u0171jt\u00f6get\u0151', sys: 'Hangok \u00e9s t\u00e9m\u00e1k', bef: 'Auto befejez\u0151',
+		toborzo: 'Toborz\u00f3'
 	};
 	const label = labels[tipus];
 	if (!label) { alert2(`Nincs ilyen t\u00edpus: ${tipus}`); return; }
@@ -6495,6 +6591,9 @@ function szem4_ADAT_restart(tipus) {try{
 		case 'epit':
 			// the builder keeps its state in the table rather than an object
 			$('#epit_lista tr:gt(0)').remove();
+			break;
+		case 'toborzo':
+			SZEM4_TOBORZO = defaultToborzoState();
 			break;
 		case 'bef':
 			SZEM4_BEF = defaultBefState();
@@ -6741,6 +6840,7 @@ function loadCloudDataIntoLocal() {
 		localStorage.setItem(AZON+"_epit",   cloudData.epit);
 		localStorage.setItem(AZON+"_sys",    cloudData.sys);
 		localStorage.setItem(AZON+"_gyujto", cloudData.gyujto);
+		if (cloudData.toborzo) localStorage.setItem(AZON+"_toborzo", cloudData.toborzo);
 		szem4_ADAT_LoadAll();
 	});
 }
@@ -6762,6 +6862,7 @@ function saveLocalDataToCloud(isAll, isByHand=false) {
 		vije:  localStorage.getItem(AZON+"_vije"),
 		sys:   localStorage.getItem(AZON+"_sys"),
 		gyujto:localStorage.getItem(AZON+"_gyujto"),
+		toborzo:localStorage.getItem(AZON+"_toborzo"),
 	};
 	updateData(jsonToSave).then(() => {
 		var d=new Date();
@@ -6805,6 +6906,7 @@ ujkieg("adatok","Adatmentő",'<tr><td>\
 <tr><td><input type="checkbox" name="sys" checked></td><td>Hangok, témák</td><td></td><td>'+szem4_ADAT_AddImageRow("sys")+'</td></tr>\
 <tr><td><input type="checkbox" name="gyujto" checked></td><td>Gyűjtögető</td><td></td><td>'+szem4_ADAT_AddImageRow("gyujto")+'</td></tr>\
 <tr><td><input type="checkbox" name="bef" checked></td><td>Auto befejező</td><td></td><td>'+szem4_ADAT_AddImageRow("bef")+'</td></tr>\
+<tr><td><input type="checkbox" name="toborzo" checked></td><td>Toborzó</td><td></td><td>'+szem4_ADAT_AddImageRow("toborzo")+'</td></tr>\
 <tr><td><input type="checkbox" name="cloud" unchecked></td><td><img height="17px" src="'+szemIkon('cloud')+'"> Cloud sync</td><td></td><td>\
 			<img title="Cloud adat betöltése a jelenlegi rendszerbe" alt="Import" onclick="loadCloudDataIntoLocal()" width="17px" src="'+szemIkon('import')+'"> \
 			<img title="Local adat lementése a Cloud rendszerbe" alt="Save" onclick="saveLocalDataToCloud(true, true)" width="17px" src="'+szemIkon('mentes')+'">\

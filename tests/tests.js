@@ -3007,6 +3007,124 @@ suite('auto befejezo -- a falu ki- es bekapcsolasa', function () {
 });
 
 /* ------------------------------------------------------------------------ */
+/* The Toborzó's templates. A village is given a role, and the role states the
+   SHAPE its army grows into rather than a quantity to reach -- so the same
+   template is meaningful on a village at 5% built and one at 90%.
+
+   Nothing recruits yet; this suite pins the model and the fact that it
+   survives a reload, which is all the first commit claims. */
+suite('The army templates a village grows into', function () {
+	var api = sandbox({}, [
+		sliceFrom(SZEM4_SRC, 'var TOBORZO_SABLON_ALAP', 'mergeToborzoState')
+	]);
+	var alap = api.defaultToborzoState();
+	var sablonok = alap.sablonok;
+
+	eq(Object.keys(sablonok).sort(), ['tamado', 'vedo', 'vegyes'],
+	   'there is a template for attacking, defending, and doing both at once');
+	eq(alap.falvak, {},
+	   'and no village is recruited for until it is given one');
+
+	/* --- the invariant that protects the farm engine --- */
+	var lovasok = [];
+	for (var nev in sablonok) {
+		if (sablonok[nev].gyujtoEgysegek.indexOf('light') !== -1) lovasok.push(nev);
+	}
+	eq(lovasok, [],
+	   'no template ever hands the gatherer light cavalry: that is the farm engine army');
+
+	/* --- his own two rules about the roles --- */
+	eq(sablonok.tamado.gyujtoEgysegek, ['axe'],
+	   'an attacker scavenges with axes only, its cavalry being out farming');
+	ok(sablonok.vedo.osszetetel.light === undefined,
+	   'a defender owns no cavalry at all, which is why it never farms');
+	ok(sablonok.vedo.gyujtoEgysegek.length > 1,
+	   'but its whole army can scavenge, so it is the better gatherer of the two');
+	ok(sablonok.vegyes.osszetetel.light > 0 && sablonok.vegyes.osszetetel.axe > 0,
+	   'the mixed role farms and gathers at once, which is what a first village must do');
+
+	/* --- proportions, not quantities --- */
+	var rosszSzam = [];
+	for (var n2 in sablonok) {
+		var ossz = sablonok[n2].osszetetel;
+		for (var egyseg in ossz) {
+			if (!(ossz[egyseg] > 0) || !isFinite(ossz[egyseg])) rosszSzam.push(n2 + '.' + egyseg);
+		}
+		if (!(sablonok[n2].nepessegAranyMax > 0) || sablonok[n2].nepessegAranyMax >= 1) {
+			rosszSzam.push(n2 + '.nepessegAranyMax');
+		}
+	}
+	eq(rosszSzam, [],
+	   'every share is a real positive number, and every army stops short of the whole farm');
+
+	/* Buildings cost population too. A template allowed to fill the farm would
+	   leave no room to raise anything ever again. */
+	ok(sablonok.tamado.nepessegAranyMax < 1,
+	   'the army is capped below the farm so buildings can still be raised');
+
+	/* --- the defaults must not be editable by accident --- */
+	/* Captured as a plain number first: comparing the edited copy against
+	   sablonok.tamado would compare the shared object with itself, and pass no
+	   matter what the deep copy does. */
+	var axeAlap = sablonok.tamado.osszetetel.axe;
+	var elso = api.defaultToborzoState();
+	elso.sablonok.tamado.osszetetel.axe = 999;
+	elso.sablonok.tamado.gyujtoEgysegek.push('light');
+	var masodik = api.defaultToborzoState();
+	eq(masodik.sablonok.tamado.osszetetel.axe, axeAlap,
+	   'editing a template never writes back into the defaults');
+	eq(masodik.sablonok.tamado.gyujtoEgysegek, ['axe'],
+	   'nor into the list of units the gatherer may spend, or a reset would hand back the edit');
+
+	/* --- loading: repair, never replace --- */
+	/* Everywhere else in the file a stored object replaces the default entire,
+	   so a field added later arrives undefined on exactly the installs that
+	   have been used. That is how the Gyűjtő's cap box shipped blank. */
+	var regi = api.mergeToborzoState({
+		falvak: { 4242: 'vedo' },
+		sablonok: { tamado: { osszetetel: { axe: 90, light: 10 } } }
+	});
+	eq(regi.falvak, { 4242: 'vedo' }, 'a stored village keeps the template it was given');
+	eq(regi.sablonok.tamado.osszetetel, { axe: 90, light: 10 },
+	   'an edited composition is kept exactly as it was edited');
+	eq(regi.sablonok.tamado.gyujtoEgysegek, ['axe'],
+	   'and a field the stored copy never had is filled in rather than left undefined');
+	eq(regi.sablonok.tamado.nepessegAranyMax, sablonok.tamado.nepessegAranyMax,
+	   'including the population ceiling, which the recruiter would otherwise read as zero');
+	eq(Object.keys(regi.sablonok).sort(), ['tamado', 'vedo', 'vegyes'],
+	   'the templates that were not stored are still there');
+
+	var sajat = api.mergeToborzoState({ sablonok: { sajat: { nev: 'Sajat', osszetetel: { spear: 1 } } } });
+	eq(sajat.sablonok.sajat.osszetetel, { spear: 1 },
+	   'a template of his own making is kept, not dropped for being unknown');
+
+	/* --- total: this reads whatever localStorage happens to hold --- */
+	/* Read back inside the try as well as called inside it: a mutation that
+	   makes one of these come back broken would otherwise throw on the line
+	   below and abort the whole suite, hiding which assertion actually died. */
+	var szemetOk;
+	try {
+		szemetOk = [null, 'nonsense', { sablonok: { tamado: null } }, { sablonok: 5 }]
+			.every(function (rossz) {
+				return api.mergeToborzoState(rossz).sablonok.tamado.osszetetel.axe === axeAlap;
+			});
+	} catch (e) { szemetOk = 'threw: ' + e.message; }
+	ok(szemetOk === true,
+	   'nothing stored, or nonsense stored, comes back as the defaults rather than a crash');
+
+	/* --- it has to survive a reload, or none of the above matters --- */
+	var forras = codeOnly(SZEM4_SRC);
+	ok(forras.indexOf("case \"toborzo\": storeGuarded(AZON + '_toborzo'") !== -1,
+	   'the templates are written to storage');
+	ok(forras.indexOf('SZEM4_TOBORZO = mergeToborzoState(dataObj)') !== -1,
+	   'and read back through the repair rather than replaced wholesale');
+	ok(forras.indexOf('name="toborzo" checked') !== -1,
+	   'the Adatmentő lists it, or the once-a-minute autosave never saves it');
+	ok(forras.indexOf('SZEM4_TOBORZO = defaultToborzoState()') !== -1,
+	   'and a reset puts the shipped templates back');
+});
+
+/* ------------------------------------------------------------------------ */
 /* The gatherer books its next visit for when a squad gets home. Under 'max' it
    waits for the SLOWEST option, so the quick options' troops stand idle in
    between -- on a real saved page the two running squads were 1h33m apart.
