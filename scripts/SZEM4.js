@@ -19,7 +19,8 @@
  * ========================================================================== */
 Object.assign(window, {
 	BotvedelemBe, BotvedelemKi, addTooltip_build, add_farmolando,
-	add_farmolo, alert2, debug_urit, gyujto_setVill,
+	add_farmolo, alert2, debug_urit, gyujto_setStrategia,
+	gyujto_setVill,
 	hattercsere, hattertolor, learnCatapult, loadCloudDataIntoLocal,
 	modosit_szam, naplo, nyit, onWallpChange,
 	playSound, removeTooltip, rendez, restartKieg,
@@ -5319,6 +5320,18 @@ function rebuildDOM_gyujto() {
 	}
 	f.strategy.value = SZEM4_GYUJTO.settings.strategy;
 }
+/* The Stratégia box was read nowhere: rebuildDOM_gyujto wrote the stored value
+   into it on load, and nothing ever wrote a chosen value back out, so the
+   engine kept running whatever was in storage no matter what the box showed.
+   Picking a strategy looked like it worked and changed nothing.
+
+   Only the state is written here, not localStorage: the Adatmentő saves every
+   ticked module once a minute, which is exactly how the village checkboxes
+   next to this box are already persisted. */
+function gyujto_setStrategia(el) {
+	if (!el || !el.value) return;
+	SZEM4_GYUJTO.settings.strategy = el.value;
+}
 function szem4_GYUJTO_search(ev) {
 	ev.stopImmediatePropagation();
 	let vills = prompt('Szűrés ezen falukra:\nÜres=minden');
@@ -5831,7 +5844,7 @@ ujkieg('gyujto','Gyűjtő',`<tr><td>
 		</table>
 		<br><br>
 		Stratégia:
-		<select name="strategy">
+		<select name="strategy" onchange="gyujto_setStrategia(this)">
 			<option value="min">Amint kész egy gyűjtés, küldje a következőt</option>
 			<option value="max">Várja meg, amíg minden opció kész (jobb csapatelosztás, de a gyors opciók csapatai várnak)</option>
 		</select>

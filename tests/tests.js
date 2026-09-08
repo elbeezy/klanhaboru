@@ -11,7 +11,8 @@
    commit that exports it. */
 var EXPECTED_EXPORTS = [
 	'BotvedelemBe', 'BotvedelemKi', 'addTooltip_build', 'add_farmolando',
-	'add_farmolo', 'alert2', 'debug_urit', 'gyujto_setVill',
+	'add_farmolo', 'alert2', 'debug_urit', 'gyujto_setStrategia',
+	'gyujto_setVill',
 	'hattercsere', 'hattertolor', 'learnCatapult', 'loadCloudDataIntoLocal',
 	'modosit_szam', 'naplo', 'nyit', 'onWallpChange',
 	'playSound', 'removeTooltip', 'rendez', 'restartKieg',
@@ -3022,7 +3023,7 @@ suite('Which gathering the gatherer waits for', function () {
 	eq(alap, 'min', 'a fresh install comes back for the first squad home, so no troops idle');
 
 	/* The <select> as a browser reads it before any of SZEM's code runs. */
-	var sel = SZEM4_SRC.slice(SZEM4_SRC.indexOf('<select name="strategy">'));
+	var sel = SZEM4_SRC.slice(SZEM4_SRC.indexOf('<select name="strategy"'));
 	sel = sel.slice(0, sel.indexOf('</select>'));
 	var opts = [];
 	sel.replace(/<option value="([^"]*)"([^>]*)>/g, function (_, val, rest) {
@@ -3044,6 +3045,33 @@ suite('Which gathering the gatherer waits for', function () {
 	lassuCimke = lassuCimke.slice(lassuCimke.indexOf('>') + 1, lassuCimke.indexOf('</option>'));
 	ok(lassuCimke.indexOf('csapatai') !== -1,
 	   'the waiting strategy says outright that troops will be left waiting');
+
+	/* The box only ever received a value; it never sent one anywhere, so the
+	   engine went on reading whatever was in storage while the interface showed
+	   the choice as taken. Both halves are pinned: the handler stores the pick,
+	   and the markup actually calls the handler. */
+	var vilag = { SZEM4_GYUJTO: { settings: { strategy: 'min' } } };
+	var beallit = sandbox(vilag, [sliceFn(SZEM4_SRC, 'gyujto_setStrategia')]);
+
+	beallit.gyujto_setStrategia({ value: 'max' });
+	eq(vilag.SZEM4_GYUJTO.settings.strategy, 'max',
+	   'choosing a strategy is what the engine then runs');
+	beallit.gyujto_setStrategia({ value: 'min' });
+	eq(vilag.SZEM4_GYUJTO.settings.strategy, 'min', 'and choosing back again works too');
+
+	/* Total on purpose: this runs from an inline handler, and a throw there is
+	   swallowed by the browser, so a bad call must leave the setting alone
+	   rather than store undefined and strand the engine on no strategy at all. */
+	var ures = 'rendben';
+	try {
+		beallit.gyujto_setStrategia(null);
+		beallit.gyujto_setStrategia({ value: '' });
+	} catch (e) { ures = 'threw: ' + e.message; }
+	ok(ures === 'rendben' && vilag.SZEM4_GYUJTO.settings.strategy === 'min',
+	   'and a call with nothing chosen leaves the strategy as it was');
+
+	ok(sel.indexOf('gyujto_setStrategia(this)') !== -1,
+	   'the box is wired to the handler, or picking a strategy does nothing again');
 });
 
 /* ------------------------------------------------------------------------ */
