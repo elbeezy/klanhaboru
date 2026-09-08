@@ -3125,6 +3125,143 @@ suite('The army templates a village grows into', function () {
 });
 
 /* ------------------------------------------------------------------------ */
+/* What the recruiter puts in the queue on one visit.
+
+   The template is a shape, not a size, so this never "finishes" -- it grows
+   the army in proportion until a limit stops it, and which limit stopped it is
+   half the answer.
+
+   sliceFrom() cuts to the END of the named function, so toborzoTerv has to
+   stay the last of this block in the source. */
+suite('What the recruiter puts in the queue', function () {
+	var api = sandbox(
+		{ TANYA: { spear: 1, sword: 1, axe: 1, archer: 1, spy: 2, light: 4, marcher: 5, heavy: 6, ram: 5, catapult: 8 } },
+		[sliceFrom(SZEM4_SRC, 'var TOBORZO_EPULET', 'toborzoTerv')]
+	);
+
+	/* Real prices and training times from the game, so the arithmetic below is
+	   the arithmetic that will run. */
+	var KOLTSEG = { spear: [50, 30, 10], sword: [30, 30, 70], axe: [60, 30, 40],
+	                light: [125, 100, 250], ram: [300, 200, 200], catapult: [320, 400, 100] };
+	var IDO = { spear: 102, sword: 150, axe: 120, light: 300, ram: 480, catapult: 640 };
+
+	function keret(extra) {
+		var a = {
+			nepessegMax: 2216, nepessegHasznalt: 2127,
+			nyers: [100000, 100000, 100000],
+			koltseg: KOLTSEG, ido: IDO,
+			epitheto: { spear: true, sword: true, axe: true, light: true, ram: true, catapult: true },
+			sorHossz: { barracks: 0, stable: 0, garage: 0 },
+			sorMaxMp: 8 * 3600
+		};
+		for (var k in (extra || {})) a[k] = extra[k];
+		return a;
+	}
+	var sablon = { osszetetel: { axe: 70, light: 30 }, nepessegAranyMax: 0.7 };
+
+	/* --- the shape, from nothing --- */
+	/* A modest purse on purpose: with resources deep enough to fill both
+	   queues, the caps alone produce something near 70:30 and the assertion
+	   stops testing the rule it is named after. */
+	var ures = api.toborzoTerv(sablon, {}, keret({ nepessegHasznalt: 0, nyers: [3000, 3000, 3000] }));
+	/* The template's numbers are unit counts, the way a player states an army
+	   ("7000 axe, 3000 light"), not population. */
+	/* 25 axes to 8 cavalry. It tracks 70:30 rather than hitting it, and the
+	   skew is the right way up: cavalry costs 250 iron against an axe's 40, so
+	   when the iron runs low only axes are still affordable and the tail is
+	   axes. Spending what is left beats stopping. */
+	var aranyA = ures.egysegek.axe / (ures.egysegek.axe + ures.egysegek.light);
+	ok(aranyA > 0.65 && aranyA < 0.8,
+	   'an empty village is recruited toward the shape the template asks for, near 70:30');
+	ok(ures.egysegek.axe > 0 && ures.egysegek.light > 0,
+	   'and both buildings are given work, rather than one unit type taking everything');
+
+	/* --- the shape, correcting an army that has drifted --- */
+	var ferde = api.toborzoTerv(sablon, { light: 60 }, keret({ nepessegHasznalt: 0, nyers: [3000, 3000, 3000] }));
+	eq(ferde.egysegek.light, undefined,
+	   'a village already over its cavalry share is given none at all');
+	ok(ferde.egysegek.axe > 0, 'every recruit goes to the unit that is furthest behind');
+
+	/* The mirror of it, and the one that bites: a village long on the unit with
+	   the LARGER share must still be given the smaller one. Without this, code
+	   that ignored what the village owns and always took the biggest number in
+	   the template would pass every other assertion here. */
+	var ferdeMasik = api.toborzoTerv(sablon, { axe: 200 },
+		keret({ nepessegHasznalt: 0, nyers: [3000, 3000, 3000] }));
+	ok(ferdeMasik.egysegek.light > 0 && ferdeMasik.egysegek.axe === undefined,
+	   'a village long on axes is given cavalry until the shape catches up');
+
+	/* --- population: the ceiling that matters, and it is two ceilings --- */
+	var szuk = api.toborzoTerv(sablon, {}, keret());
+	eq(szuk.nepesseg, 89,
+	   'a village 89 spaces from a full farm recruits exactly 89 population and no more');
+	eq(szuk.ok, 'nepesseg', 'and says the farm is what stopped it');
+
+	/* The army's own share is the tighter limit here: 70% of 2216 is 1551, and
+	   the army already holds 1500 of it. */
+	var seregHatar = api.toborzoTerv(sablon, { axe: 1500 }, keret({ nepessegHasznalt: 1500 }));
+	eq(seregHatar.nepesseg, 51,
+	   'an army at its share of the farm stops there, leaving the rest for buildings');
+	eq(seregHatar.ok, 'nepesseg', 'and says so');
+
+	/* --- resources --- */
+	var szegeny = api.toborzoTerv(sablon, {}, keret({ nepessegHasznalt: 0, nyers: [600, 300, 400] }));
+	eq(szegeny.ok, 'nyers', 'a village out of resources says that is what stopped it');
+	ok(szegeny.egysegek.axe > 0 && szegeny.egysegek.axe <= 10,
+	   'and it spends what it has rather than nothing');
+
+	/* --- the queue cap, per building --- */
+	var telisor = api.toborzoTerv(sablon, {},
+		keret({ nepessegHasznalt: 0, sorHossz: { barracks: 8 * 3600, stable: 0, garage: 0 } }));
+	eq(telisor.egysegek.axe, undefined, 'a building whose queue is full is skipped');
+	ok(telisor.egysegek.light > 0,
+	   'and the building that is free keeps working instead of the whole visit stopping');
+
+	var mindTele = api.toborzoTerv(sablon, {},
+		keret({ nepessegHasznalt: 0, sorHossz: { barracks: 8 * 3600, stable: 8 * 3600, garage: 0 } }));
+	eq(mindTele.egysegek, {}, 'with every queue full nothing is ordered');
+	eq(mindTele.ok, 'sor', 'and the reason names the queue, not the resources');
+
+	/* --- what the village cannot build yet --- */
+	var nincsIstallo = api.toborzoTerv(sablon, {},
+		keret({ nepessegHasznalt: 0, epitheto: { axe: true } }));
+	eq(nincsIstallo.egysegek.light, undefined, 'a unit the village cannot train yet is never ordered');
+	ok(nincsIstallo.egysegek.axe > 0, 'while the ones it can are');
+
+	var semmi = api.toborzoTerv(sablon, {}, keret({ nepessegHasznalt: 0, epitheto: {} }));
+	eq(semmi.ok, 'nincs_egyseg',
+	   'a village that can train nothing in its template says which way out that is');
+
+	/* --- every reason has an instruction attached to it --- */
+	var szovegek = codeOnly(sliceFrom(SZEM4_SRC, 'var TOBORZO_OKOK', 'toborzoSeregNepesseg'));
+	['nepesseg', 'nyers', 'sor', 'nincs_egyseg', 'nincs_sablon'].forEach(function (nev) {
+		ok(szovegek.indexOf(nev + ':') !== -1, 'the "' + nev + '" reason has a sentence of its own');
+	});
+	ok(szovegek.indexOf('Építs magasabb Tanyát') !== -1,
+	   'and a full farm tells him to raise the Tanya rather than only reporting it');
+	/* Per reason, not a search of the whole block: both of these say "Nincs
+	   teendő", so a single presence check passes while one of them has lost it. */
+	['nyers', 'sor'].forEach(function (nev) {
+		var sor = szovegek.slice(szovegek.indexOf(nev + ':'));
+		sor = sor.slice(0, sor.indexOf('\n'));
+		ok(sor.indexOf('Nincs teendő') !== -1,
+		   'the "' + nev + '" limit, which he cannot act on, says outright there is nothing to do');
+	});
+
+	/* --- total: this runs on whatever the page and his templates hold --- */
+	var vedett;
+	try {
+		vedett = [api.toborzoTerv(null, {}, keret()).ok,
+		          api.toborzoTerv({ osszetetel: {} }, {}, keret()).ok,
+		          api.toborzoTerv(sablon, null, keret({ nepessegHasznalt: 0 })).ok];
+	} catch (e) { vedett = 'threw: ' + e.message; }
+	/* The third stops on 'sor': with a farm this empty and resources this deep,
+	   the eight-hour queue cap is reached long before either. */
+	eq(vedett, ['nincs_sablon', 'nincs_egyseg', 'sor'],
+	   'no template, an empty template and no troop counts are all answers rather than crashes');
+});
+
+/* ------------------------------------------------------------------------ */
 /* Auto befejező is on every other persistence path (saveNow, loadNow, restart,
    the #adat_opts row) but was missing from the two cloud sync functions, so a
    fresh machine restoring from the cloud lost which villages had it enabled. */

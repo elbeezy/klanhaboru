@@ -2681,6 +2681,141 @@ function mergeToborzoState(tarolt) {
 	return allapot;
 }
 var SZEM4_TOBORZO = defaultToborzoState();
+
+/* Which building trains what. A unit belongs to exactly one of the three, so
+   this is also which queue a recruit lands in. */
+var TOBORZO_EPULET = {
+	spear: 'barracks', sword: 'barracks', axe: 'barracks', archer: 'barracks',
+	spy: 'stable', light: 'stable', marcher: 'stable', heavy: 'stable',
+	ram: 'garage', catapult: 'garage'
+};
+
+/* Every reason the recruiter can stop, and what to do about each. The reason
+   is half the answer here: "nothing was recruited" on its own sends him
+   looking at the wrong thing, which is what the gatherer's silent refusals
+   cost us this morning. */
+var TOBORZO_OKOK = {
+	nepesseg:  'Megtelt a sereg helye. Építs magasabb Tanyát, vagy emeld a sablon népesség-arányát.',
+	nyers:     'Elfogyott a toborzásra szánt nyersanyag. Nincs teendő, a következő körben folytatja.',
+	sor:       'Tele a kiképzési sor. Nincs teendő, a sor ürültével folytatja.',
+	nincs_egyseg: 'Egyik egységet sem tudja még kiképezni ez a falu. Építsd meg a hiányzó épületet.',
+	nincs_sablon: 'Nincs sablon ehhez a faluhoz. Válassz neki szerepet a Toborzó paneljén.'
+};
+
+/* How much farm space this army already occupies. Units the world does not
+   price are skipped rather than counted as free. */
+function toborzoSeregNepesseg(birtokolt) {
+	var ossz = 0;
+	for (var tipus in (birtokolt || {})) {
+		if (!TANYA[tipus]) continue;
+		ossz += (Number(birtokolt[tipus]) || 0) * TANYA[tipus];
+	}
+	return ossz;
+}
+
+/* Which unit is furthest below the share the template gives it.
+
+   The template states proportions, so the army is never "finished" -- it grows
+   in shape until a limit stops it. Dividing what the village owns by the
+   template's number gives every unit a comparable position, and the smallest
+   is the one most overdue. An empty village makes every ratio zero, so the
+   largest share in the template goes first, which is the same answer arrived
+   at from the other end.
+
+   This replaces the old script's random pick. Random produced a different army
+   every run and could not be tested at all; this has one right answer at every
+   step, which is also what makes the whole plan reproducible. */
+function toborzoKovetkezo(osszetetel, birtokolt, engedett) {
+	var legjobb = null, legjobbArany = Infinity, legjobbSuly = -1;
+	for (var tipus in osszetetel) {
+		var suly = Number(osszetetel[tipus]);
+		if (!(suly > 0) || engedett.indexOf(tipus) === -1) continue;
+		var arany = (Number(birtokolt[tipus]) || 0) / suly;
+		if (arany < legjobbArany || (arany === legjobbArany && suly > legjobbSuly)) {
+			legjobb = tipus; legjobbArany = arany; legjobbSuly = suly;
+		}
+	}
+	return legjobb;
+}
+
+/* What to put in the queue on this visit.
+
+   Built one unit at a time, the way the script this replaces did, because that
+   is what makes every limit exact rather than estimated: each unit is only
+   added once there is the population, the resources and the queue room for
+   that particular unit.
+
+   A unit whose own building's queue has filled up is skipped, and the next
+   most overdue unit is taken instead -- so the barracks filling does not stop
+   the stable from working. What it will NOT do is recruit a unit the template
+   does not want in order to keep a building busy: the shape is the goal, and
+   an idle building is cheaper than an army of the wrong composition.
+
+   Nothing here reads the page. Everything the plan needs is passed in, so the
+   whole decision can be tested without a game. */
+function toborzoTerv(sablon, birtokolt, allapot) {
+	if (!sablon || !sablon.osszetetel) return { egysegek: {}, nepesseg: 0, ok: 'nincs_sablon' };
+	var meglevo = birtokolt || {};
+	var koltseg = allapot.koltseg || {}, ido = allapot.ido || {};
+	var epitheto = allapot.epitheto || {};
+	var sorMax = allapot.sorMaxMp > 0 ? allapot.sorMaxMp : Infinity;
+
+	/* Two ceilings, and the tighter one wins: the farm cannot be exceeded at
+	   all, and the army may only have the share of it the template allows --
+	   buildings need the rest, or nothing can ever be raised again. */
+	var seregNep = toborzoSeregNepesseg(meglevo);
+	var aranyMax = sablon.nepessegAranyMax > 0 ? sablon.nepessegAranyMax : 1;
+	var nepessegKeret = Math.min(
+		(Number(allapot.nepessegMax) || 0) - (Number(allapot.nepessegHasznalt) || 0),
+		aranyMax * (Number(allapot.nepessegMax) || 0) - seregNep
+	);
+
+	var nyers = [Number(allapot.nyers[0]) || 0, Number(allapot.nyers[1]) || 0, Number(allapot.nyers[2]) || 0];
+	var sorok = {};
+	for (var ep in (allapot.sorHossz || {})) sorok[ep] = Number(allapot.sorHossz[ep]) || 0;
+
+	/* Only units this village can actually train, and that the world prices. */
+	var epitthetoLista = [];
+	for (var t in sablon.osszetetel) {
+		if (epitheto[t] && TANYA[t] > 0 && koltseg[t]) epitthetoLista.push(t);
+	}
+	if (!epitthetoLista.length) return { egysegek: {}, nepesseg: 0, ok: 'nincs_egyseg' };
+
+	var egysegek = {}, hozzaadva = {}, felhasznaltNep = 0, ok = 'nyers';
+	for (var t2 in meglevo) hozzaadva[t2] = Number(meglevo[t2]) || 0;
+
+	while (true) {
+		/* Anything still affordable, with room in its own queue. The reason the
+		   loop ends is taken from why the list emptied, so it names the real
+		   limit rather than the last one checked. */
+		var engedett = [], nepessegFogyott = false, sorTele = false;
+		for (var i = 0; i < epitthetoLista.length; i++) {
+			var jelolt = epitthetoLista[i];
+			if (felhasznaltNep + TANYA[jelolt] > nepessegKeret) { nepessegFogyott = true; continue; }
+			var epulet = TOBORZO_EPULET[jelolt];
+			if ((sorok[epulet] || 0) + (Number(ido[jelolt]) || 0) > sorMax) { sorTele = true; continue; }
+			var ar = koltseg[jelolt];
+			if (nyers[0] < ar[0] || nyers[1] < ar[1] || nyers[2] < ar[2]) continue;
+			engedett.push(jelolt);
+		}
+		if (!engedett.length) {
+			ok = nepessegFogyott ? 'nepesseg' : (sorTele ? 'sor' : 'nyers');
+			break;
+		}
+
+		var tipus = toborzoKovetkezo(sablon.osszetetel, hozzaadva, engedett);
+		if (!tipus) { ok = 'nyers'; break; }
+
+		egysegek[tipus] = (egysegek[tipus] || 0) + 1;
+		hozzaadva[tipus] = (hozzaadva[tipus] || 0) + 1;
+		felhasznaltNep += TANYA[tipus];
+		nyers[0] -= koltseg[tipus][0];
+		nyers[1] -= koltseg[tipus][1];
+		nyers[2] -= koltseg[tipus][2];
+		sorok[TOBORZO_EPULET[tipus]] = (sorok[TOBORZO_EPULET[tipus]] || 0) + (Number(ido[tipus]) || 0);
+	}
+	return { egysegek: egysegek, nepesseg: felhasznaltNep, sorok: sorok, ok: ok };
+}
 /* The four colours the interface shipped with before it had a palette.
 
    The style boxes are saved as soon as anything on the sound panel is, so an
