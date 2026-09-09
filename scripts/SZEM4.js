@@ -3314,29 +3314,6 @@ TOBORZO_REF,
 TOBORZO_DATA,
 TOBORZO_HIBA = 0,
 TOBORZO_PAUSE = true;
-ujkieg('toborzo','Toborzó',`<tr><td>
-	<h2 align="center">Toborzó</h2>
-	Adj a faluknak szerepet, a szerep sablonja pedig megmondja, milyen arányban nőjön a seregük.
-	A számok arányok, nem darabszámok: a 70 bárd / 30 könnyűlovas ugyanazt jelenti, mint a 7000 / 3000.
-	Mindig azt az egységet toborozza, amelyik a legjobban le van maradva a saját arányától.<br>
-	Legfeljebb ${TOBORZO_SOR_ORA} órányi kiképzést tesz be egyszerre, és minden épületnek ad legalább ${TOBORZO_SOR_PADLO_ORA} órányi munkát,
-	mielőtt az arányokra figyelne: az álló épület ideje elveszik, az arány viszont később is behozható.
-	<form id="toborzo_form">
-		<table class="vis" id="toborzo_tabla">
-			<thead><tr>
-				<th onclick="rendez('szoveg', false, this, 'toborzo_tabla', 0)">Falu</th>
-				<th onclick="rendez('szam', false, this, 'toborzo_tabla', 1)">Pont</th>
-				<th onclick="rendez('tanya', false, this, 'toborzo_tabla', 2)">Tanya</th>
-				<th>Szerep</th>
-				<th onclick="rendez('datum', false, this, 'toborzo_tabla', 4)">Következő nézés</th>
-			</tr></thead>
-			<tbody>${toborzo_listAllVillages()}</tbody>
-		</table>
-		<br>
-		${toborzoSablonUrlap()}
-	</form>
-</td></tr>`);
-szem4_TOBORZO_motor();
 /* The four colours the interface shipped with before it had a palette.
 
    The style boxes are saved as soon as anything on the sound panel is, so an
@@ -4871,6 +4848,30 @@ var FARM_LEPES=0, FARM_REF, FARM_HIBA=0, FARM_GHIBA=0,
 	SZEM4_FARM = defaultFarmState(),
 	PM1, FARM_PAUSE=true;
 szem4_farmolo_motor();
+
+ujkieg('toborzo','Toborzó',`<tr><td>
+	<h2 align="center">Toborzó</h2>
+	Adj a faluknak szerepet, a szerep sablonja pedig megmondja, milyen arányban nőjön a seregük.
+	A számok arányok, nem darabszámok: a 70 bárd / 30 könnyűlovas ugyanazt jelenti, mint a 7000 / 3000.
+	Mindig azt az egységet toborozza, amelyik a legjobban le van maradva a saját arányától.<br>
+	Legfeljebb ${TOBORZO_SOR_ORA} órányi kiképzést tesz be egyszerre, és minden épületnek ad legalább ${TOBORZO_SOR_PADLO_ORA} órányi munkát,
+	mielőtt az arányokra figyelne: az álló épület ideje elveszik, az arány viszont később is behozható.
+	<form id="toborzo_form">
+		<table class="vis" id="toborzo_tabla">
+			<thead><tr>
+				<th onclick="rendez('szoveg', false, this, 'toborzo_tabla', 0)">Falu</th>
+				<th onclick="rendez('szam', false, this, 'toborzo_tabla', 1)">Pont</th>
+				<th onclick="rendez('tanya', false, this, 'toborzo_tabla', 2)">Tanya</th>
+				<th>Szerep</th>
+				<th onclick="rendez('datum', false, this, 'toborzo_tabla', 4)">Következő nézés</th>
+			</tr></thead>
+			<tbody>${toborzo_listAllVillages()}</tbody>
+		</table>
+		<br>
+		${toborzoSablonUrlap()}
+	</form>
+</td></tr>`);
+szem4_TOBORZO_motor();
 
 /* --------------------- JELENTÉS ELEMZŐ ----------------------- */
 function readUpVijeOpts() {
