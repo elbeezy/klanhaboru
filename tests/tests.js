@@ -3817,14 +3817,21 @@ suite('When the gatherer books its next visit', function () {
 	   'a window mid-navigation falls back instead of throwing');
 
 	/* --- and which of them the next visit is booked for --- */
-	eq(api.scavengeNextVisitMs([korai, kesoi], 'min', most), korai + 60000,
+	eq(api.scavengeNextVisitMs([korai, kesoi], 'min', most), korai + 10000,
 	   'min comes back for the first squad home, so its troops go straight out again');
-	eq(api.scavengeNextVisitMs([korai, kesoi], 'max', most), kesoi + 60000,
+	eq(api.scavengeNextVisitMs([korai, kesoi], 'max', most), kesoi + 10000,
 	   'max waits for the last -- the 1h33m of idle troops he reported');
 	eq(api.scavengeNextVisitMs([], 'min', most), most + 1200000,
 	   'nothing gathering here: twenty minutes before looking again');
 	eq(api.scavengeNextVisitMs([most - 500000], 'min', most), most + 10000,
 	   'an overdue squad cannot book a visit in the past and reopen the page every tick');
+
+	/* The cushion after a landing is ten seconds, not the minute it used to be:
+	   the page is loaded fresh, so it only has to cover our clock running ahead
+	   of the game's. Arriving early costs one page load and books another short
+	   visit, where a minute of certainty cost idle troops on every cycle. */
+	eq(api.scavengeNextVisitMs([most + 3000], 'min', most), most + 13000,
+	   'a squad seconds from landing is waited out by ten seconds, not a minute');
 });
 
 /* ------------------------------------------------------------------------ */

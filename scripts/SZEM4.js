@@ -6125,8 +6125,16 @@ function szem4_GYUJTO_search(ev) {
 }
 /* Waits, in milliseconds. */
 var GYUJTO_URES_MS = 1200000,     // nothing gathering here at all: look again in 20 minutes
-    GYUJTO_RATARTAS_MS = 60000,   // slack after a squad lands, so the page has settled
+    GYUJTO_RATARTAS_MS = 10000,   // slack after a squad lands, so the page has settled
     GYUJTO_PADLO_MS = 10000;      // never book a visit sooner than this
+
+/* Why ten seconds of slack and not sixty: the page is loaded fresh after the
+   landing, so the server has already brought the troops home -- the only thing
+   the slack has to cover is our clock running ahead of the game's, which is
+   seconds, not a minute. Arriving early is cheap and fixes itself: the squads
+   read as still out, the plan comes back empty, and scavengeNextVisitMs books
+   another short visit. One wasted page load, not a lost run. Sixty seconds of
+   certainty cost a minute of idle troops on every single cycle. */
 
 /* A painted countdown says how much is LEFT, so it is a duration rather than a
    moment. The game drops the fields it does not need, so the same squad reads
