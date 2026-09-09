@@ -4447,10 +4447,56 @@ suite('A whole gathering visit under the aligned strategy', function () {
 		windowOpener: function () { return { document: {} }; },
 		gameUrl: function () { return 'screen=place&mode=scavenge'; },
 		debug: function () {} };
-	sandbox(kereso, [sliceFn(SZEM4_SRC, 'szem4_GYUJTO_1keres')]).szem4_GYUJTO_1keres();
+	var esedekes = sandbox(kereso, [sliceFn(SZEM4_SRC, 'szem4_GYUJTO_1keres')]).szem4_GYUJTO_1keres();
 	eq(kereso.GYUJTO_DATA, 4242, 'a village whose gathering is due gets the visit');
 	ok(kereso.GYUJTO_VILLINFO[4242].terv === null,
 	   'and every visit starts by throwing away any plan left over from a broken one');
+	eq(esedekes, 0, 'and it reports no wait at all, so the engine carries straight on');
+
+	/* How long the engine may sleep when there is nothing to do yet.
+
+	   It used to sleep a flat minute regardless, so a squad landing just after
+	   a look sat home until the next one -- up to a minute of idle troops on
+	   top of the cushion the appointment already carries. He watched that in
+	   game: landed at 0:03, still nothing out at 0:05. */
+	function orak(vill, most) {
+		var w = { KTID: {}, SZEM4_GYUJTO: { settings: { strategy: 'egyutt' } },
+			GYUJTO_VILLINFO: {}, GYUJTO_STATE: 0, GYUJTO_DATA: null,
+			GYUJTO_REF: null, GYUJTO_HIBA: 0, AZON: 'p_w',
+			windowOpener: function () { return { document: {} }; },
+			gameUrl: function () { return 'screen=place&mode=scavenge'; },
+			debug: function () {} };
+		var i = 0;
+		for (var kulcs in vill) {
+			w.KTID['500|' + (500 + i++)] = kulcs;
+			w.SZEM4_GYUJTO[kulcs] = vill[kulcs].tiltva ? false : true;
+			w.GYUJTO_VILLINFO[kulcs] = { retry: false, returned: most + vill[kulcs].mulva };
+		}
+		w.Date = { now: function () { return most; } };
+		return { w: w, varakozas: sandbox(w, [sliceFn(SZEM4_SRC, 'szem4_GYUJTO_1keres')]).szem4_GYUJTO_1keres() };
+	}
+
+	var T = 1788694401000;
+	eq(orak({ 11: { mulva: 15000 } }, T).varakozas, 15000,
+	   'with nothing due it sleeps exactly until the appointment, not a blind minute');
+	eq(orak({ 11: { mulva: 40000 }, 22: { mulva: 9000 }, 33: { mulva: 25000 } }, T).varakozas, 9000,
+	   'and with several booked it wakes for the soonest of them, not the first or the last');
+	eq(orak({ 11: { mulva: 4 * 3600000 } }, T).varakozas, 60000,
+	   'an appointment hours away still gets looked at within the minute');
+	eq(orak({ 11: { mulva: 200 } }, T).varakozas, 1000,
+	   'and one a heartbeat away cannot busy-loop the engine below a second');
+
+	/* A village he has not ticked must not book the engine a wake-up: its
+	   appointment is stale data nobody is going to act on, and honouring it
+	   would wake the engine early for a village it then skips. */
+	var kihagy = orak({ 11: { mulva: -90000, tiltva: true }, 22: { mulva: 30000 } }, T);
+	eq(kihagy.varakozas, 30000,
+	   'a village not ticked in the panel books no wake-up of its own');
+	ok(kihagy.w.GYUJTO_DATA === null,
+	   'and is not visited either, however overdue its leftover appointment looks');
+
+	eq(orak({}, T).varakozas, 60000,
+	   'with no gathering villages at all it falls back to looking once a minute');
 });
 
 /* ------------------------------------------------------------------------ */

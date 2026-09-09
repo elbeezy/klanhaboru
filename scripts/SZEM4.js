@@ -6660,26 +6660,37 @@ function szem4_GYUJTO_egyutt() {
 	GYUJTO_HIBA = 0;
 	return true;
 }
+/* Returns 0 when it has opened a village and there is work to do, otherwise
+   how long the engine may sleep -- the time to the soonest appointment, never
+   more than a minute and never less than a second. Sleeping a flat minute
+   instead meant a squad landing just after a look sat home until the next one:
+   up to a minute of idle troops on top of whatever cushion the appointment
+   itself carries. Same shape as szem4_BEF_keres, for the same reason. */
 function szem4_GYUJTO_1keres() {try{
 	/* Appointments are booked on the real clock now (see scavengeReturnsMs),
 	   so they have to be read against the real clock too. */
-	let d = Date.now();
+	let d = Date.now(), legkozelebb = 0;
 	for (const coord in KTID) {
 		const villId = KTID[coord];
 		if (!GYUJTO_VILLINFO[villId]) GYUJTO_VILLINFO[villId] = { retry: false };
-		if (SZEM4_GYUJTO[villId] === true && (!GYUJTO_VILLINFO[villId].returned || GYUJTO_VILLINFO[villId].returned < d)) {
-			GYUJTO_REF = windowOpener('gyujto', gameUrl({ village: villId, screen: 'place', mode: 'scavenge', group: null, page: null }), AZON + '_gyujto');
-			GYUJTO_STATE = 1;
-			GYUJTO_DATA = villId;
-			/* Every visit plans afresh. A plan left over from a visit that was
-			   cut short -- the motor restarts the window after 30 failed
-			   checks -- would otherwise be spent against troop counts and a
-			   deadline that have both moved on. */
-			GYUJTO_VILLINFO[villId].terv = null;
-			return false;
+		if (SZEM4_GYUJTO[villId] !== true) continue;
+		const mikor = GYUJTO_VILLINFO[villId].returned;
+		if (mikor && mikor >= d) {
+			if (!legkozelebb || mikor < legkozelebb) legkozelebb = mikor;
+			continue;
 		}
+		GYUJTO_REF = windowOpener('gyujto', gameUrl({ village: villId, screen: 'place', mode: 'scavenge', group: null, page: null }), AZON + '_gyujto');
+		GYUJTO_STATE = 1;
+		GYUJTO_DATA = villId;
+		/* Every visit plans afresh. A plan left over from a visit that was
+		   cut short -- the motor restarts the window after 30 failed
+		   checks -- would otherwise be spent against troop counts and a
+		   deadline that have both moved on. */
+		GYUJTO_VILLINFO[villId].terv = null;
+		return 0;
 	}
-	return true;
+	if (!legkozelebb) return 60000;
+	return Math.min(60000, Math.max(1000, legkozelebb - d));
 } catch(e) { GYUJTO_HIBA++; console.error(e); debug('szem4_GYUJTO_1keres', e); }}
 function szem4_GYUJTO_3elindit() { try{
 	/* The 'egyutt' strategy plans and sends the whole visit itself. It stands
@@ -6751,14 +6762,16 @@ function szem4_GYUJTO_motor() {
 				GYUJTO_HIBA = 0;
 			}
 			switch (GYUJTO_STATE) {
-				case 0:
+				case 0: {
 					// Search & OpenVill
-					if (szem4_GYUJTO_1keres()) {
-						nexttime = 60000;
+					const varakozas = szem4_GYUJTO_1keres();
+					if (varakozas) {
+						nexttime = varakozas;
 						if (MOBILE_MODE) GYUJTO_REF.close()
 					}
 					if (GYUJTO_REF && GYUJTO_REF.document) GYUJTO_REF.document.title = 'szem4/gyűjtögető';
 					break;
+				}
 				case 1:
 					// run 3rdparty script
 					if (isPageLoaded(GYUJTO_REF, GYUJTO_DATA, 'screen=place&mode=scavenge', ['#scavenge_screen .scavenge-option'])) {
